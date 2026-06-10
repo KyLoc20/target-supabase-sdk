@@ -1,0 +1,43 @@
+{
+  "name": "@react-starter/supabase-sdk",
+  "version": "0.1.0",
+  "description": "Supabase client initializer and data access APIs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/supabase-sdk.git"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "node --input-type=module -e \"import fs from 'node:fs'; fs.rmSync('dist', { recursive: true, force: true })\"",
+    "build": "pnpm clean && tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch"
+  },
+  "peerDependencies": {
+    "@supabase/postgrest-js": "^1.19.0",
+    "@supabase/supabase-js": "^2.50.0",
+    "lodash-es": "^4.17.21"
+  },
+  "devDependencies": {
+    "@supabase/postgrest-js": "1.19.4",
+    "@supabase/supabase-js": "2.50.3",
+    "@types/lodash-es": "^4.17.12",
+    "@types/wicg-file-system-access": "^2023.10.7",
+    "lodash-es": "^4.17.21",
+    "typescript": "~5.7.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
