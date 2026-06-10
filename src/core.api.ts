@@ -1,7 +1,7 @@
 import { pick } from "lodash-es";
 import { createResponse, Target } from "./core.interface";
 import { supabase } from ".";
-import { BaseValidator } from "./core.utils";
+import { BaseValidator, handleSupabaseError } from "./core.utils";
 import { PostgrestFilterBuilder } from "@supabase/postgrest-js";
 
 export interface QueryFilter {
@@ -35,8 +35,7 @@ export const getTarget = async ({ id, filterList }: { id: string; filterList?: Q
 
   const { data, error } = await query.single();
   if (error) {
-    console.error("[getTarget] failed:", error?.message);
-    throw error;
+    handleSupabaseError("getTarget", error, "Failed to fetch target.");
   }
   return createResponse.success<Target>(data as Target);
 };
@@ -53,8 +52,7 @@ export const getPossibleTarget = async ({ filterList }: { filterList: QueryFilte
 
   const { data, error } = await query.maybeSingle();
   if (error) {
-    console.error("[getPossibleTarget] failed:", error?.message);
-    throw error;
+    handleSupabaseError("getPossibleTarget", error, "Failed to fetch target.");
   }
   return createResponse.success<Target | null>(data);
 };
@@ -92,8 +90,7 @@ export const getTargetList = async ({
     .range(pageNum * pageSize, (pageNum + 1) * pageSize - 1);
 
   if (error) {
-    console.error("[getTargetList] failed:", error?.message);
-    throw error;
+    handleSupabaseError("getTargetList", error, "Failed to fetch target list.");
   }
   return createResponse.success<Target[]>(data);
 };
@@ -129,8 +126,7 @@ export const getTargetTotalCount = async ({
   const { count, error } = await query;
 
   if (error) {
-    console.error("[getTargetTotalCount] failed:", error?.message);
-    throw error;
+    handleSupabaseError("getTargetTotalCount", error, "Failed to fetch target count.");
   }
   return createResponse.success<number>(count ?? 0);
 };
@@ -148,16 +144,14 @@ export const deleteTarget = async ({ id, filterList }: { id: string; filterList?
     }, supabase.client.from("target").select().eq("id", id));
     const { data: existingTarget, error: existingError } = await query.single();
     if (existingError || existingTarget == null) {
-      const msg = `[deleteTarget] failed: Cannot find the target ${id} given filterList: ${JSON.stringify(filterList)}`;
-      console.error(msg, existingError);
+      const msg = `[deleteTarget] Cannot find the target ${id}`;
+      console.error(msg, { filterList }, existingError);
       throw new Error(msg);
     }
   }
   const { error } = await supabase.client.from("target").delete().eq("id", id);
   if (error) {
-    const msg = `[deleteTarget] failed: Cannot delete the target ${id}`;
-    console.error(msg, error);
-    throw new Error(msg);
+    handleSupabaseError("deleteTarget", error, `Failed to delete target ${id}.`);
   }
   return createResponse.success();
 };
@@ -194,7 +188,7 @@ export const postTarget = async (payload: PostTargetPayload) => {
     .single();
 
   if (error) {
-    throw error;
+    handleSupabaseError("postTarget", error, "Failed to create target.");
   }
   return createResponse.success<Target>(data as Target);
 };
@@ -208,7 +202,7 @@ export const patchTarget = async ({ id, ...restPayload }: PatchTargetPayload) =>
   if (!currentData) {
     throw new Error("Target NOT exists");
   }
-  if (fetchError) throw fetchError;
+  if (fetchError) handleSupabaseError("patchTarget", fetchError, "Failed to fetch target.");
 
   const updatedTarget = new PostTargetPayloadValidator().validate(restPayload);
 
@@ -222,7 +216,7 @@ export const patchTarget = async ({ id, ...restPayload }: PatchTargetPayload) =>
     .single();
 
   if (error) {
-    throw error;
+    handleSupabaseError("patchTarget", error, "Failed to update target.");
   }
   return createResponse.success<Target>(data as Target);
 };
@@ -270,7 +264,7 @@ export const updateTargetDetails = async <T, D>({
 
   const { data, error } = await supabase.client.from("target").update(updated).eq("id", id).select().single();
 
-  if (error) throw error;
+  if (error) handleSupabaseError("updateTargetDetails", error, "Failed to update target details.");
   return data as T;
 };
 
@@ -302,7 +296,7 @@ export const createTarget = async <T extends Target, P extends object>({
     }, supabase.client.from("target").select("id"));
     const { data: existingTarget, error: existingError } = await query.maybeSingle();
     if (existingError) {
-      throw existingError;
+      handleSupabaseError("createTarget", existingError, "Failed to check target existence.");
     }
     if (existingTarget) {
       if (upsert) {
@@ -315,12 +309,12 @@ export const createTarget = async <T extends Target, P extends object>({
           .select()
           .single();
         if (error) {
-          throw error;
+          handleSupabaseError("createTarget", error, "Failed to update existing target.");
         }
         return createResponse.success<T>(data);
       }
-      const msg = `[createTarget] Target already exists: ${JSON.stringify(checkRedundancyFilterList)}`;
-      console.error(msg);
+      const msg = "[createTarget] Target already exists";
+      console.error(msg, checkRedundancyFilterList);
       throw new Error(msg);
     }
   }
@@ -329,7 +323,7 @@ export const createTarget = async <T extends Target, P extends object>({
   const newTarget = createFn(validPayload);
   const { data, error } = await supabase.client.from("target").insert([newTarget]).select().single();
   if (error) {
-    throw error;
+    handleSupabaseError("createTarget", error, "Failed to create target.");
   }
   return createResponse.success<T>(data);
 };

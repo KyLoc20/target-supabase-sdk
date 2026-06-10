@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { logDev, logDevGroup } from "./core.utils";
 
 interface SupabaseConfig {
   main: {
@@ -40,11 +41,11 @@ export class SupabaseInitializer {
     params: SupabaseInitializerParams
   ): Promise<{ supabase: SupabaseClient; supabaseAuth: SupabaseClient | null }> {
     if (this.isInitialized) {
-      console.log("🚫 Supabase already initialized");
+      logDev("🚫 Supabase already initialized");
       return { supabase: this._mainClient!, supabaseAuth: this._authClient };
     }
 
-    console.log("🔧 Initializing Supabase...");
+    logDev("🔧 Initializing Supabase...");
 
     // Validate and get environment variables
     const config = this.validateEnvironmentVariables(params);
@@ -73,7 +74,7 @@ export class SupabaseInitializer {
     this.logConfiguration(config);
 
     this.isInitialized = true;
-    console.log("✅ Supabase initialization completed");
+    logDev("✅ Supabase initialization completed");
 
     return { supabase: this._mainClient, supabaseAuth: this._authClient };
   }
@@ -100,14 +101,14 @@ export class SupabaseInitializer {
   }
 
   private logConfiguration(config: SupabaseConfig) {
-    console.group("🔧 Supabase Configuration");
-    console.log("Main URL:", config.main.url);
-    console.log("Auth URL:", config.auth?.url || "Not configured");
-    console.log("Clients:", {
-      main: !!this._mainClient,
-      auth: !!this._authClient,
+    logDevGroup("🔧 Supabase Configuration", () => {
+      console.log("Main URL:", config.main.url);
+      console.log("Auth URL:", config.auth?.url || "Not configured");
+      console.log("Clients:", {
+        main: !!this._mainClient,
+        auth: !!this._authClient,
+      });
     });
-    console.groupEnd();
   }
 
   getClients() {

@@ -1,5 +1,40 @@
 import { pick, pickBy } from "lodash-es";
 
+/** True when running in a development build (Vite or Node). Defaults to false for safety. */
+export function isDevEnvironment(): boolean {
+  if (typeof import.meta !== "undefined" && "env" in import.meta) {
+    const env = (import.meta as ImportMeta & { env?: { DEV?: boolean; MODE?: string } }).env;
+    if (env?.DEV === true || env?.MODE === "development") return true;
+    if (env?.DEV === false || env?.MODE === "production") return false;
+  }
+  if (typeof process !== "undefined" && process.env?.NODE_ENV) {
+    return process.env.NODE_ENV !== "production";
+  }
+  return false;
+}
+
+export function logDev(...args: unknown[]): void {
+  if (isDevEnvironment()) {
+    console.log(...args);
+  }
+}
+
+export function logDevGroup(label: string, fn: () => void): void {
+  if (!isDevEnvironment()) return;
+  console.group(label);
+  try {
+    fn();
+  } finally {
+    console.groupEnd();
+  }
+}
+
+/** Log internal details, then throw a sanitized error safe to expose to callers. */
+export function handleSupabaseError(context: string, error: unknown, publicMessage?: string): never {
+  console.error(`[${context}] failed:`, error);
+  throw new Error(publicMessage ?? `[${context}] Operation failed`);
+}
+
 /** Raw payload -> Available data */
 export abstract class BaseValidator<T extends object> {
   protected requiredFields: (keyof T)[] = [];

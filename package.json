@@ -1,11 +1,11 @@
 {
-  "name": "@react-starter/supabase-sdk",
+  "name": "target-supabase-sdk",
   "version": "0.1.0",
   "description": "Supabase client initializer and data access APIs",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/supabase-sdk.git"
+    "url": "https://github.com/KyLoc20/target-supabase-sdk.git"
   },
   "type": "module",
   "types": "./dist/index.d.ts",

@@ -1,5 +1,6 @@
 import { supabase } from "..";
 import { createResponse } from "../core.interface";
+import { handleSupabaseError } from "../core.utils";
 
 export interface LoginPayload {
   email: string;
@@ -27,8 +28,7 @@ export const registerUser = async ({ email, password }: RegisterPayload) => {
   });
 
   if (error) {
-    console.error("[registerUser] failed:", error.message);
-    throw error;
+    handleSupabaseError("registerUser", error, "Registration failed. Please try again.");
   }
 
   return createResponse.success(data);
@@ -42,8 +42,7 @@ export const loginUser = async ({ email, password }: LoginPayload) => {
   });
 
   if (error) {
-    console.error("[loginUser] failed:", error.message);
-    throw error;
+    handleSupabaseError("loginUser", error, "Login failed. Please check your credentials.");
   }
 
   return createResponse.success(data);
@@ -54,8 +53,7 @@ export const logoutUser = async () => {
   const { error } = await supabase.authClient!.auth.signOut();
 
   if (error) {
-    console.error("[logoutUser] failed:", error.message);
-    throw error;
+    handleSupabaseError("logoutUser", error, "Logout failed.");
   }
 
   return createResponse.success();
@@ -69,8 +67,7 @@ export const getCurrentUser = async () => {
   } = await supabase.authClient!.auth.getUser();
 
   if (error) {
-    console.error("[getCurrentUser] failed:", error.message);
-    throw error;
+    handleSupabaseError("getCurrentUser", error, "Failed to get current user.");
   }
 
   return createResponse.success<User | null>(user as User | null);
@@ -81,8 +78,7 @@ export const resetPassword = async (email: string) => {
   const { error } = await supabase.authClient!.auth.resetPasswordForEmail(email);
 
   if (error) {
-    console.error("[resetPassword] failed:", error.message);
-    throw error;
+    handleSupabaseError("resetPassword", error, "Password reset request failed.");
   }
 
   return createResponse.success();
