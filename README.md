@@ -61,8 +61,48 @@ const target = await getTarget({ id: "..." });
 
 ```bash
 pnpm install
+pnpm typecheck
 pnpm build
 pnpm dev
+```
+
+Verify the publishable tarball locally:
+
+```bash
+pnpm pack:check
+```
+
+## Release
+
+Publishing is automated via GitHub Actions when a version tag is pushed.
+
+### One-time setup
+
+1. Create an npm [Granular Access Token](https://www.npmjs.com/settings/~your-username/tokens) with **Read and Write** permission and **Bypass 2FA for automation** enabled.
+2. Add it to the GitHub repository as a secret named `NPM_TOKEN`:
+   - Repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+
+### Publish a new version
+
+```bash
+# Bump version (patch | minor | major), create git tag, and commit
+npm version patch
+
+# Push commit and tag — triggers .github/workflows/release.yml
+git push && git push --tags
+```
+
+The release workflow will:
+
+1. Verify the git tag matches `package.json` version (e.g. tag `v0.1.1` ↔ version `0.1.1`)
+2. Build the package
+3. Publish to npm with [provenance](https://docs.npmjs.com/generating-provenance-statements)
+
+### Manual publish (fallback)
+
+```bash
+pnpm pack:check
+npm publish --otp=YOUR_2FA_CODE
 ```
 
 ## License

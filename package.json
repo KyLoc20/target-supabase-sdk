@@ -3,11 +3,21 @@
   "version": "0.1.0",
   "description": "Supabase client initializer and data access APIs",
   "license": "MIT",
+  "author": "KyLoc20",
+  "homepage": "https://github.com/KyLoc20/target-supabase-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/KyLoc20/target-supabase-sdk/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/KyLoc20/target-supabase-sdk.git"
+    "url": "git+https://github.com/KyLoc20/target-supabase-sdk.git"
   },
   "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "packageManager": "pnpm@9.15.0",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -17,12 +27,16 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "clean": "node --input-type=module -e \"import fs from 'node:fs'; fs.rmSync('dist', { recursive: true, force: true })\"",
     "build": "pnpm clean && tsc -p tsconfig.build.json",
-    "dev": "tsc -p tsconfig.build.json --watch"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "pack:check": "npm pack --dry-run",
+    "prepack": "pnpm build"
   },
   "peerDependencies": {
     "@supabase/postgrest-js": "^1.19.0",
