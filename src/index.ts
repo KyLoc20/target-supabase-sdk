@@ -25,6 +25,7 @@ export type {
   Lifecycle as ParcelLifecycle,
 } from "./parcel/parcel.interface";
 export { default as ParcelManager } from "./parcel/parcel-manager";
+export type { StorageAdapter, ParcelTargetBase } from "./parcel/parcel-manager";
 
 export * from "./file/file.interface";
 export * from "./file/file.api";

@@ -85,12 +85,23 @@ Publishing is automated via GitHub Actions when a version tag is pushed.
 ### Publish a new version
 
 ```bash
-# Bump version (patch | minor | major), create git tag, and commit
 npm version patch
-
-# Push commit and tag — triggers .github/workflows/release.yml
-git push && git push --tags
+git push
+git push --tags
 ```
+
+- `npm version patch` — bump version (`0.1.0` → `0.1.1`), commit, and create git tag `v0.1.1`. Use `minor` or `major` when needed.
+- `git push` — push the version commit to GitHub
+- `git push --tags` — push the tag; triggers `.github/workflows/release.yml` to publish to npm
+
+First push on a new machine (set upstream once):
+
+```bash
+git push -u origin main
+git push --tags
+```
+
+PowerShell 5.x does not support `&&`. Run each command on its own line, or use `git push; git push --tags`.
 
 The release workflow will:
 

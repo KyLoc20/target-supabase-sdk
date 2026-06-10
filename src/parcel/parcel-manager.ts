@@ -9,7 +9,7 @@ const AES_GCM_TAG_LENGTH = 128;
 const EXTRA_IV_KEY = "iv";
 
 /** 可插拔的存储适配器：不同文件系统 */
-interface StorageAdapter {
+export interface StorageAdapter {
   /** 上传一段数据，返回可下载的 URL */
   upload(data: ArrayBuffer, pathOrKey: string): Promise<{ url: string }>;
 }
@@ -33,7 +33,7 @@ interface CreateResult {
 }
 
 /** 调用方提供的 Target 基础字段，用于拼成完整 Parcel */
-type ParcelTargetBase = Pick<Parcel, "id" | "category" | "name" | "value" | "tagList" | "created_at">;
+export type ParcelTargetBase = Pick<Parcel, "id" | "category" | "name" | "value" | "tagList" | "created_at">;
 
 function getCrypto(): Crypto {
   if (typeof globalThis !== "undefined" && globalThis.crypto) return globalThis.crypto;
