@@ -49,3 +49,9 @@ export * from "./review-v2/apis/post-review-setting.api";
 export * from "./service/base.interface";
 export * from "./service/service.interface";
 export * from "./service/api.interface";
+
+
+export * from "./link/link.interface";
+
+export * from "./list/list.interface";
+export * from "./list/list.api";

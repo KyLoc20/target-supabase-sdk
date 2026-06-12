@@ -1,6 +1,6 @@
 import { createTarget } from "../core.api";
 import { BaseValidator } from "../core.utils";
-import { File, CategoryFile, FileDetails } from "./file.interface";
+import { File, FileDetails } from "./file.interface";
 
 export interface PostFileCreatePayload {
   name: File["name"];
