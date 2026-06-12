@@ -1,6 +1,7 @@
 import { Target } from "../core.interface";
 
 export enum CategoryLink {
+    /** HTML by default */
     LINK = "link",
 }
 
@@ -16,6 +17,10 @@ export interface Link extends Target {
 export interface LinkDetails {
     manifestVersion: number;
     description: string;
-    iconUrl: string;
+    /** If string, it is the url of the preview TODO */
+    preview: string;
+    /** How to render the link */
+    loaderKey: string;
+    original: unknown;
 };
 
