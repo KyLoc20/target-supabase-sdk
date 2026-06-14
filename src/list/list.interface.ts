@@ -19,6 +19,6 @@ export interface ListDetails {
     preview: string;
     /** How to render the List */
     loaderKey: string;
-    items: Target[]
+    items: Array<Omit<Target, 'id' | 'created_at'>>[]
 };
 

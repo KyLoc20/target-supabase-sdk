@@ -52,6 +52,7 @@ export * from "./service/api.interface";
 
 
 export * from "./link/link.interface";
+export * from "./link/link.api";
 
 export * from "./list/list.interface";
 export * from "./list/list.api";
