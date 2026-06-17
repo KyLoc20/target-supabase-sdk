@@ -52,6 +52,7 @@ await updateTargetDetails<Task, TaskDetails>({
 ## QueryFilter operators
 
 - `eq` — single value match
+- `neq` — single value not equal
 - `in` — any value in array (PostgREST `.in()`)
 
 JSON details columns: `details->>fieldName`
@@ -65,8 +66,18 @@ JSON details columns: `details->>fieldName`
 
 Updates with no concurrency risk (e.g. heartbeat timestamp on a single node row) may omit `optimisticLockFilterList`.
 
+## Optimistic create (`createTarget`)
+
+Pre-check `SELECT` → `INSERT` is **not atomic** — do not use it.
+
+Current SDK behavior: **insert-first + post-verify + rollback** on `checkRedundancyFilterList` conflict.
+
+For limitations, industry comparison, why **not** `.upsert()` yet, and **RPC migration plan**, see [create-target-redundancy](../create-target-redundancy/SKILL.md).
+
+Callers: `isCreateTargetAlreadyExistsError` — same propagate pattern as UPDATE lock failures.
+
 ## Reference
 
-Implementation: `src/core.api.ts` — `updateTargetDetails`, `applyQueryFilters`
+Implementation: `src/core.api.ts` — `updateTargetDetails`, `createTarget`, `applyQueryFilters`
 
 Example: `src/node/node.api.ts` — `patchClaimTask`

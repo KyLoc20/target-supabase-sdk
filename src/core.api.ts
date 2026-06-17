@@ -1,4 +1,3 @@
-import { pick } from "lodash-es";
 import { generateResponse, Target, TargetPayload } from "./core.interface";
 import { supabase } from ".";
 import { BaseValidator, handleSupabaseError } from "./core.utils";
@@ -6,7 +5,7 @@ import { PostgrestFilterBuilder } from "@supabase/postgrest-js";
 
 export interface QueryFilter {
   field: string;
-  operator: "eq" | "in";
+  operator: "eq" | "neq" | "in";
   value: unknown;
 }
 
@@ -18,6 +17,8 @@ function applyQueryFilter<Q extends PostgrestFilterBuilder<any, any, any, any, a
   switch (filter.operator) {
     case "eq":
       return query.eq(filter.field, filter.value) as Q;
+    case "neq":
+      return query.neq(filter.field, filter.value) as Q;
     case "in":
       return query.in(filter.field, filter.value as unknown[]) as Q;
     default:
@@ -159,7 +160,7 @@ class PostTargetPayloadValidator extends BaseValidator<PostTargetPayload> {
   constructor() {
     super();
     // Add custom
-    this.addValidator((val) => {
+    this.addCustomValidator((val) => {
       return true;
     });
   }
@@ -265,12 +266,12 @@ export const updateTargetDetails = async <T, D>({
   const updated =
     updateExtraFn == null
       ? {
-          details: updatedDetails,
-        }
+        details: updatedDetails,
+      }
       : {
-          details: updatedDetails,
-          extra: updateExtraFn(currentDetails),
-        };
+        details: updatedDetails,
+        extra: updateExtraFn(currentDetails),
+      };
 
   const updateQuery = applyQueryFilters(
     supabase.client.from("target").update(updated).eq("id", id),
@@ -296,10 +297,50 @@ export const updateTargetDetails = async <T, D>({
 export const OPTIMISTIC_LOCK_FAILED_MESSAGE =
   "[updateTargetDetails] Optimistic lock failed: target no longer matches expected state.";
 
+export const CREATE_TARGET_ALREADY_EXISTS_MESSAGE = "[createTarget] Target already exists";
+
+const CREATE_TARGET_REDUNDANCY_MISMATCH_MESSAGE =
+  "[createTarget] Inserted row does not match checkRedundancyFilterList; verify createFn aligns with filters.";
+
+/** Max rows to fetch during post-verify — only need to detect one other match. */
+const REDUNDANCY_VERIFY_ROW_LIMIT = 2;
+
 export function isOptimisticLockError(error: unknown): boolean {
   return error instanceof Error && error.message === OPTIMISTIC_LOCK_FAILED_MESSAGE;
 }
 
+export function isCreateTargetAlreadyExistsError(error: unknown): boolean {
+  return error instanceof Error && error.message === CREATE_TARGET_ALREADY_EXISTS_MESSAGE;
+}
+
+/** Roll back an optimistic insert when redundancy filters match other rows. */
+async function rollbackCreateTargetInsert(id: string) {
+  const { error } = await supabase.client.from("target").delete().eq("id", id);
+  if (error) {
+    handleSupabaseError("createTarget", error, "Failed to rollback conflicting insert.");
+  }
+}
+
+/** Roll back the new row and signal a redundancy conflict to the caller. */
+function throwCreateTargetAlreadyExists(checkRedundancyFilterList: QueryFilter[]): never {
+  console.error(CREATE_TARGET_ALREADY_EXISTS_MESSAGE, checkRedundancyFilterList);
+  throw new Error(CREATE_TARGET_ALREADY_EXISTS_MESSAGE);
+}
+
+async function failCreateTargetRedundancy(
+  selfId: string,
+  checkRedundancyFilterList: QueryFilter[]
+): Promise<never> {
+  await rollbackCreateTargetInsert(selfId);
+  return throwCreateTargetAlreadyExists(checkRedundancyFilterList);
+}
+
+/**
+ * Create a `target` row with optional payload validation and optimistic redundancy checks.
+ *
+ * When `checkRedundancyFilterList` is set, uses insert-first + post-verify (not SELECT-before-INSERT).
+ * See `.cursor/skills/create-target-redundancy/SKILL.md`.
+ */
 export const createTarget = async <T extends Target, P extends object>({
   payload,
   validator,
@@ -310,47 +351,58 @@ export const createTarget = async <T extends Target, P extends object>({
   payload: P;
   validator?: new () => BaseValidator<P>;
   createFn: (validPayload: P) => TargetPayload<T>;
+  /** Business-key filters; if another row matches after insert, conflict handling runs. */
   checkRedundancyFilterList?: QueryFilter[];
+  /**
+   * @deprecated Not supported — ignored at runtime. Use domain patch APIs or future RPC upsert.
+   * Reserved for a later release; do not pass `true`.
+   */
   upsert?: boolean;
 }) => {
-  // (Optional)Step 1: validate payload
-  const validPayload = validator != null ? new validator().validate(payload) : payload;
-
-  // (Optional)Step 2: check redundancy
-  if (checkRedundancyFilterList != null && checkRedundancyFilterList.length > 0) {
-    const query = applyQueryFilters(supabase.client.from("target").select("id"), checkRedundancyFilterList);
-    const { data: existingTarget, error: existingError } = await query.maybeSingle();
-    if (existingError) {
-      handleSupabaseError("createTarget", existingError, "Failed to check target existence.");
-    }
-    if (existingTarget) {
-      if (upsert) {
-        const newTarget = createFn(validPayload);
-        const updated = pick(newTarget, ["category", "name", "value", "tagList", "extra", "details"]);
-        const { data, error } = await supabase.client
-          .from("target")
-          .update(updated)
-          .eq("id", existingTarget.id)
-          .select()
-          .single();
-        if (error) {
-          handleSupabaseError("createTarget", error, "Failed to update existing target.");
-        }
-        return generateResponse.success<T>(data);
-      }
-      const msg = "[createTarget] Target already exists";
-      console.error(msg, checkRedundancyFilterList);
-      throw new Error(msg);
-    }
+  if (upsert) {
+    console.warn("[createTarget] `upsert` is deprecated and has no effect.");
   }
 
-  // Step 3: create target
+  const validPayload = validator != null ? new validator().validate(payload) : payload;
   const newTarget = createFn(validPayload);
+
+  const hasRedundancyCheck =
+    checkRedundancyFilterList != null && checkRedundancyFilterList.length > 0;
+
+  // 1. Optimistic insert (see create-target-redundancy skill)
   const { data, error } = await supabase.client.from("target").insert([newTarget]).select().single();
   if (error) {
     handleSupabaseError("createTarget", error, "Failed to create target.");
   }
-  return generateResponse.success<T>(data);
+
+  if (!hasRedundancyCheck) {
+    return generateResponse.success<T>(data);
+  }
+
+  // 2. Post-verify: limit(2) — enough to detect one other row matching the business-key filters
+  const { data: matches, error: matchError } = await applyQueryFilters(
+    supabase.client.from("target").select("id"),
+    checkRedundancyFilterList
+  ).limit(REDUNDANCY_VERIFY_ROW_LIMIT);
+  if (matchError) {
+    handleSupabaseError("createTarget", matchError, "Failed to verify target redundancy.");
+  }
+
+  const selfId = data.id as string;
+  const rows = matches ?? [];
+  const selfMatchesFilters = rows.some((row) => row.id === selfId);
+  if (!selfMatchesFilters) {
+    console.warn(CREATE_TARGET_REDUNDANCY_MISMATCH_MESSAGE, checkRedundancyFilterList);
+  }
+
+  const hasOtherRow = rows.some((row) => row.id !== selfId);
+
+  // 3. No conflict — keep the inserted row; otherwise rollback and reject
+  if (!hasOtherRow) {
+    return generateResponse.success<T>(data);
+  }
+
+  return failCreateTargetRedundancy(selfId, checkRedundancyFilterList);
 };
 
 export function validateWith<P extends object, V extends BaseValidator<P>>(ValidatorClass: new () => V) {

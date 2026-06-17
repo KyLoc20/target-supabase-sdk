@@ -9,7 +9,7 @@ export class PostCreateFileListValidator extends BaseValidator<PostCreateFileLis
   constructor() {
     super();
     // Add custom
-    this.addValidator((val) => {
+    this.addCustomValidator((val) => {
       return true;
     });
   }

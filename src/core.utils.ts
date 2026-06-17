@@ -42,12 +42,6 @@ export abstract class BaseValidator<T extends object> {
   protected ignoredFields: (keyof T)[] = [];
   protected customValidators: ((val: T) => true | string)[] = [];
 
-  /** @deprecated -> addCustomValidator */
-  addValidator(validator: (val: T) => true | string) {
-    this.customValidators.push(validator);
-    return this;
-  }
-
   addCustomValidator(validator: (val: T) => true | string) {
     this.customValidators.push(validator);
     return this;

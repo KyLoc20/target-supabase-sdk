@@ -30,7 +30,7 @@ Do not wrap lower-layer throws in try/catch at the feature API unless that behav
 
 | Layer | Role | Errors (today) |
 |-------|------|----------------|
-| **Core** (`updateTargetDetails`, `getPossibleTarget`) | DB read/write, optimistic lock on UPDATE | Throw (`handleSupabaseError`, `OPTIMISTIC_LOCK_FAILED_MESSAGE`, missing row) |
+| **Core** (`updateTargetDetails`, `createTarget`, `getPossibleTarget`) | DB read/write, optimistic lock on UPDATE; optimistic insert on CREATE | Throw (`handleSupabaseError`, lock / redundancy messages, missing row) |
 | **Feature API** (`patchClaimTask`, `patchUpsertReview`) | Compose core into a use case | **Propagate** — no catch-to-null |
 | **Application** (node scheduler, app UI) | Business policy | try/catch, `isOptimisticLockError`, retry, monitoring |
 
@@ -39,7 +39,7 @@ Do not wrap lower-layer throws in try/catch at the feature API unless that behav
 | Meaning | Mechanism | Example |
 |---------|-----------|---------|
 | Expected empty outcome | `generateResponse.success(null)` | No TODO task matches filters |
-| Contention / conflict | **Throw** | Optimistic lock failed |
+| Contention / conflict | **Throw** | Optimistic lock failed; create redundancy conflict (`isCreateTargetAlreadyExistsError`) |
 | Infrastructure / validation failure | **Throw** | DB error, missing target |
 
 ## Caller pattern (today — `patchClaimTask`)
@@ -63,7 +63,7 @@ try {
 }
 ```
 
-Helpers: `isOptimisticLockError`, `OPTIMISTIC_LOCK_FAILED_MESSAGE` — `src/core.api.ts`
+Helpers: `isOptimisticLockError`, `OPTIMISTIC_LOCK_FAILED_MESSAGE`, `isCreateTargetAlreadyExistsError`, `CREATE_TARGET_ALREADY_EXISTS_MESSAGE` — `src/core.api.ts`. Create redundancy strategy: [create-target-redundancy](../create-target-redundancy/SKILL.md).
 
 ## Logging
 

@@ -12,7 +12,7 @@ class PatchUpsertReviewValidator extends BaseValidator<ReviewDetails> {
   constructor() {
     super();
     // Add custom
-    this.addValidator((val) => {
+    this.addCustomValidator((val) => {
       if (val.reviewResult == null || Object.values(val.reviewResult).some((v) => typeof v !== "number")) {
         return "[Check reviewResult] reviewResult invalid";
       }
@@ -96,7 +96,7 @@ export class PostReviewValidator extends BaseValidator<PostReviewPayload> {
   constructor() {
     super();
     // Add custom
-    this.addValidator((val) => {
+    this.addCustomValidator((val) => {
       return true;
     });
   }

@@ -9,7 +9,7 @@ export class PostCreateQuestionListValidator extends BaseValidator<PostCreateQue
   constructor() {
     super();
     // Add custom
-    this.addValidator((val) => {
+    this.addCustomValidator((val) => {
       return true;
     });
   }
