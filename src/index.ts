@@ -56,3 +56,9 @@ export * from "./link/link.api";
 
 export * from "./list/list.interface";
 export * from "./list/list.api";
+
+export * from "./word/word.interface";
+
+export * from "./task/task.interface";
+
+export * from "./repo/repo.interface";

@@ -2,16 +2,16 @@ import { createTarget } from "../core.api";
 import { BaseValidator } from "../core.utils";
 import { Word, WordDetails } from "./word.interface";
 
-export interface PostWordCreatePayload {
+export interface PostWordPayload {
   name: Word["name"];
   value: Word["value"];
   category: Word["category"];
   details: WordDetails;
 }
 
-export class PostWordValidator extends BaseValidator<PostWordCreatePayload> {
-  protected requiredFields: (keyof PostWordCreatePayload)[] = ["name", "value", "category", "details"];
-  protected optionalFields: (keyof PostWordCreatePayload)[] = [];
+export class PostWordValidator extends BaseValidator<PostWordPayload> {
+  protected requiredFields: (keyof PostWordPayload)[] = ["name", "value", "category", "details"];
+  protected optionalFields: (keyof PostWordPayload)[] = [];
 
   constructor() {
     super();
@@ -24,8 +24,8 @@ export class PostWordValidator extends BaseValidator<PostWordCreatePayload> {
 
 
 
-export const postWordCreate = async (payload: PostWordCreatePayload) => {
-  return createTarget<Word, PostWordCreatePayload>({
+export const postWord = async (payload: PostWordPayload) => {
+  return createTarget<Word, PostWordPayload>({
     payload: payload,
     validator: PostWordValidator,
     createFn: (validPayload) => {

@@ -11,6 +11,8 @@ export interface Target {
   created_at: string;
 }
 
+export type TargetPayload<T extends Target> = Omit<T, "id" | "created_at">;
+
 export enum StatusCode {
   SUCCESS = 200,
   ERROR = 400,
@@ -27,7 +29,7 @@ export interface SupabaseResponse<T = unknown> {
   };
 }
 
-export const createResponse = {
+export const generateResponse = {
   success<T>(data?: T, message?: string): SupabaseResponse<T> {
     return {
       status_code: StatusCode.SUCCESS,

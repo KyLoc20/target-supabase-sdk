@@ -1,4 +1,4 @@
-import { Target } from "../core.interface";
+import { Target, TargetPayload } from "../core.interface";
 
 export enum CategoryList {
     LIST = "list",
@@ -19,6 +19,6 @@ export interface ListDetails {
     preview: string;
     /** How to render the List */
     loaderKey: string;
-    items: Array<Omit<Target, 'id' | 'created_at'>>
+    items: Array<TargetPayload<Target>>
 };
 

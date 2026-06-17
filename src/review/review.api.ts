@@ -1,6 +1,6 @@
 import { cloneDeep } from "lodash-es";
 import { createTarget, getPossibleTarget, updateTargetDetails } from "../core.api";
-import { createResponse } from "../core.interface";
+import { generateResponse } from "../core.interface";
 import { BaseValidator } from "../core.utils";
 import { CategoryReview, Review, ReviewDetails } from "./review.interface";
 
@@ -69,7 +69,7 @@ export const patchUpsertReview = async (payload: ReviewDetails) => {
         return details;
       },
     });
-    return createResponse.success<Review>(data);
+    return generateResponse.success<Review>(data);
   }
   // Create
   const { data: newReview } = await postReview({
@@ -81,7 +81,7 @@ export const patchUpsertReview = async (payload: ReviewDetails) => {
     console.error(msg);
     throw new Error(msg);
   }
-  return createResponse.success<Review>(newReview);
+  return generateResponse.success<Review>(newReview);
 };
 
 export interface PostReviewPayload {

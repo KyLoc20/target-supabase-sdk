@@ -1,13 +1,36 @@
 import { pick } from "lodash-es";
-import { createResponse, Target } from "./core.interface";
+import { generateResponse, Target, TargetPayload } from "./core.interface";
 import { supabase } from ".";
 import { BaseValidator, handleSupabaseError } from "./core.utils";
 import { PostgrestFilterBuilder } from "@supabase/postgrest-js";
 
 export interface QueryFilter {
   field: string;
-  operator: "eq";
+  operator: "eq" | "in";
   value: unknown;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
+function applyQueryFilter<Q extends PostgrestFilterBuilder<any, any, any, any, any>>(
+  query: Q,
+  filter: QueryFilter
+): Q {
+  switch (filter.operator) {
+    case "eq":
+      return query.eq(filter.field, filter.value) as Q;
+    case "in":
+      return query.in(filter.field, filter.value as unknown[]) as Q;
+    default:
+      return query;
+  }
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
+function applyQueryFilters<Q extends PostgrestFilterBuilder<any, any, any, any, any>>(
+  query: Q,
+  filterList: QueryFilter[]
+): Q {
+  return filterList.reduce((q, filter) => applyQueryFilter(q, filter), query);
 }
 
 export interface QueryOrderBy {
@@ -23,38 +46,24 @@ export interface BaseQueryParams {
 export const getTarget = async ({ id, filterList }: { id: string; filterList?: QueryFilter[] }) => {
   const query =
     filterList != null && filterList.length > 0
-      ? filterList.reduce((query, filter) => {
-          switch (filter.operator) {
-            case "eq":
-              return query.eq(filter.field, filter.value);
-            default:
-              return query;
-          }
-        }, supabase.client.from("target").select().eq("id", id))
+      ? applyQueryFilters(supabase.client.from("target").select().eq("id", id), filterList)
       : supabase.client.from("target").select().eq("id", id);
 
   const { data, error } = await query.single();
   if (error) {
     handleSupabaseError("getTarget", error, "Failed to fetch target.");
   }
-  return createResponse.success<Target>(data as Target);
+  return generateResponse.success<Target>(data as Target);
 };
 
 export const getPossibleTarget = async ({ filterList }: { filterList: QueryFilter[] }) => {
-  const query = filterList.reduce((query, filter) => {
-    switch (filter.operator) {
-      case "eq":
-        return query.eq(filter.field, filter.value);
-      default:
-        return query;
-    }
-  }, supabase.client.from("target").select());
+  const query = applyQueryFilters(supabase.client.from("target").select(), filterList);
 
   const { data, error } = await query.maybeSingle();
   if (error) {
     handleSupabaseError("getPossibleTarget", error, "Failed to fetch target.");
   }
-  return createResponse.success<Target | null>(data);
+  return generateResponse.success<Target | null>(data);
 };
 
 export interface GetTargetListParams extends BaseQueryParams {
@@ -71,19 +80,12 @@ export const getTargetList = async ({
   orderBy = { field: "created_at", ascending: false },
   filterBuilder,
 }: GetTargetListParams & {
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
   filterBuilder?: PostgrestFilterBuilder<any, any, any[], "target", unknown>;
 }) => {
   const query =
     filterBuilder ??
-    filterList.reduce((query, filter) => {
-      switch (filter.operator) {
-        case "eq":
-          return query.eq(filter.field, filter.value);
-        default:
-          return query;
-      }
-    }, supabase.client.from("target").select("*").eq("category", category));
+    applyQueryFilters(supabase.client.from("target").select("*").eq("category", category), filterList);
 
   const { data, error } = await query
     .order(orderBy.field, { ascending: orderBy.ascending })
@@ -92,15 +94,14 @@ export const getTargetList = async ({
   if (error) {
     handleSupabaseError("getTargetList", error, "Failed to fetch target list.");
   }
-  return createResponse.success<Target[]>(data);
+  return generateResponse.success<Target[]>(data);
 };
 
 export interface GetTargetTotalCountParams extends BaseQueryParams {
   category: Target["category"];
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
   filterBuilder?: PostgrestFilterBuilder<any, any, any[], "target", unknown>;
 }
-
 export const getTargetTotalCount = async ({
   category,
   filterList = [],
@@ -108,19 +109,12 @@ export const getTargetTotalCount = async ({
 }: GetTargetTotalCountParams) => {
   const query =
     filterBuilder ??
-    filterList.reduce(
-      (query, filter) => {
-        switch (filter.operator) {
-          case "eq":
-            return query.eq(filter.field, filter.value);
-          default:
-            return query;
-        }
-      },
+    applyQueryFilters(
       supabase.client
         .from("target")
-        .select("id", { count: "exact", head: true }) // head: true means no row payload
-        .eq("category", category)
+        .select("id", { count: "exact", head: true })
+        .eq("category", category),
+      filterList
     );
 
   const { count, error } = await query;
@@ -128,20 +122,13 @@ export const getTargetTotalCount = async ({
   if (error) {
     handleSupabaseError("getTargetTotalCount", error, "Failed to fetch target count.");
   }
-  return createResponse.success<number>(count ?? 0);
+  return generateResponse.success<number>(count ?? 0);
 };
 
 export const deleteTarget = async ({ id, filterList }: { id: string; filterList?: QueryFilter[] }) => {
   // Check whether the target exists given filterList
   if (filterList != null && filterList.length > 0) {
-    const query = filterList.reduce((query, filter) => {
-      switch (filter.operator) {
-        case "eq":
-          return query.eq(filter.field, filter.value);
-        default:
-          return query;
-      }
-    }, supabase.client.from("target").select().eq("id", id));
+    const query = applyQueryFilters(supabase.client.from("target").select().eq("id", id), filterList);
     const { data: existingTarget, error: existingError } = await query.single();
     if (existingError || existingTarget == null) {
       const msg = `[deleteTarget] Cannot find the target ${id}`;
@@ -153,7 +140,7 @@ export const deleteTarget = async ({ id, filterList }: { id: string; filterList?
   if (error) {
     handleSupabaseError("deleteTarget", error, `Failed to delete target ${id}.`);
   }
-  return createResponse.success();
+  return generateResponse.success();
 };
 
 export interface PostTargetPayload {
@@ -190,7 +177,7 @@ export const postTarget = async (payload: PostTargetPayload) => {
   if (error) {
     handleSupabaseError("postTarget", error, "Failed to create target.");
   }
-  return createResponse.success<Target>(data as Target);
+  return generateResponse.success<Target>(data as Target);
 };
 
 export interface PatchTargetPayload extends PostTargetPayload {
@@ -218,25 +205,55 @@ export const patchTarget = async ({ id, ...restPayload }: PatchTargetPayload) =>
   if (error) {
     handleSupabaseError("patchTarget", error, "Failed to update target.");
   }
-  return createResponse.success<Target>(data as Target);
+  return generateResponse.success<Target>(data as Target);
 };
+
+/**
+ * Read-modify-write `target.details` with optional DB-level optimistic locking on UPDATE.
+ *
+ * Do not use application-layer pre-update validators (e.g. checking state after SELECT then
+ * UPDATE with only `id`). That pattern is not atomic and loses under concurrency. Pass expected
+ * row conditions via `optimisticLockFilterList` so they are applied on the UPDATE statement.
+ */
+export interface UpdateTargetDetailsParams<D> {
+  /** Target row id. */
+  id: string;
+  /**
+   * Computes new details from the row fetched immediately before UPDATE.
+   * Runs after SELECT; the write still relies on `optimisticLockFilterList` for atomic guards.
+   */
+  updateFn: (existing: D) => D;
+  /**
+   * Optional `target.extra` derived from existing details (written together with details).
+   */
+  updateExtraFn?: (existing: D) => string;
+  /**
+   * Optimistic lock conditions applied on UPDATE (not on the prior SELECT).
+   *
+   * Replaces the removed `beforeUpdateValidator`: validators ran in app code between read and
+   * write and could not prevent concurrent overwrites. These filters become part of the UPDATE
+   * WHERE clause (via `applyQueryFilters`), e.g. `{ field: "details->>status", operator: "eq", value: "TODO" }`.
+   *
+   * If no row matches after UPDATE, throws "Optimistic lock failed". Empty array = update by id only.
+   */
+  optimisticLockFilterList?: QueryFilter[];
+}
 
 export const updateTargetDetails = async <T, D>({
   id,
   updateFn,
-  beforeUpdateValidator = () => true,
   updateExtraFn,
-}: {
-  id: string;
-  updateFn: (existing: D) => D;
-  beforeUpdateValidator?: (existing: D) => true | string;
-  updateExtraFn?: (existing: D) => string;
-}) => {
+  optimisticLockFilterList = [],
+}: UpdateTargetDetailsParams<D>) => {
   const { data: currentData, error: fetchError } = await supabase.client
     .from("target")
     .select("details")
     .eq("id", id)
     .single();
+
+  if (fetchError) {
+    handleSupabaseError("updateTargetDetails", fetchError, "Failed to fetch target.");
+  }
   if (!currentData) {
     const msg = "[updateTargetDetails] Target NOT exists: " + id;
     console.error(msg);
@@ -244,13 +261,6 @@ export const updateTargetDetails = async <T, D>({
   }
 
   const currentDetails = currentData.details as D;
-
-  // Check before update
-  const validatorResult = beforeUpdateValidator(currentDetails);
-  if (validatorResult !== true) {
-    throw new Error("[updateTargetDetails] validation failed. " + validatorResult);
-  }
-
   const updatedDetails: D = updateFn(currentDetails);
   const updated =
     updateExtraFn == null
@@ -262,11 +272,33 @@ export const updateTargetDetails = async <T, D>({
           extra: updateExtraFn(currentDetails),
         };
 
-  const { data, error } = await supabase.client.from("target").update(updated).eq("id", id).select().single();
+  const updateQuery = applyQueryFilters(
+    supabase.client.from("target").update(updated).eq("id", id),
+    optimisticLockFilterList
+  );
 
-  if (error) handleSupabaseError("updateTargetDetails", error, "Failed to update target details.");
+  const { data, error } = await updateQuery.select().maybeSingle();
+
+  if (error) {
+    handleSupabaseError("updateTargetDetails", error, "Failed to update target details.");
+  }
+  if (!data) {
+    const msg =
+      optimisticLockFilterList.length > 0
+        ? OPTIMISTIC_LOCK_FAILED_MESSAGE
+        : "[updateTargetDetails] Target not found or was deleted.";
+    throw new Error(msg);
+  }
+
   return data as T;
 };
+
+export const OPTIMISTIC_LOCK_FAILED_MESSAGE =
+  "[updateTargetDetails] Optimistic lock failed: target no longer matches expected state.";
+
+export function isOptimisticLockError(error: unknown): boolean {
+  return error instanceof Error && error.message === OPTIMISTIC_LOCK_FAILED_MESSAGE;
+}
 
 export const createTarget = async <T extends Target, P extends object>({
   payload,
@@ -277,7 +309,7 @@ export const createTarget = async <T extends Target, P extends object>({
 }: {
   payload: P;
   validator?: new () => BaseValidator<P>;
-  createFn: (validPayload: P) => Omit<T, "id" | "created_at">;
+  createFn: (validPayload: P) => TargetPayload<T>;
   checkRedundancyFilterList?: QueryFilter[];
   upsert?: boolean;
 }) => {
@@ -286,14 +318,7 @@ export const createTarget = async <T extends Target, P extends object>({
 
   // (Optional)Step 2: check redundancy
   if (checkRedundancyFilterList != null && checkRedundancyFilterList.length > 0) {
-    const query = checkRedundancyFilterList.reduce((query, filter) => {
-      switch (filter.operator) {
-        case "eq":
-          return query.eq(filter.field, filter.value);
-        default:
-          return query;
-      }
-    }, supabase.client.from("target").select("id"));
+    const query = applyQueryFilters(supabase.client.from("target").select("id"), checkRedundancyFilterList);
     const { data: existingTarget, error: existingError } = await query.maybeSingle();
     if (existingError) {
       handleSupabaseError("createTarget", existingError, "Failed to check target existence.");
@@ -311,7 +336,7 @@ export const createTarget = async <T extends Target, P extends object>({
         if (error) {
           handleSupabaseError("createTarget", error, "Failed to update existing target.");
         }
-        return createResponse.success<T>(data);
+        return generateResponse.success<T>(data);
       }
       const msg = "[createTarget] Target already exists";
       console.error(msg, checkRedundancyFilterList);
@@ -325,7 +350,7 @@ export const createTarget = async <T extends Target, P extends object>({
   if (error) {
     handleSupabaseError("createTarget", error, "Failed to create target.");
   }
-  return createResponse.success<T>(data);
+  return generateResponse.success<T>(data);
 };
 
 export function validateWith<P extends object, V extends BaseValidator<P>>(ValidatorClass: new () => V) {

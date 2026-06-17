@@ -1,5 +1,5 @@
 import { supabase } from "..";
-import { createResponse } from "../core.interface";
+import { generateResponse } from "../core.interface";
 import { handleSupabaseError } from "../core.utils";
 
 export interface LoginPayload {
@@ -31,7 +31,7 @@ export const registerUser = async ({ email, password }: RegisterPayload) => {
     handleSupabaseError("registerUser", error, "Registration failed. Please try again.");
   }
 
-  return createResponse.success(data);
+  return generateResponse.success(data);
 };
 
 // 用户登录
@@ -45,7 +45,7 @@ export const loginUser = async ({ email, password }: LoginPayload) => {
     handleSupabaseError("loginUser", error, "Login failed. Please check your credentials.");
   }
 
-  return createResponse.success(data);
+  return generateResponse.success(data);
 };
 
 // 用户登出
@@ -56,7 +56,7 @@ export const logoutUser = async () => {
     handleSupabaseError("logoutUser", error, "Logout failed.");
   }
 
-  return createResponse.success();
+  return generateResponse.success();
 };
 
 // 获取当前用户
@@ -70,7 +70,7 @@ export const getCurrentUser = async () => {
     handleSupabaseError("getCurrentUser", error, "Failed to get current user.");
   }
 
-  return createResponse.success<User | null>(user as User | null);
+  return generateResponse.success<User | null>(user as User | null);
 };
 
 // 重置密码
@@ -81,5 +81,5 @@ export const resetPassword = async (email: string) => {
     handleSupabaseError("resetPassword", error, "Password reset request failed.");
   }
 
-  return createResponse.success();
+  return generateResponse.success();
 };
