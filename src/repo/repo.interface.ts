@@ -3,13 +3,12 @@ import { Target } from "../core.interface";
 export enum CategoryRepo {
     /** Project */
     REPO = "repo",
-    SCRIPT = "script",
 }
 
 export interface Repo extends Target {
     /** Key */
     name: string;
-    /** Url */
+    /** By this key, you can get everything on this repo like source code, which is called RepoContext */
     value: string;
     details: RepoDetails;
     category: CategoryRepo;
@@ -17,7 +16,6 @@ export interface Repo extends Target {
 
 export interface RepoDetails {
     manifestVersion: number;
-    context?: unknown;
     hash: string;
-};
+}
 

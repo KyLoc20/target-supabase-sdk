@@ -26,6 +26,9 @@ importers:
       typescript:
         specifier: ~5.7.2
         version: 5.7.3
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
 
 packages:
 
@@ -105,6 +108,9 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
+
+  zod@3.25.76:
+    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
 snapshots:
 
@@ -189,3 +195,5 @@ snapshots:
       webidl-conversions: 3.0.1
 
   ws@8.21.0: {}
+
+  zod@3.25.76: {}

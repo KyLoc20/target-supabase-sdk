@@ -30,3 +30,9 @@ export interface NodeDetails {
     lastHeartBeat: number;
 };
 
+/** 主循环单轮运行时上下文 — 由 start() 创建并向下传递 */
+export interface NodeLoopContext {
+    loopTraceId: string;
+    nodeId: string;
+}
+

@@ -2,6 +2,8 @@ import { generateResponse, Target, TargetPayload } from "./core.interface";
 import { supabase } from ".";
 import { BaseValidator, handleSupabaseError } from "./core.utils";
 import { PostgrestFilterBuilder } from "@supabase/postgrest-js";
+import type { ZodType } from "zod";
+import { ZodError } from "zod";
 
 export interface QueryFilter {
   field: string;
@@ -410,6 +412,36 @@ export function validateWith<P extends object, V extends BaseValidator<P>>(Valid
     return (payload: P): R => {
       const validPayload = new ValidatorClass().validate(payload);
       return fn(validPayload);
+    };
+  };
+}
+
+function formatZodValidationError(schemaName: string, error: ZodError): Error {
+  const errorList = error.issues
+    .map((issue, index) => {
+      const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
+      return `  ${index + 1}. ${path}: ${issue.message}`;
+    })
+    .join("\n");
+  const errorCount = error.issues.length;
+  return new Error(
+    `[${schemaName}] Validation failed (${errorCount} error${errorCount > 1 ? "s" : ""}):\n${errorList}`
+  );
+}
+
+/** Zod-based counterpart to {@link validateWith} — requires `zod` as a peer dependency. */
+export function validateWithSchema<T extends ZodType>(
+  schema: T,
+  schemaName = "Schema"
+) {
+  type Parsed = T["_output"];
+  return <R>(fn: (validPayload: Parsed) => R | Promise<R>) => {
+    return (payload: unknown): R | Promise<R> => {
+      const result = schema.safeParse(payload);
+      if (!result.success) {
+        throw formatZodValidationError(schemaName, result.error);
+      }
+      return fn(result.data);
     };
   };
 }

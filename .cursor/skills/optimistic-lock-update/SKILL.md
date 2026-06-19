@@ -80,4 +80,4 @@ Callers: `isCreateTargetAlreadyExistsError` — same propagate pattern as UPDATE
 
 Implementation: `src/core.api.ts` — `updateTargetDetails`, `createTarget`, `applyQueryFilters`
 
-Example: `src/node/node.api.ts` — `patchClaimTask`
+Example: `src/task/task.api.ts` — `patchClaimTask`, `patchChangeTaskStatus`, `lockOnDoingOwner`

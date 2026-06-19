@@ -1,4 +1,4 @@
-import { Target } from "../core.interface";
+import { Target, TargetPayload } from "../core.interface";
 import { Repo } from "../repo/repo.interface";
 
 export enum CategoryTask {
@@ -11,6 +11,16 @@ export enum TaskStatus {
     DOING = "DOING",
     DONE = "DONE",
     CLOSED = "CLOSED",
+}
+
+/** Named transitions for {@link patchChangeTaskStatus} — verb aligned with state machine edges */
+export enum TaskStatusAction {
+    PUBLISH = "publish",
+    CLAIM = "claim",
+    RESET = "reset",
+    CANCEL = "cancel",
+    CLOSE = "close",
+    FINISH = "finish",
 }
 
 export enum ResultCode {
@@ -40,7 +50,7 @@ export interface Task extends Target {
 export interface TaskDetails {
     manifestVersion: number;
     status: TaskStatus;
-    repo: Repo;
+    repo: TargetPayload<Repo>;
     params: unknown;
     /** [0,100] */
     progress: number;

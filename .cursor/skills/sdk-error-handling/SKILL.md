@@ -137,4 +137,4 @@ Extend `StatusCode` beyond `200 | 400` when implementing (e.g. 409, 500).
 - Optimistic lock: `.cursor/skills/optimistic-lock-update/SKILL.md`
 - Response envelope: `src/core.interface.ts` — `SupabaseResponse`, `generateResponse`
 - Core: `src/core.api.ts` — `updateTargetDetails`, `isOptimisticLockError`
-- Feature API: `src/node/node.api.ts` — `patchClaimTask`
+- Feature API: `src/task/task.api.ts` — `patchClaimTask`, `patchChangeTaskStatus`

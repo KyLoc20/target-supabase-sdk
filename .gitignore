@@ -5,3 +5,6 @@ dist
 .env
 .env.*
 !.env.example
+
+# Local task implementations (see config/task.config.js and tasks.example/)
+tasks/
