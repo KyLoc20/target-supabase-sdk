@@ -436,7 +436,7 @@ export function validateWithSchema<T extends ZodType>(
 ) {
   type Parsed = T["_output"];
   return <R>(fn: (validPayload: Parsed) => R | Promise<R>) => {
-    return (payload: unknown): R | Promise<R> => {
+    return (payload: Parsed): R | Promise<R> => {
       const result = schema.safeParse(payload);
       if (!result.success) {
         throw formatZodValidationError(schemaName, result.error);

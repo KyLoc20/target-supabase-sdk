@@ -81,6 +81,8 @@ interface LoggerWithContext {
     success: (message: LogParams["message"], restParams?: LogRestParams) => void;
     warn: (message: LogParams["message"], restParams?: LogRestParams) => void;
     error: (message: LogParams["message"], restParams?: LogRestParams) => void;
+    /** Merge partial fields into this logger's bound context (e.g. nodeId after register). */
+    resetContext: (fields: Partial<LogContext>) => void;
 }
 
 function mergeLogOptions(options?: Partial<LogOptions>): LogOptions {
@@ -263,16 +265,20 @@ class LogManager {
     }
 
     public withContext(context: LogContext): { logger: LoggerWithContext; context: LogContext } {
-        return {
-            logger: {
-                debug: (message, restParams) => this.debug(message, context, restParams),
-                info: (message, restParams) => this.info(message, context, restParams),
-                success: (message, restParams) => this.success(message, context, restParams),
-                warn: (message, restParams) => this.warn(message, context, restParams),
-                error: (message, restParams) => this.error(message, context, restParams),
+        const boundContext: LogContext = { ...context };
+
+        const logger: LoggerWithContext = {
+            debug: (message, restParams) => this.debug(message, boundContext, restParams),
+            info: (message, restParams) => this.info(message, boundContext, restParams),
+            success: (message, restParams) => this.success(message, boundContext, restParams),
+            warn: (message, restParams) => this.warn(message, boundContext, restParams),
+            error: (message, restParams) => this.error(message, boundContext, restParams),
+            resetContext: (fields) => {
+                Object.assign(boundContext, fields);
             },
-            context,
         };
+
+        return { logger, context: boundContext };
     }
 }
 

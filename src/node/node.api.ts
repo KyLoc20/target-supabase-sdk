@@ -1,72 +1,139 @@
-import { createTarget, updateTargetDetails } from "../core.api";
+import { createTarget, QueryFilter, updateTargetDetails, validateWithSchema } from "../core.api";
 import { generateResponse } from "../core.interface";
-import { BaseValidator } from "../core.utils";
+import { createApiLogger } from "../shared/log/log-manager";
+import { z } from "zod";
 import { CategoryNode, Node, NodeDetails, NodeStatus } from "./node.interface";
-export interface PostRegisterNodePayload {
+
+const NODE_STATUS_FIELD = "details->>status" as const;
+
+const nodeIdSchema = z.string().trim().min(1);
+const traceIdSchema = z.string().trim().min(1).optional();
+
+// ─── Zod schemas ─────────────────────────────────────────────────────────────
+
+export const postRegisterNodeSchema = z.object({
+    traceId: traceIdSchema,
+});
+
+export type PostRegisterNodePayload = z.infer<typeof postRegisterNodeSchema>;
+
+export const patchNodeHeartBeatSchema = z.object({
+    nodeId: nodeIdSchema,
+    traceId: traceIdSchema,
+});
+
+export type PatchNodeHeartBeatPayload = z.infer<typeof patchNodeHeartBeatSchema>;
+
+export const patchStopNodeSchema = z.object({
+    nodeId: nodeIdSchema,
+    traceId: traceIdSchema,
+});
+
+export type PatchStopNodePayload = z.infer<typeof patchStopNodeSchema>;
+
+export const patchChangeNodeStatusSchema = z.object({
+    nodeId: nodeIdSchema,
+    status: z.nativeEnum(NodeStatus),
+    /** When set, UPDATE only if current status matches (optimistic lock). */
+    fromStatus: z.nativeEnum(NodeStatus).optional(),
+    traceId: traceIdSchema,
+});
+
+export type PatchChangeNodeStatusPayload = z.infer<typeof patchChangeNodeStatusSchema>;
+
+// ─── Optimistic lock helpers ─────────────────────────────────────────────────
+
+function lockOnNodeStatus(status: NodeStatus): QueryFilter[] {
+    return [{ field: NODE_STATUS_FIELD, operator: "eq", value: status }];
 }
 
-export class PostListValidator extends BaseValidator<PostRegisterNodePayload> {
-    protected requiredFields: (keyof PostRegisterNodePayload)[] = [];
-    protected optionalFields: (keyof PostRegisterNodePayload)[] = [];
+// ─── postRegisterNode ────────────────────────────────────────────────────────
 
-    constructor() {
-        super();
-        // Add custom
-        this.addCustomValidator((val) => {
-            return true;
-        });
-    }
-}
-
-
-
-export const postRegisterNode = async (payload: PostRegisterNodePayload) => {
+export const postRegisterNode = validateWithSchema(
+    postRegisterNodeSchema,
+    "postRegisterNodeSchema"
+)(async (payload) => {
     return createTarget<Node, PostRegisterNodePayload>({
-        payload: payload,
-        validator: PostListValidator,
-        createFn: (validPayload) => {
+        payload,
+        createFn: () => {
             const details: NodeDetails = {
                 manifestVersion: 0,
                 status: NodeStatus.READY,
                 lastHeartBeat: Date.now(),
             };
             return {
-                name: '',
+                name: "",
                 category: CategoryNode.NODE,
-                value: '',
+                value: "",
                 tagList: [],
                 details,
             };
         },
     });
-};
+});
 
-export const patchNodeHeartBeat = async ({ nodeId }: { nodeId: string }) => {
+// ─── patchNodeHeartBeat ──────────────────────────────────────────────────────
+
+export const patchNodeHeartBeat = validateWithSchema(
+    patchNodeHeartBeatSchema,
+    "patchNodeHeartBeatSchema"
+)(async ({ nodeId }) => {
     const lastHeartBeat = Date.now();
     await updateTargetDetails<Node, NodeDetails>({
         id: nodeId,
-        updateFn: (details) => {
-            return {
-                ...details,
-                lastHeartBeat,
-            };
-        },
+        updateFn: (details) => ({
+            ...details,
+            lastHeartBeat,
+        }),
     });
     return generateResponse.success(lastHeartBeat);
-};
+});
 
-export const patchStopNode = async ({ nodeId }: { nodeId: string }) => {
+// ─── patchStopNode ───────────────────────────────────────────────────────────
+
+export const patchStopNode = validateWithSchema(
+    patchStopNodeSchema,
+    "patchStopNodeSchema"
+)(async ({ nodeId }) => {
     const lastHeartBeat = Date.now();
     // TODO 等待任務全部完成才下綫 應該先使用NodeStatus.DRAINING
     await updateTargetDetails<Node, NodeDetails>({
         id: nodeId,
-        updateFn: (details) => {
-            return {
-                ...details,
-                lastHeartBeat,
-                status: NodeStatus.LOST,
-            };
-        },
+        updateFn: (details) => ({
+            ...details,
+            lastHeartBeat,
+            status: NodeStatus.LOST,
+        }),
     });
     return generateResponse.success(lastHeartBeat);
-};
+});
+
+// ─── patchChangeNodeStatus ───────────────────────────────────────────────────
+
+export const patchChangeNodeStatus = validateWithSchema(
+    patchChangeNodeStatusSchema,
+    "patchChangeNodeStatusSchema"
+)(async ({ nodeId, status, fromStatus, traceId }) => {
+    const logger = createApiLogger("patchChangeNodeStatus", { traceId, nodeId });
+
+    const data = await updateTargetDetails<Node, NodeDetails>({
+        id: nodeId,
+        optimisticLockFilterList: fromStatus != null ? lockOnNodeStatus(fromStatus) : [],
+        updateFn: (details) => ({
+            ...details,
+            status,
+            lastHeartBeat: Date.now(),
+        }),
+    });
+
+    logger.info("节点状态更新成功", {
+        topic: "node",
+        context: {
+            nodeId,
+            status,
+            fromStatus,
+        },
+    });
+
+    return generateResponse.success(data);
+});

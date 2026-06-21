@@ -1,9 +1,10 @@
-import logManager from "../shared/log/log-manager";
+import logManager, { type LoggerWithContext } from "../shared/log/log-manager";
+import { getErrorMessage, toError } from "../shared/utils/error.utils";
 import TaskManager, { TaskRunResult } from "../task/task-manager";
 import { patchChangeTaskStatus, patchClaimTask } from "../task/task.api";
-import { Task, TaskStatus, TaskStatusAction } from "../task/task.interface";
-import { patchNodeHeartBeat, patchStopNode, postRegisterNode } from "./node.api";
-import { NodeLoopContext } from "./node.interface";
+import { Task, TaskStatusAction } from "../task/task.interface";
+import { patchChangeNodeStatus, patchNodeHeartBeat, patchStopNode, postRegisterNode } from "./node.api";
+import { NodeLoopContext, NodeStatus } from "./node.interface";
 import { formatHeartbeat, getRandomInterval } from "./node.utils";
 
 export class NodeManager {
@@ -48,21 +49,8 @@ export class NodeManager {
         return this.localNodeId ?? "bootstrap";
     }
 
-    async start() {
-        let { logger } = logManager.withContext({
-            module: "nodeManager",
-            traceId: this.startupTraceId,
-            nodeId: this.getLogNodeId(),
-        });
-
-        logger.info("节点进程启动中", {
-            topic: "node",
-            context: {
-                pid: process.pid,
-                env: process.env.NODE_ENV ?? "development",
-            },
-        });
-
+    /** 启动日志 + SIGTERM/SIGINT/uncaughtException/unhandledRejection → shutdown */
+    private registerProcessLifecycle(logger: LoggerWithContext): void {
         process.on("SIGTERM", async () => {
             logger.warn("收到 SIGTERM 信号，准备关闭节点", { topic: "process" });
             await this.shutdown();
@@ -86,12 +74,29 @@ export class NodeManager {
             logger.error("未处理的 Promise 拒绝，准备关闭节点", {
                 topic: "process",
                 context: {
-                    reason: reason instanceof Error ? reason.message : reason,
+                    reason: getErrorMessage(reason),
                     stack: reason instanceof Error ? reason.stack : undefined,
                 },
             });
             await this.shutdown();
         });
+    }
+
+    async start() {
+        const { logger } = logManager.withContext({
+            module: "nodeManager",
+            traceId: this.startupTraceId,
+            nodeId: this.getLogNodeId(),
+        });
+
+        logger.info("节点进程启动中", {
+            topic: "node",
+            context: {
+                pid: process.pid,
+                env: process.env.NODE_ENV ?? "development",
+            },
+        });
+        this.registerProcessLifecycle(logger);
 
         logger.info("开始扫描并注册本地任务", { topic: "node" });
         try {
@@ -103,28 +108,19 @@ export class NodeManager {
         } catch (error) {
             logger.error("本地任务注册失败", {
                 topic: "node",
-                context: { error: error instanceof Error ? error.message : error },
+                context: { error: getErrorMessage(error) },
             });
             await this.shutdown();
-            return;
         }
 
         logger.info("开始向 Supabase 注册节点", { topic: "node" });
         try {
-            const { data, error } = await postRegisterNode({});
-            if (data == null) {
-                throw new Error("postRegisterNode 返回空数据");
+            const { data, error } = await postRegisterNode({ traceId: this.startupTraceId });
+            if (data == null || error) {
+                throw error ?? new Error("postRegisterNode 失败");
             }
-            if (error) {
-                throw new Error(`postRegisterNode 失败: ${error.message}`);
-            }
-
             this.localNodeId = data.id;
-            ({ logger } = logManager.withContext({
-                module: "nodeManager",
-                traceId: this.startupTraceId,
-                nodeId: data.id,
-            }));
+            logger.resetContext({ nodeId: data.id });
             logger.success("节点注册成功", {
                 topic: "node",
                 context: {
@@ -135,10 +131,9 @@ export class NodeManager {
         } catch (error) {
             logger.error("节点注册失败", {
                 topic: "node",
-                context: { error: error instanceof Error ? error.message : error },
+                context: { error: getErrorMessage(error) },
             });
             await this.shutdown();
-            return;
         }
 
         const nodeId = this.localNodeId!;
@@ -157,11 +152,17 @@ export class NodeManager {
                 topic: "node",
                 context: { loopCount: this.loopCount },
             });
-
-            // 每轮三步：1. 控制指令  2. 心跳  3. 认领并执行任务
-            await this.batchCommand(loopCtx);
-            await this.heartbeat(loopCtx);
-            await this.runAsWorker(loopCtx);
+            try {
+                // 每轮三步：1. 控制指令  2. 心跳  3. 认领并执行任务
+                await this.batchCommand(loopCtx);
+                await this.heartbeat(loopCtx);
+                await this.runAsWorker(loopCtx);
+            } catch (error) {
+                iterLogger.error("主循环第 ${this.loopCount} 轮失败", {
+                    topic: "node",
+                    context: { error: getErrorMessage(error) },
+                });
+            }
             const interval = getRandomInterval();
             iterLogger.debug(`主循环第 ${this.loopCount} 轮完成，等待下一轮`, {
                 topic: "node",
@@ -180,14 +181,13 @@ export class NodeManager {
         });
 
         const availableTaskList = this.availableTaskList;
-        logger.debug("Worker 开始尝试认领任务", {
+        logger.debug("开始尝试认领以下任务类型", {
             topic: "node",
             context: {
                 capabilityCount: availableTaskList.length,
                 availableTaskList,
             },
         });
-
         if (availableTaskList.length === 0) {
             logger.debug("未配置可认领任务类型，跳过本轮", { topic: "node" });
             return;
@@ -197,7 +197,6 @@ export class NodeManager {
             topic: "node",
             context: { availableTaskList },
         });
-
         const { data: task, error: claimError } = await patchClaimTask({
             nodeId,
             availableTaskList,
@@ -214,7 +213,6 @@ export class NodeManager {
             });
             return;
         }
-
         if (task == null) {
             logger.debug("本轮无匹配的 TODO 任务", {
                 topic: "node",
@@ -233,12 +231,43 @@ export class NodeManager {
                 repoKey: task.details.repo?.value ?? null,
             },
         });
-
         try {
-            await this.executeTask({ task, ...ctx });
-            logger.success("Worker 轮次任务执行完成", {
-                topic: "node",
-                context: { taskId: task.id, taskTypeKey: task.value },
+            const { logger: prepareLogger } = logManager.withContext({
+                module: "prepareTask",
+                traceId: loopTraceId,
+                nodeId,
+            });
+            const { isSuccess, taskFn } = await TaskManager.prepareTask({ logger: prepareLogger, task });
+            if (!isSuccess || taskFn == null) {
+                prepareLogger.error("任务准备失败，无法执行", {
+                    topic: "node",
+                    context: {
+                        task
+                    },
+                });
+                throw new Error("[prepareTask]任务准备失败，无法执行");
+            }
+
+            const { logger: executeLogger } = logManager.withContext({
+                module: "executeTask",
+                traceId: loopTraceId,
+                nodeId,
+            });
+            executeLogger.info("开始执行业务逻辑", {
+                topic: "task",
+                context: { taskId: task.id, displayName: taskFn.displayName },
+            });
+            const startTime = Date.now();
+            const { isSuccess: taskSuccess, cost, extra } = await taskFn();
+            if (taskSuccess) {
+                await this.finalizeTaskRun("success", { logger: executeLogger, taskId: task.id, nodeId, cost, extra, traceId: loopTraceId });
+            } else {
+                await this.finalizeTaskRun("failure", { logger: executeLogger, taskId: task.id, nodeId, cost, extra, traceId: loopTraceId });
+            }
+            const duration = Date.now() - startTime;
+            executeLogger.success("业务逻辑执行完成", {
+                topic: "task",
+                context: { taskId: task.id, durationMs: duration, },
             });
         } catch (error) {
             logger.error("任务执行失败", {
@@ -247,123 +276,75 @@ export class NodeManager {
                     taskId: task.id,
                     taskName: task.name,
                     taskTypeKey: task.value,
-                    error: error instanceof Error ? error.message : error,
+                    error: getErrorMessage(error),
                 },
             });
         }
+        logger.success("Worker轮次任务执行完成", {
+            topic: "node",
+            context: { taskId: task.id, taskTypeKey: task.value },
+        });
     }
 
-    async executeTask(params: { task: Task } & NodeLoopContext) {
-        const { task, loopTraceId, nodeId } = params;
-        const { logger: prepareLogger } = logManager.withContext({
-            module: "prepareTask",
-            traceId: loopTraceId,
-            nodeId,
-        });
-        const { isSuccess, taskFn } = await TaskManager.prepareTask({ logger: prepareLogger, task });
-        if (!isSuccess || taskFn == null) {
-            throw new Error("[executeTask] 任务准备失败，无法执行");
+    /** Task 执行结束后统一收尾：更新 TaskStatus + NodeStatus */
+    private async finalizeTaskRun(
+        outcome: "success" | "failure",
+        params: {
+            logger: LoggerWithContext;
+            taskId: string;
+            nodeId: string;
+            cost: TaskRunResult["cost"];
+            extra: TaskRunResult["extra"];
+            traceId: string;
         }
+    ): Promise<void> {
+        const { logger, taskId, nodeId, cost, extra, traceId } = params;
+        const outcomePrefix = outcome === "success" ? "任務成功" : "任務失败";
+        const logContext = { taskId, nodeId };
+        const extraValue = typeof extra === "string" ? extra : undefined;
 
-        const { logger } = logManager.withContext({
-            module: "executeTask",
-            traceId: loopTraceId,
-            nodeId,
-        });
+        const { error: changeTaskStatusError } =
+            outcome === "success"
+                ? await patchChangeTaskStatus({
+                      id: taskId,
+                      action: TaskStatusAction.FINISH,
+                      nodeId,
+                      cost,
+                      extra: extraValue,
+                      traceId,
+                  })
+                : await patchChangeTaskStatus({
+                      id: taskId,
+                      action: TaskStatusAction.RESET,
+                      nodeId,
+                      extra: extraValue,
+                      traceId,
+                  });
 
-        logger.info("开始执行业务逻辑", {
-            topic: "task",
-            context: { taskId: task.id, displayName: taskFn.displayName },
-        });
-        const startTime = Date.now();
-        const { isSuccess: taskSuccess, cost, extra } = await taskFn();
-        if (taskSuccess) {
-            await this.onTaskSuccess({ taskId: task.id, nodeId, cost, extra, traceId: loopTraceId });
-        } else {
-            await this.onTaskFailed({ taskId: task.id, nodeId, cost, extra, traceId: loopTraceId });
+        if (changeTaskStatusError) {
+            logger.error(changeTaskStatusError.message, {
+                topic: "task",
+                context: logContext,
+            });
+            throw new Error(`${outcomePrefix}但是更新TaskStatus失敗`);
         }
-        const duration = Date.now() - startTime;
-        logger.success("业务逻辑执行完成", {
-            topic: "task",
-            context: { taskId: task.id, durationMs: duration, },
+        logger.info("更新TaskStatus成功", { topic: "task", context: logContext });
+
+        // TODO 事务
+        const { error: changeNodeStatusError } = await patchChangeNodeStatus({
+            nodeId,
+            status: NodeStatus.READY,
+            fromStatus: NodeStatus.BUSY,
+            traceId,
         });
-    }
-
-    async onTaskSuccess(params: {
-        taskId: string;
-        nodeId: string;
-        cost: TaskRunResult["cost"];
-        extra: TaskRunResult["extra"];
-        traceId: string;
-    }) {
-        // const { taskId, nodeId, cost, extra, traceId } = params;
-        // // DOING -> DONE
-        // if (nextTaskStatus === TaskStatus.DONE) {
-        //     try {
-        //         await patchChangeTaskStatus({
-        //             id: taskId,
-        //             action: TaskStatusAction.FINISH,
-        //             extra,
-        //             nodeId,
-        //             cost,
-        //             traceId,
-        //         });
-        //     } catch (error) {
-        //         throw new Error("[onTaskSuccess] 任务成功但是更新TaskStatus失败:", error);
-        //     }
-        //     try {
-        //         await updateTargetDetails<Node, NodeDetails>({
-        //             id: nodeId,
-        //             updateFn: (details) => {
-        //                 return {
-        //                     ...details,
-        //                     lastHeartBeat: Date.now(),
-        //                     nodeStatus: NodeStatus.READY,
-        //                 };
-        //             },
-        //         });
-        //     } catch (error) {
-        //         throw new Error("[onTaskSuccess] 任务成功但是更新NodeStatus失败:", error);
-        //     }
-        // } else {
-        //     // TODO
-        // }
-    }
-
-    async onTaskFailed(params: {
-        taskId: string;
-        nodeId: string;
-        cost: TaskRunResult["cost"];
-        extra: TaskRunResult["extra"];
-        traceId: string;
-    }) {
-        // const { taskId, nodeId, extra, traceId } = params;
-        // // DOING -> OPEN
-        // try {
-        //     await patchChangeTaskStatus({
-        //         id: taskId,
-        //         action: TaskStatusAction.RESET,
-        //         extra,
-        //         nodeId,
-        //         traceId,
-        //     });
-        // } catch (error) {
-        //     throw new Error("[onTaskFailed] 任务失败且更新TaskStatus失败:", error);
-        // }
-        // try {
-        //     await updateTargetDetails<Node, NodeDetails>({
-        //         id: nodeId,
-        //         updateFn: (details) => {
-        //             return {
-        //                 ...details,
-        //                 lastHeartBeat: Date.now(),
-        //                 nodeStatus: NodeStatus.READY,
-        //             };
-        //         },
-        //     });
-        // } catch (error) {
-        //     throw new Error("[onTaskFailed] 任务失败且更新NodeStatus失败:", error);
-        // }
+        if (changeNodeStatusError) {
+            logger.error(changeNodeStatusError.message, {
+                topic: "node",
+                context: logContext,
+            });
+            throw new Error(`${outcomePrefix}但是更新NodeStatus失敗`);
+        }
+        logger.info("更新NodeStatus成功", { topic: "node", context: logContext });
     }
 
     async shutdown() {
@@ -382,7 +363,10 @@ export class NodeManager {
             this.isRunning = false;
             logger.info("正在登出节点", { topic: "node", context: { nodeId: this.localNodeId } });
             try {
-                const { error } = await patchStopNode({ nodeId: this.localNodeId });
+                const { error } = await patchStopNode({
+                    nodeId: this.localNodeId,
+                    traceId: this.startupTraceId,
+                });
                 if (error) {
                     throw new Error(`patchStopNode 失败: ${error.message}`);
                 }
@@ -390,7 +374,7 @@ export class NodeManager {
             } catch (error) {
                 logger.error("登出节点失败", {
                     topic: "node",
-                    context: { error: error instanceof Error ? error.message : error },
+                    context: { error: getErrorMessage(error) },
                 });
             } finally {
                 logger.info("节点进程退出", { topic: "node" });
@@ -408,22 +392,19 @@ export class NodeManager {
         });
 
         logger.info("开始发送心跳", { topic: "node" });
-        try {
-            const { error, data: lastHeartBeat } = await patchNodeHeartBeat({ nodeId });
-            if (error || lastHeartBeat == null) {
-                throw error ?? new Error("patchNodeHeartBeat 返回空数据");
-            }
-            logger.success("心跳更新成功", {
-                topic: "node",
-                context: { lastHeartBeat: formatHeartbeat(lastHeartBeat) },
-            });
-        } catch (error) {
+        const { error, data: lastHeartBeat } = await patchNodeHeartBeat({ nodeId, traceId: loopTraceId });
+        if (error || lastHeartBeat == null) {
+            // TODO should not happen this critical error 
             logger.error("心跳更新失败", {
                 topic: "node",
-                context: { error: error instanceof Error ? error.message : error },
+                context: { error: getErrorMessage(error) },
             });
-            await this.shutdown();
+            throw error ?? new Error("patchNodeHeartBeat Failed");
         }
+        logger.success("心跳更新成功", {
+            topic: "node",
+            context: { lastHeartBeat: formatHeartbeat(lastHeartBeat) },
+        });
     }
 
     async batchCommand(ctx: NodeLoopContext) {
