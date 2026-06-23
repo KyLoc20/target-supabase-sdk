@@ -1,12 +1,25 @@
 import { isDevEnvironment } from "../../core.utils";
 import { generateUniqueId } from "../utils/id.utils";
 
+/**
+ * Log severity and semantics (low → high). `minLevel` filters by {@link LOG_LEVEL_RANK}.
+ *
+ * | Level    | Rank | When to use |
+ * |----------|------|-------------|
+ * | DEBUG    | 0    | Diagnostic detail for dev/troubleshooting; noisy, safe to drop in prod. |
+ * | INFO     | 1    | Normal operational flow (startup, polling, state transitions). |
+ * | SUCCESS  | 2    | Positive milestone within a flow (not a separate severity axis — same band as INFO). |
+ * | WARN     | 3    | Recoverable anomaly or degradation; work continues but worth watching. |
+ * | ERROR    | 4    | A concrete operation failed (API, task step, I/O); investigate and retry/fix locally. |
+ * | CRITICAL | 5    | Invariant violated — design flaw, data-integrity risk, or business rule broken; escalate and fix urgently. |
+ */
 enum LogLevel {
     DEBUG = "DEBUG",
     INFO = "INFO",
     SUCCESS = "SUCCESS",
     WARN = "WARN",
     ERROR = "ERROR",
+    CRITICAL = "CRITICAL",
 }
 
 const LOG_LEVEL_RANK: Record<LogLevel, number> = {
@@ -15,6 +28,7 @@ const LOG_LEVEL_RANK: Record<LogLevel, number> = {
     [LogLevel.SUCCESS]: 2,
     [LogLevel.WARN]: 3,
     [LogLevel.ERROR]: 4,
+    [LogLevel.CRITICAL]: 5,
 };
 
 interface LogEntry {
@@ -76,11 +90,18 @@ const DEFAULT_OPTIONS: LogOptions = {
 };
 
 interface LoggerWithContext {
+    /** Rank 0 — diagnostic detail; dev/troubleshooting only. */
     debug: (message: LogParams["message"], restParams?: LogRestParams) => void;
+    /** Rank 1 — normal operational flow. */
     info: (message: LogParams["message"], restParams?: LogRestParams) => void;
+    /** Rank 2 — positive milestone (semantic INFO, not higher severity). */
     success: (message: LogParams["message"], restParams?: LogRestParams) => void;
+    /** Rank 3 — recoverable anomaly; system continues. */
     warn: (message: LogParams["message"], restParams?: LogRestParams) => void;
+    /** Rank 4 — a concrete operation failed; needs investigation. */
     error: (message: LogParams["message"], restParams?: LogRestParams) => void;
+    /** Rank 5 — invariant / design / integrity breach; escalate immediately. */
+    critical: (message: LogParams["message"], restParams?: LogRestParams) => void;
     /** Merge partial fields into this logger's bound context (e.g. nodeId after register). */
     resetContext: (fields: Partial<LogContext>) => void;
 }
@@ -126,6 +147,7 @@ class LogManager {
         [LogLevel.SUCCESS]: "✅",
         [LogLevel.WARN]: "⚠️",
         [LogLevel.ERROR]: "❌",
+        [LogLevel.CRITICAL]: "💀",
     };
 
     private constructor(options?: Partial<LogOptions>) {
@@ -184,6 +206,14 @@ class LogManager {
         };
     }
 
+    private formatLevelTag(entry: LogEntry): string {
+        const emoji = this.options.formatEmoji ? `${this.levelEmojis[entry.level]} ` : "";
+        if (entry.level === LogLevel.CRITICAL) {
+            return `[${emoji}*** ${entry.level} ***]`;
+        }
+        return `[${emoji}${entry.level}]`;
+    }
+
     private formatLog(entry: LogEntry): string {
         const parts: string[] = [];
 
@@ -191,8 +221,7 @@ class LogManager {
             parts.push(`[${new Date(entry.timestamp).toISOString()}]`);
         }
 
-        const emoji = this.options.formatEmoji ? `${this.levelEmojis[entry.level]} ` : "";
-        parts.push(`[${emoji}${entry.level}]`);
+        parts.push(this.formatLevelTag(entry));
         parts.push(
             `traceId=${entry.traceId} nodeId=${entry.nodeId ?? "--"} module=${entry.module} topic=${entry.topic ?? "--"}`
         );
@@ -201,7 +230,9 @@ class LogManager {
             parts.push(`prefix=${this.options.formatPrefix}`);
         }
 
-        parts.push(`| ${entry.message}`);
+        const message =
+            entry.level === LogLevel.CRITICAL ? `>>> ${entry.message} <<<` : entry.message;
+        parts.push(`| ${message}`);
 
         if (entry.extra) {
             parts.push(`| extra=${entry.extra}`);
@@ -213,6 +244,20 @@ class LogManager {
         }
 
         return parts.join(" ");
+    }
+
+    private emitLog(entry: LogEntry, formatted: string): void {
+        switch (entry.level) {
+            case LogLevel.WARN:
+                console.warn(formatted);
+                break;
+            case LogLevel.ERROR:
+            case LogLevel.CRITICAL:
+                console.error(formatted);
+                break;
+            default:
+                console.log(formatted);
+        }
     }
 
     private log(
@@ -236,7 +281,8 @@ class LogManager {
             this.history.shift();
         }
 
-        console.log(this.formatLog(entry));
+        const formatted = this.formatLog(entry);
+        this.emitLog(entry, formatted);
         this.options.onLog?.(entry);
     }
 
@@ -264,6 +310,10 @@ class LogManager {
         this.log(LogLevel.ERROR, message, logContext, restParams);
     }
 
+    public critical(message: LogParams["message"], logContext: LogContext, restParams?: LogRestParams) {
+        this.log(LogLevel.CRITICAL, message, logContext, restParams);
+    }
+
     public withContext(context: LogContext): { logger: LoggerWithContext; context: LogContext } {
         const boundContext: LogContext = { ...context };
 
@@ -273,6 +323,7 @@ class LogManager {
             success: (message, restParams) => this.success(message, boundContext, restParams),
             warn: (message, restParams) => this.warn(message, boundContext, restParams),
             error: (message, restParams) => this.error(message, boundContext, restParams),
+            critical: (message, restParams) => this.critical(message, boundContext, restParams),
             resetContext: (fields) => {
                 Object.assign(boundContext, fields);
             },

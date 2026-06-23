@@ -1,5 +1,5 @@
-import { getPossibleTarget, QueryFilter, updateTargetDetails, validateWithSchema } from "../core.api";
-import { generateResponse } from "../core.interface";
+import { getPossibleTarget, QueryFilter, updateTargetDetails, validateWithSchema, isOptimisticLockError, OPTIMISTIC_LOCK_FAILED_MESSAGE } from "../core.api";
+import { generateResponse, type SupabaseResponse } from "../core.interface";
 import { createApiLogger, type LoggerWithContext } from "../shared/log/log-manager";
 import { z } from "zod";
 import { CategoryTask, ResultCode, Task, TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
@@ -328,29 +328,39 @@ export const patchTaskProgress = validateWithSchema(
  * Flow: filter by `availableTaskList` → {@link claimTaskById} (same as `action: CLAIM`).
  * Equivalent to `patchChangeTaskStatus({ id, action: CLAIM, nodeId })` when `id` is already known.
  *
- * Returns `data: null` when no TODO task matches. Optimistic lock conflicts propagate as throws
- * (see `.cursor/skills/sdk-error-handling/SKILL.md`).
+ * Returns `data: null` when no TODO task matches.
+ * Optimistic lock conflicts return `{ error }` with `code: "OPTIMISTIC_LOCK"` (not thrown).
  */
 export const patchClaimTask = validateWithSchema(
     patchClaimTaskSchema,
     "patchClaimTaskSchema"
-)(async ({ nodeId, availableTaskList, traceId }) => {
+)(async ({ nodeId, availableTaskList, traceId }): Promise<SupabaseResponse<Task | null>> => {
     const logger = createApiLogger("patchClaimTask", { traceId, nodeId });
 
-    const { data: possibleTask } = await getPossibleTarget({
-        filterList: [
-            { field: "category", operator: "eq", value: CategoryTask.TASK },
-            { field: TASK_STATUS_FIELD, operator: "eq", value: TaskStatus.TODO },
-            { field: "value", operator: "in", value: availableTaskList },
-        ],
-    });
+    try {
+        const { data: possibleTask } = await getPossibleTarget({
+            filterList: [
+                { field: "category", operator: "eq", value: CategoryTask.TASK },
+                { field: TASK_STATUS_FIELD, operator: "eq", value: TaskStatus.TODO },
+                { field: "value", operator: "in", value: availableTaskList },
+            ],
+        });
 
-    if (possibleTask == null) {
-        return generateResponse.success(null);
+        if (possibleTask == null) {
+            return generateResponse.success(null);
+        }
+
+        const todoTask = possibleTask as Task;
+        const data = await claimTaskById({ taskId: todoTask.id, nodeId });
+        logTaskTransition(logger, "patchClaimTask", data);
+        return generateResponse.success(data);
+    } catch (error) {
+        if (isOptimisticLockError(error)) {
+            logger.debug("認領競爭失敗，本輪無可認領任務", { topic: "task" });
+            return generateResponse.error(OPTIMISTIC_LOCK_FAILED_MESSAGE, undefined, "OPTIMISTIC_LOCK") as SupabaseResponse<Task | null>;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error("認領任務失敗", { topic: "task", context: { error: message } });
+        return generateResponse.error(message) as SupabaseResponse<Task | null>;
     }
-
-    const todoTask = possibleTask as Task;
-    const data = await claimTaskById({ taskId: todoTask.id, nodeId });
-    logTaskTransition(logger, "patchClaimTask", data);
-    return generateResponse.success(data);
 });

@@ -1,7 +1,9 @@
 import { Target } from "../core.interface";
 
 export enum NodeStatus {
+    /** Registered, not yet in worker loop. */
     READY = "READY",
+    /** Worker main loop is running (accepts tasks until shutdown). */
     BUSY = "BUSY",
     /** Heartbeat lost or voluntarily offline; considered unavailable by the scheduler. */
     LOST = "LOST",

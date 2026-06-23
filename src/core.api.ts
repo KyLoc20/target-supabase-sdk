@@ -11,6 +11,85 @@ export interface QueryFilter {
   value: unknown;
 }
 
+export const MAX_TARGET_LIST_PAGE_SIZE = 100;
+
+/** Alias for {@link pollTargetList} batch size cap. */
+export const MAX_POLL_TARGET_LIST_SIZE = MAX_TARGET_LIST_PAGE_SIZE;
+
+const TARGET_LIST_ORDER_FIELDS = new Set<string>(["created_at", "name", "value", "category"]);
+
+// biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
+export type TargetFilterBuilder = PostgrestFilterBuilder<any, any, any[], "target", unknown>;
+
+function validateTargetListPagination(pageNum: number, pageSize: number): void {
+  if (!Number.isInteger(pageNum) || pageNum < 0) {
+    throw new Error(`[getTargetList] pageNum must be a non-negative integer, got ${pageNum}`);
+  }
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > MAX_TARGET_LIST_PAGE_SIZE) {
+    throw new Error(
+      `[getTargetList] pageSize must be an integer between 1 and ${MAX_TARGET_LIST_PAGE_SIZE}, got ${pageSize}`
+    );
+  }
+}
+
+function resolveTargetListPagination(params: {
+  pageNum?: number;
+  pageSize?: number;
+  limit?: number;
+}): {
+  pageNum: number;
+  pageSize: number;
+} {
+  if (params.limit != null) {
+    validateTargetListPagination(0, params.limit);
+    return { pageNum: 0, pageSize: params.limit };
+  }
+  if (params.pageNum === undefined || params.pageSize === undefined) {
+    throw new Error("[getTargetList] Provide pageNum and pageSize, or limit.");
+  }
+  validateTargetListPagination(params.pageNum, params.pageSize);
+  return { pageNum: params.pageNum, pageSize: params.pageSize };
+}
+
+function validateTargetListOrderBy(orderBy: QueryOrderBy): void {
+  if (!TARGET_LIST_ORDER_FIELDS.has(orderBy.field)) {
+    throw new Error(
+      `[getTargetList] Unsupported orderBy.field "${orderBy.field}"; allowed: ${[...TARGET_LIST_ORDER_FIELDS].join(", ")}`
+    );
+  }
+}
+
+/**
+ * 构建带 category 作用域的 target 查询（供 getTargetList / getTargetTotalCount / pollTargetList 共用）。
+ *
+ * 必要性：
+ * 1. category 是 target 表的分区维度，所有列表/计数/出队都必须限定 category，避免跨类型扫表。
+ * 2. 传入 filterBuilder 时仍强制 `.eq("category", category)`，防止自定义 builder 漏加 category 导致误查或安全问题。
+ * 3. 统一 select 普通列表与 count head 两种查询形态，再叠加 filterList，避免三处复制分支逻辑。
+ */
+function buildCategoryScopedQuery({
+  category,
+  filterList,
+  filterBuilder,
+  select,
+  selectOptions,
+}: {
+  category: Target["category"];
+  filterList: QueryFilter[];
+  filterBuilder?: TargetFilterBuilder;
+  select: string;
+  selectOptions?: { count: "exact"; head: true };
+}) {
+  const base =
+    filterBuilder != null
+      ? filterBuilder.eq("category", category)
+      : selectOptions != null
+        ? supabase.client.from("target").select(select, selectOptions).eq("category", category)
+        : supabase.client.from("target").select(select).eq("category", category);
+
+  return applyQueryFilters(base, filterList);
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
 function applyQueryFilter<Q extends PostgrestFilterBuilder<any, any, any, any, any>>(
   query: Q,
@@ -23,8 +102,10 @@ function applyQueryFilter<Q extends PostgrestFilterBuilder<any, any, any, any, a
       return query.neq(filter.field, filter.value) as Q;
     case "in":
       return query.in(filter.field, filter.value as unknown[]) as Q;
-    default:
-      return query;
+    default: {
+      const unsupportedOperator: never = filter.operator;
+      throw new Error(`[applyQueryFilter] Unsupported operator: ${unsupportedOperator}`);
+    }
   }
 }
 
@@ -70,55 +151,72 @@ export const getPossibleTarget = async ({ filterList }: { filterList: QueryFilte
 };
 
 export interface GetTargetListParams extends BaseQueryParams {
-  pageNum: number;
-  pageSize: number;
   category: Target["category"];
+  /** 0-based page index. Required with pageSize unless `limit` is set. */
+  pageNum?: number;
+  pageSize?: number;
+  /** Shorthand for `{ pageNum: 0, pageSize: limit }`. Max {@link MAX_TARGET_LIST_PAGE_SIZE}. */
+  limit?: number;
+  /** PostgREST select clause; defaults to `"*"`. */
+  selectFields?: string;
+  /** Custom query builder; `category` and `filterList` are still applied. */
+  filterBuilder?: TargetFilterBuilder;
 }
 
-export const getTargetList = async ({
+/**
+ * Paginated target list by category. Failures throw via `handleSupabaseError` (no `{ error }` envelope).
+ */
+export const getTargetList = async <T extends Target = Target>({
   pageNum,
   pageSize,
+  limit,
   category,
   filterList = [],
   orderBy = { field: "created_at", ascending: false },
+  selectFields = "*",
   filterBuilder,
-}: GetTargetListParams & {
-  // biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
-  filterBuilder?: PostgrestFilterBuilder<any, any, any[], "target", unknown>;
-}) => {
-  const query =
-    filterBuilder ??
-    applyQueryFilters(supabase.client.from("target").select("*").eq("category", category), filterList);
+}: GetTargetListParams) => {
+  const { pageNum: resolvedPageNum, pageSize: resolvedPageSize } = resolveTargetListPagination({
+    pageNum,
+    pageSize,
+    limit,
+  });
+  validateTargetListOrderBy(orderBy);
+
+  const query = buildCategoryScopedQuery({
+    category,
+    filterList,
+    filterBuilder,
+    select: selectFields,
+  });
 
   const { data, error } = await query
     .order(orderBy.field, { ascending: orderBy.ascending })
-    .range(pageNum * pageSize, (pageNum + 1) * pageSize - 1);
+    .range(resolvedPageNum * resolvedPageSize, (resolvedPageNum + 1) * resolvedPageSize - 1);
 
   if (error) {
     handleSupabaseError("getTargetList", error, "Failed to fetch target list.");
   }
-  return generateResponse.success<Target[]>(data);
+  return generateResponse.success<T[]>((data ?? []) as T[]);
 };
 
 export interface GetTargetTotalCountParams extends BaseQueryParams {
   category: Target["category"];
-  // biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
-  filterBuilder?: PostgrestFilterBuilder<any, any, any[], "target", unknown>;
+  /** Custom query builder; `category` and `filterList` are still applied. */
+  filterBuilder?: TargetFilterBuilder;
 }
 export const getTargetTotalCount = async ({
   category,
   filterList = [],
   filterBuilder,
 }: GetTargetTotalCountParams) => {
-  const query =
-    filterBuilder ??
-    applyQueryFilters(
-      supabase.client
-        .from("target")
-        .select("id", { count: "exact", head: true })
-        .eq("category", category),
-      filterList
-    );
+  const query = buildCategoryScopedQuery({
+    category,
+    filterList,
+    filterBuilder,
+    select: "id",
+    selectOptions: { count: "exact", head: true },
+  });
 
   const { count, error } = await query;
 
@@ -126,6 +224,76 @@ export const getTargetTotalCount = async ({
     handleSupabaseError("getTargetTotalCount", error, "Failed to fetch target count.");
   }
   return generateResponse.success<number>(count ?? 0);
+};
+
+function validatePollTargetListSize(size: number): void {
+  if (!Number.isInteger(size) || size < 1 || size > MAX_POLL_TARGET_LIST_SIZE) {
+    throw new Error(
+      `[pollTargetList] size must be an integer between 1 and ${MAX_POLL_TARGET_LIST_SIZE}, got ${size}`
+    );
+  }
+}
+
+export interface PollTargetListParams {
+  category: Target["category"];
+  /** Max rows to read and attempt dequeue (not offset pagination). */
+  size: number;
+  filterList?: QueryFilter[];
+  /** Order by `created_at`. Default `true` (oldest first). */
+  ascending?: boolean;
+  selectFields?: string;
+}
+
+/**
+ * Queue poll: SELECT up to `size` rows matching `category` + `filterList`, ordered by
+ * `created_at`, then DELETE each by `id`. Returns only dequeued rows (at-most-once).
+ *
+ * Delete failures (concurrent consumer) are skipped silently.
+ * Failures on the initial SELECT throw via `handleSupabaseError`.
+ *
+ * TODO(concurrency): 当前为 SELECT → 逐条 DELETE，非 DB 原子出队，多 consumer 并发时可能：
+ * - 重叠读取：两个 worker 同一批 SELECT 命中相同行，靠 DELETE 竞速，后者 skip（多数 at-most-once）
+ * - TOCTOU：SELECT 与 DELETE 之间无锁，极端情况下 DELETE 0 行仍不报错 → 可能重复计入 polled
+ * - 非 exactly-once：行已删但 worker 崩溃未处理 → 消息丢失
+ * 若同一 filter 多实例 poll（或多 worker 同 nodeId），需改为 DB 侧原子方案，例如：
+ * - RPC：`DELETE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED) RETURNING *`
+ * - 或 claim 状态机：UPDATE … WHERE pending → DELETE/标记已消费（类似 patchClaimTask 乐观锁）
+ * - 短期加固：DELETE 后校验影响行数，0 行则不 push 到 polled
+ */
+export const pollTargetList = async <T extends Target = Target>({
+  category,
+  size,
+  filterList = [],
+  ascending = true,
+  selectFields = "*",
+}: PollTargetListParams) => {
+  validatePollTargetListSize(size);
+
+  const query = buildCategoryScopedQuery({
+    category,
+    filterList,
+    select: selectFields,
+  });
+
+  const { data, error } = await query.order("created_at", { ascending }).limit(size);
+
+  if (error) {
+    handleSupabaseError("pollTargetList", error, "Failed to fetch targets for poll.");
+  }
+
+  const candidates = (data ?? []) as T[];
+  const polled: T[] = [];
+
+  for (const row of candidates) {
+    try {
+      await deleteTarget({ id: row.id });
+      polled.push(row);
+    } catch {
+      // Concurrent dequeue — row already removed
+    }
+  }
+
+  return generateResponse.success<T[]>(polled);
 };
 
 export const deleteTarget = async ({ id, filterList }: { id: string; filterList?: QueryFilter[] }) => {
