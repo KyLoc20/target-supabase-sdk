@@ -10,7 +10,7 @@ import { patchChangeNodeStatus, patchNodeHeartBeat, patchStopNode, postRegisterN
 import { NodeLoopContext, NodeStatus } from "./node.interface";
 import { formatHeartbeat, getRandomInterval } from "./node.utils";
 
-export class NodeManager {
+class NodeManager {
     private static readonly HEARTBEAT_FAILURE_THRESHOLD = 3;
 
     private _localNodeId: string | null = null;
@@ -29,9 +29,6 @@ export class NodeManager {
 
     get availableTaskList(): readonly string[] {
         return [...this._availableTaskList];
-    }
-    set availableTaskList(value: string[]) {
-        this._availableTaskList = value;
     }
 
     get localNodeId(): string | null {
@@ -147,19 +144,16 @@ export class NodeManager {
         });
         this.registerProcessLifecycle(logger);
 
-        logger.info("開始掃描並註冊本地任務", { topic: "node" });
+        logger.info("開始註冊任務", { topic: "node" });
         try {
-            this._availableTaskList = await TaskManager.runWorkerLocalTaskBootstrap(this._availableTaskList);
-            logger.success("本地任務註冊流程完成", {
-                topic: "node",
-                context: { availableTaskList: this._availableTaskList },
-            });
+            const { availableTaskList } = await TaskManager.registerTasks({ logger });
+            this._availableTaskList = availableTaskList;
         } catch (error) {
-            logger.error("本地任務註冊失敗", {
+            logger.error("任務註冊失敗", {
                 topic: "node",
                 context: { error: getErrorMessage(error) },
             });
-            this.requestShutdown("bootstrap:local-tasks");
+            this.requestShutdown("bootstrap:register-tasks");
             return;
         }
 
@@ -210,14 +204,14 @@ export class NodeManager {
             const loopTraceId = logManager.generateTraceId();
             const loopCtx: NodeLoopContext = { loopTraceId, nodeId };
             const { logger: iterLogger } = logManager.withContext({
-                module: "nodeManager",
+                module: "nodeManager-loop-iteration",
                 traceId: loopTraceId,
                 nodeId,
             });
 
             iterLogger.info(`主循環第 ${this.loopCount} 輪開始`, {
                 topic: "node",
-                context: { loopCount: this.loopCount },
+                context: { nodeId, loopCount: this.loopCount, },
             });
             try {
                 // 每輪三步：1. 控制指令  2. 心跳  3. 認領並執行任務
@@ -303,7 +297,6 @@ export class NodeManager {
                 taskName: task.name,
                 taskTypeKey: task.value,
                 taskStatus: task.details.status,
-                repoKey: task.details.repo?.value ?? null,
             },
         });
 
@@ -670,3 +663,5 @@ export class NodeManager {
         }
     }
 }
+
+export default NodeManager;

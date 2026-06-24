@@ -29,8 +29,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
+      - name: Typecheck library
         run: pnpm typecheck
+
+      - name: Typecheck scripts
+        run: pnpm typecheck:scripts
 
       - name: Verify publishable tarball
         run: npm pack --dry-run

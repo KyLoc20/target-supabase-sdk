@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
@@ -15,8 +15,18 @@ import {
 const importedModuleCache = new Map<string, LoadedRepoContext>();
 
 async function importFromFilePath(modulePath: string): Promise<unknown> {
-    const href = pathToFileURL(modulePath).href;
+    const href = modulePath.includes("://") ? modulePath : pathToFileURL(modulePath).href;
     return import(href);
+}
+
+/** Resolve repo `details.url` to a value suitable for dynamic `import()`. */
+export function resolveRepoEntryHref(url: string, cwd = process.cwd()): string {
+    const trimmed = url.trim();
+    if (trimmed.includes("://")) {
+        return trimmed;
+    }
+    const absolute = isAbsolute(trimmed) ? trimmed : resolve(cwd, trimmed);
+    return pathToFileURL(absolute).href;
 }
 
 async function importFromSource(source: string, cacheKey: string): Promise<unknown> {
@@ -79,6 +89,48 @@ export async function loadRepoContextFromScript({
         logger.error("动态加载 Repo 脚本失败", {
             topic: "repo",
             context: { scriptId: script.id, error: error instanceof Error ? error.message : error },
+        });
+        return null;
+    }
+}
+
+export async function loadRepoContextFromUrl({
+    logger,
+    url,
+    taskTypeKey,
+    exportName,
+}: {
+    logger: LoggerWithContext;
+    url: string;
+    taskTypeKey: string;
+    exportName?: string;
+}): Promise<LoadedRepoContext | null> {
+    const href = resolveRepoEntryHref(url);
+    const cacheKey = `${taskTypeKey}@url:${href}`;
+    const cached = importedModuleCache.get(cacheKey);
+    if (cached != null) {
+        logger.info("命中 Repo URL 模块缓存", { topic: "repo", context: { cacheKey } });
+        return cached;
+    }
+
+    try {
+        logger.info("从 Repo URL 动态加载脚本", { topic: "repo", context: { url, href } });
+        const moduleExports = await import(href);
+        const context = normalizeRepoContextModule(moduleExports, taskTypeKey, exportName);
+        if (context == null) {
+            logger.warn("Repo URL 模块未导出合法的 TaskRepoContext", {
+                topic: "repo",
+                context: { url, exportName: exportName ?? "default" },
+            });
+            return null;
+        }
+        const loaded: LoadedRepoContext = { context, contentHash: cacheKey };
+        importedModuleCache.set(cacheKey, loaded);
+        return loaded;
+    } catch (error) {
+        logger.error("从 Repo URL 动态加载失败", {
+            topic: "repo",
+            context: { url, error: error instanceof Error ? error.message : error },
         });
         return null;
     }

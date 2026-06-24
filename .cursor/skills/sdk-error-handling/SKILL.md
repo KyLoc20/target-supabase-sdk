@@ -2,139 +2,178 @@
 name: sdk-error-handling
 description: >-
   Error-handling boundaries for target-supabase-sdk. Use when implementing or reviewing
-  SDK functions (patchClaimTask, updateTargetDetails), deciding throw vs SupabaseResponse,
-  null vs error.code, try/catch placement, or RPC-style error envelopes.
+  *.api.ts public APIs, generateResponse.error vs throw, SupabaseResponse envelopes,
+  validateWithSchema, null vs error.code, or core vs feature layer boundaries.
 ---
 
 # SDK error-handling boundaries (target-supabase-sdk)
 
-## Current status (keep for now)
+## Paradigm: `*.api.ts` never throws
 
-**Feature APIs propagate throws; callers catch.** `patchClaimTask` follows this model today.
+**All public functions in `*.api.ts` return `Promise<SupabaseResponse<T>>` and must not throw to callers.**
 
-| Outcome | Current behavior |
-|---------|------------------|
-| No TODO task | `generateResponse.success(null)` |
-| Claim succeeded | `generateResponse.success(Task)` |
-| Optimistic lock / DB failure | **Throw** from `updateTargetDetails` — caller uses `isOptimisticLockError` |
+| Outcome | Mechanism |
+|---------|-----------|
+| Success with data | `generateResponse.success(data)` |
+| Success, expected empty | `generateResponse.success(null)` |
+| Validation / business / infra failure | `generateResponse.error(message, statusCode?, code?)` |
 
-Do not catch lock conflicts inside `patchClaimTask` and return `null` — that conflates "no task" with "lost race".
+Callers (managers, scripts, UI) branch on `success` / `error` — no try/catch required for normal control flow.
 
-## Core rule (today)
+**Core (`core.api.ts`) still throws.** Feature APIs catch at the boundary and map to envelope.
 
-**Core throws. Feature API composes core and propagates. Application decides retry / logging policy.**
-
-Do not wrap lower-layer throws in try/catch at the feature API unless that behavior is an explicit, documented contract (see **Future direction** below — not implemented yet).
-
-## Layer responsibilities
-
-| Layer | Role | Errors (today) |
-|-------|------|----------------|
-| **Core** (`updateTargetDetails`, `createTarget`, `getPossibleTarget`) | DB read/write, optimistic lock on UPDATE; optimistic insert on CREATE | Throw (`handleSupabaseError`, lock / redundancy messages, missing row) |
-| **Feature API** (`patchClaimTask`, `patchUpsertReview`) | Compose core into a use case | **Propagate** — no catch-to-null |
-| **Application** (node scheduler, app UI) | Business policy | try/catch, `isOptimisticLockError`, retry, monitoring |
-
-## `null` vs `throw` (today)
-
-| Meaning | Mechanism | Example |
-|---------|-----------|---------|
-| Expected empty outcome | `generateResponse.success(null)` | No TODO task matches filters |
-| Contention / conflict | **Throw** | Optimistic lock failed; create redundancy conflict (`isCreateTargetAlreadyExistsError`) |
-| Infrastructure / validation failure | **Throw** | DB error, missing target |
-
-## Caller pattern (today — `patchClaimTask`)
-
-```typescript
-import { patchClaimTask, isOptimisticLockError } from "target-supabase-sdk";
-
-try {
-  const { data } = await patchClaimTask({ nodeId, availableTaskList });
-  if (data == null) {
-    // No matching TODO task — idle or poll again later
-    return;
-  }
-  await runTask(data);
-} catch (error) {
-  if (isOptimisticLockError(error)) {
-    // Another node claimed it — retry or pick next (caller policy)
-    return;
-  }
-  throw error;
-}
+```text
+Caller → *.api.ts (envelope, no throw) → core.api.ts (throw) → Supabase
 ```
-
-Helpers: `isOptimisticLockError`, `OPTIMISTIC_LOCK_FAILED_MESSAGE`, `isCreateTargetAlreadyExistsError`, `CREATE_TARGET_ALREADY_EXISTS_MESSAGE` — `src/core.api.ts`. Create redundancy strategy: [create-target-redundancy](../create-target-redundancy/SKILL.md).
-
-## Logging
-
-- **Feature API:** operational `console.log` for traceability (attempt / success / empty) is OK
-- **Do not** use catch-and-log to replace throw for errors callers must react to (today)
-- **Application** owns warn/error for retries and monitoring
-
-## Returning data after PATCH
-
-Returning the **full updated row** after a successful claim/patch is appropriate (`updateTargetDetails` already `.select()`). Map to slimmer DTOs at the app layer if needed.
 
 ---
 
-## Future direction (evaluated, not implemented)
+## Layer responsibilities
 
-Treat selected **public RPC-style APIs** (e.g. `patchClaimTask`) as a single API call where **all outcomes live in `SupabaseResponse`** — no throw to the caller. **Core still throws**; the RPC boundary catches and maps.
+| Layer | File pattern | Errors |
+|-------|--------------|--------|
+| **Core** | `core.api.ts` | Throw (`handleSupabaseError`, optimistic lock, redundancy) |
+| **Feature API** | `*.api.ts` | **Never throw** — try/catch core + Zod → `generateResponse` |
+| **Manager / worker** | `*-manager.ts`, `scripts/` | Read `error`; may throw for process lifecycle (e.g. worker shutdown) |
 
-### Two-layer model (target)
+Managers may translate `{ error }` into throw when aborting startup — that is **application policy**, not API contract.
 
-| Layer | Behavior |
-|-------|----------|
-| **Core** | Keep throwing |
-| **Public RPC API** | try/catch → `generateResponse.success` / `generateResponse.error`; internal details logged, not exposed |
+---
 
-This does **not** contradict "callers decide policy": the app reads `success` and `error.code` instead of try/catch.
+## Implementation pattern
 
-### Proposed outcome matrix (`patchClaimTask` pilot)
+### 1. Zod validation → envelope (not throw)
 
-| Scenario | `success` | `status_code` | `data` | `error.code` |
-|----------|-----------|---------------|--------|--------------|
-| Claimed | `true` | 200 | `Task` | — |
-| No TODO task | `true` | 200 | `null` | optional `NO_TASK_AVAILABLE` |
-| Empty `availableTaskList` | `false` | 400 | — | `EMPTY_TASK_LIST` |
-| Optimistic lock lost | `false` | 409 | — | `LOCK_CONFLICT` |
-| Unknown / DB | `false` | 500 | — | `INTERNAL_ERROR` (generic message to caller) |
-
-Suggested codes:
+`validateWithSchema` throws on invalid input. Wrap the exported API:
 
 ```typescript
-// Future — not in codebase yet
-EMPTY_TASK_LIST | NO_TASK_AVAILABLE | LOCK_CONFLICT | INTERNAL_ERROR
+export const getScanRemoteRepoValues = async (
+  payload: GetScanRemoteRepoValuesPayload
+): Promise<SupabaseResponse<string[]>> => {
+  try {
+    return await getScanRemoteRepoValuesValidated(payload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return generateResponse.error(message) as SupabaseResponse<string[]>;
+  }
+};
+
+const getScanRemoteRepoValuesValidated = validateWithSchema(
+  getScanRemoteRepoValuesSchema,
+  "getScanRemoteRepoValuesSchema"
+)(async (payload) => { /* ... */ });
 ```
 
-Extend `StatusCode` beyond `200 | 400` when implementing (e.g. 409, 500).
+Future: optional `validateWithSchemaSafe` in core that returns `{ ok, data } | { ok: false, message }` to avoid outer try/catch for Zod only.
 
-### Why consider this later
+### 2. Core composition → catch → envelope
 
-- Scheduler loops prefer `if (!res.success) switch (res.error.code)` over try/catch
-- Separates "no work" from "contention" without overloading `null`
-- Aligns with HTTP/RPC gateways mapping `SupabaseResponse` → HTTP status
+```typescript
+)(async (payload): Promise<SupabaseResponse<Task | null>> => {
+  try {
+    const { data: possibleTask } = await getPossibleTarget({ filterList });
+    if (possibleTask == null) {
+      return generateResponse.success(null);
+    }
+    const data = await claimTaskById({ taskId: possibleTask.id, nodeId });
+    return generateResponse.success(data);
+  } catch (error) {
+    if (isOptimisticLockError(error)) {
+      return generateResponse.error(OPTIMISTIC_LOCK_FAILED_MESSAGE, undefined, "OPTIMISTIC_LOCK") as SupabaseResponse<Task | null>;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return generateResponse.error(message) as SupabaseResponse<Task | null>;
+  }
+});
+```
 
-### Migration notes (when implementing)
+Reference: `patchClaimTask`, `getScanRemoteRepoValues`.
 
-1. Pilot on `patchClaimTask` only; do not rewrite all SDK APIs at once
-2. Add error-code enum + mapping helper (core throw → `generateResponse.error`)
-3. Log real errors internally; expose sanitized `error.message` for `INTERNAL_ERROR`
-4. Update this skill's **Current status** section to reflect RPC model
-5. Keep [optimistic-lock-update](../optimistic-lock-update/SKILL.md) — lock still enforced in Core
+### 3. Do not swallow errors silently
+
+- Log inside API when useful (`createApiLogger`)
+- Return `error.code` for machine-readable branches (lock conflict, validation, etc.)
+- Do not use `success(null)` for failures that need retry semantics
+
+---
+
+## `null` vs `error`
+
+| Meaning | Mechanism | Example |
+|---------|-----------|---------|
+| Expected empty outcome | `success: true`, `data: null` | No TODO task matches filters |
+| Validation failure | `success: false`, `error` | Invalid Zod payload |
+| Contention | `success: false`, `error.code: "OPTIMISTIC_LOCK"` | Lost claim race |
+| DB / unknown | `success: false`, `error` | Postgrest error message |
+
+Do not conflate "no task" with "lock lost" — both can use `data: null` only when **success** and empty is expected.
+
+---
+
+## Caller pattern (managers / scripts)
+
+```typescript
+const { data, error, success } = await patchClaimTask({ nodeId, availableTaskList });
+
+if (!success || error) {
+  logger.error("认领失败", { context: { error: error?.message, code: error?.code } });
+  return;
+}
+if (data == null) {
+  // 本轮无任务 — 正常空闲
+  return;
+}
+await runTask(data);
+```
+
+Worker startup may still throw after `{ error }` to trigger shutdown — intentional.
+
+---
+
+## Error codes (convention)
+
+Use `error.code` for stable branching:
+
+| Code | When |
+|------|------|
+| `OPTIMISTIC_LOCK` | Lock / race lost (`isOptimisticLockError`) |
+| `VALIDATION` | Zod / payload (optional — message often enough) |
+| `EMPTY_TASK_LIST` | Business rule: empty filter list (future) |
+| `NO_TASK_AVAILABLE` | Optional on `success(null)` for explicit idle (future) |
+
+Extend `StatusCode` (409, 500) when mapping to HTTP gateways.
+
+Helpers: `isOptimisticLockError`, `OPTIMISTIC_LOCK_FAILED_MESSAGE`, `isCreateTargetAlreadyExistsError` — `src/core.api.ts`.
+
+---
+
+## Migration status
+
+| Module | Status |
+|--------|--------|
+| `repo.api.ts` — `getScanRemoteRepoValues` | ✅ Envelope, no throw |
+| `task.api.ts` — `patchClaimTask` | ✅ Envelope for catch path |
+| `task.api.ts` — other exports | ⚠️ Still propagate core throws / Zod throws |
+| `node.api.ts`, `command.api.ts`, … | ⚠️ Migrate when touched |
+
+When editing any `*.api.ts`, convert to envelope model in the same PR.
 
 ---
 
 ## Do not
 
-- Reintroduce `beforeUpdateValidator` (see [optimistic-lock-update](../optimistic-lock-update/SKILL.md))
-- Catch `isOptimisticLockError` inside `patchClaimTask` and return `null` (**today**)
-- Use `generateResponse.success(null)` for failures that need retry semantics (**today**)
-- Implement RPC envelope on one function without documenting the two-layer model in this skill
+- Throw from exported `*.api.ts` functions (validation, core, or business)
+- Let `validateWithSchema` throw reach callers without an outer envelope wrapper
+- Catch `isOptimisticLockError` and return `success(null)` — use `error` + code
+- Move envelope logic into `NodeManager` / `TaskManager` — boundary stays in `*.api.ts`
+- Make `core.api.ts` return envelopes — keep core throw-based
+
+---
 
 ## Reference
 
-- Optimistic lock: `.cursor/skills/optimistic-lock-update/SKILL.md`
-- Response envelope: `src/core.interface.ts` — `SupabaseResponse`, `generateResponse`
-- Core: `src/core.api.ts` — `updateTargetDetails`, `isOptimisticLockError`
-- Feature API: `src/task/task.api.ts` — `patchClaimTask`, `patchChangeTaskStatus`
+- Envelope: `src/core.interface.ts` — `SupabaseResponse`, `generateResponse`
+- Core: `src/core.api.ts`
+- Examples: `src/repo/repo.api.ts`, `src/task/task.api.ts` (`patchClaimTask`)
+- Optimistic lock: [optimistic-lock-update](../optimistic-lock-update/SKILL.md)
+- Create redundancy: [create-target-redundancy](../create-target-redundancy/SKILL.md)

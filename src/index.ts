@@ -60,5 +60,14 @@ export * from "./list/list.api";
 export * from "./word/word.interface";
 
 export * from "./task/task.interface";
+export * from "./task/task.api";
+export { default as TaskManager } from "./task/task-manager";
+export type { RegisterTasksOptions, RegisterTasksResult } from "./task/task-manager";
+
+export * from "./node/node.interface";
+export * from "./node/node.api";
+export { default as NodeManager } from "./node/node-manager";
 
 export * from "./repo/repo.interface";
+export * from "./repo/repo.api";
+export { default as RepoManager } from "./repo/repo-manager";

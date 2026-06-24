@@ -1,5 +1,4 @@
 import { getPossibleTarget } from "../core.api";
-import { TargetPayload } from "../core.interface";
 import { SupabaseInitializer } from "../supabase";
 import { LoggerWithContext } from "../shared/log/log-manager";
 import type { TaskRepoContext, TaskRepoScriptRecord } from "../task/task-repo-context";
@@ -10,7 +9,11 @@ import {
     pickEntryScript,
 } from "./repo-context.utils";
 import { CategoryRepo, Repo } from "./repo.interface";
-import { clearRepoScriptModuleCache, loadRepoContextFromScript } from "./repo.script-loader";
+import {
+    clearRepoScriptModuleCache,
+    loadRepoContextFromScript,
+    loadRepoContextFromUrl,
+} from "./repo.script-loader";
 
 const supabase = SupabaseInitializer.getInstance();
 
@@ -23,78 +26,36 @@ const remoteContextCache = new Map<string, TaskRepoContext>();
 
 export interface GetRepoContextParams {
     logger: LoggerWithContext;
-    /** Task type key (`task.value`) */
+    /** Task type key (`task.value`) — matches {@link Repo.value} for remote lookup; local registry key */
     taskTypeKey: string;
-    /** Repo snapshot attached on the task — used for hash verification */
-    repo?: TargetPayload<Repo>;
 }
 
-function buildCacheKey(taskTypeKey: string, repo?: TargetPayload<Repo>): string {
-    const repoHash = repo?.details?.hash ?? "";
-    return `${taskTypeKey}@${repoHash}`;
+function buildRemoteCacheKey(taskTypeKey: string, contentHash: string): string {
+    return `${taskTypeKey}@${contentHash}`;
 }
 
-function verifyRepoHash(
-    logger: LoggerWithContext,
-    expectedHash: string | undefined,
-    remoteHash: string | undefined
-): boolean {
-    if (expectedHash == null || expectedHash === "") {
-        return true;
-    }
-    if (remoteHash == null || remoteHash === "") {
-        logger.warn("任务携带 repo hash，但远程 Repo 无 hash", { topic: "repo" });
-        return false;
-    }
-    if (expectedHash !== remoteHash) {
-        logger.warn("Repo hash 不匹配", {
-            topic: "repo",
-            context: { expectedHash, remoteHash },
-        });
-        return false;
-    }
-    return true;
-}
-
-async function fetchRemoteRepo(taskTypeKey: string, repo?: TargetPayload<Repo>): Promise<Repo | null> {
-    const repoKey = repo?.value ?? taskTypeKey;
+async function fetchRemoteRepo(taskTypeKey: string): Promise<Repo | null> {
     const { data } = await getPossibleTarget({
         filterList: [
             { field: "category", operator: "eq", value: CategoryRepo.REPO },
-            { field: "value", operator: "eq", value: repoKey },
+            { field: "value", operator: "eq", value: taskTypeKey },
         ],
     });
     return (data as Repo | null) ?? null;
 }
 
-async function fetchRemoteScripts(taskTypeKey: string, repo?: TargetPayload<Repo>): Promise<TaskRepoScriptRecord[]> {
-    const repoKey = repo?.value ?? taskTypeKey;
+async function fetchRemoteScripts(taskTypeKey: string): Promise<TaskRepoScriptRecord[]> {
+    const { data, error } = await supabase.client
+        .from("target")
+        .select("id, value, details")
+        .eq("category", TASK_REPO_SCRIPT_CATEGORY)
+        .eq("value", taskTypeKey);
 
-    const [byValueResult, byRepoKeyResult] = await Promise.all([
-        supabase.client
-            .from("target")
-            .select("id, value, details")
-            .eq("category", TASK_REPO_SCRIPT_CATEGORY)
-            .eq("value", repoKey),
-        supabase.client
-            .from("target")
-            .select("id, value, details")
-            .eq("category", TASK_REPO_SCRIPT_CATEGORY)
-            .eq("details->>repoKey", repoKey),
-    ]);
-
-    if (byValueResult.error) {
-        throw byValueResult.error;
-    }
-    if (byRepoKeyResult.error) {
-        throw byRepoKeyResult.error;
+    if (error) {
+        throw error;
     }
 
-    const merged = new Map<string, TaskRepoScriptRecord>();
-    for (const row of [...(byValueResult.data ?? []), ...(byRepoKeyResult.data ?? [])]) {
-        merged.set(row.id, row as TaskRepoScriptRecord);
-    }
-    return [...merged.values()];
+    return (data ?? []) as TaskRepoScriptRecord[];
 }
 
 async function loadLocalEntry(
@@ -125,45 +86,46 @@ async function loadLocalEntry(
 
 async function loadRemoteRepoContext(
     logger: LoggerWithContext,
-    taskTypeKey: string,
-    repo?: TargetPayload<Repo>
+    taskTypeKey: string
 ): Promise<TaskRepoContext | null> {
-    const cacheKey = buildCacheKey(taskTypeKey, repo);
+    logger.info("从 Supabase 加载 Repo", { topic: "repo", context: { taskTypeKey } });
+
+    const remoteRepo = await fetchRemoteRepo(taskTypeKey);
+    if (remoteRepo == null) {
+        logger.warn("Supabase 未找到 Repo", { topic: "repo", context: { taskTypeKey } });
+        return null;
+    }
+
+    const repoUrl = remoteRepo.details?.url?.trim() ?? "";
+    const repoHash = remoteRepo.details?.hash?.trim() ?? repoUrl;
+    const cacheKey = buildRemoteCacheKey(taskTypeKey, repoHash);
     const cached = remoteContextCache.get(cacheKey);
     if (cached != null) {
         logger.info("命中远程 Repo 上下文缓存", { topic: "repo", context: { cacheKey } });
         return cached;
     }
 
-    logger.info("从 Supabase 加载 Repo", { topic: "repo", context: { taskTypeKey } });
-
-    const remoteRepo = await fetchRemoteRepo(taskTypeKey, repo);
-    if (remoteRepo == null) {
-        logger.warn("Supabase 未找到 Repo", { topic: "repo", context: { taskTypeKey } });
-        return null;
-    }
-
-    if (!verifyRepoHash(logger, repo?.details?.hash, remoteRepo.details?.hash)) {
-        return null;
-    }
-
-    const scripts = await fetchRemoteScripts(taskTypeKey, repo);
+    const scripts = await fetchRemoteScripts(taskTypeKey);
     const entryScript = pickEntryScript(scripts);
-    if (entryScript == null) {
-        logger.warn("Repo 下未找到可执行脚本", { topic: "repo", context: { taskTypeKey } });
-        return null;
-    }
 
-    if (!assertScriptLoadable(entryScript.details)) {
-        logger.warn("入口脚本缺少 source 或 modulePath", {
+    let loaded =
+        entryScript != null && assertScriptLoadable(entryScript.details)
+            ? await loadRepoContextFromScript({ logger, script: entryScript, taskTypeKey })
+            : null;
+
+    if (loaded == null && repoUrl !== "") {
+        logger.info("未找到 script 行，尝试从 Repo.details.url 加载", {
             topic: "repo",
-            context: { scriptId: entryScript.id },
+            context: { taskTypeKey, url: repoUrl },
         });
-        return null;
+        loaded = await loadRepoContextFromUrl({ logger, url: repoUrl, taskTypeKey });
     }
 
-    const loaded = await loadRepoContextFromScript({ logger, script: entryScript, taskTypeKey });
     if (loaded == null) {
+        logger.warn("无法从 Repo 加载 TaskRepoContext", {
+            topic: "repo",
+            context: { taskTypeKey, hasUrl: repoUrl !== "", scriptCount: scripts.length },
+        });
         return null;
     }
 
@@ -174,7 +136,6 @@ async function loadRemoteRepoContext(
 const getRepoContext = async <RepoContext extends TaskRepoContext>({
     logger,
     taskTypeKey,
-    repo,
 }: GetRepoContextParams): Promise<RepoContext | null> => {
     const localEntry = localRepoRegistry.get(taskTypeKey);
     if (localEntry != null) {
@@ -188,7 +149,7 @@ const getRepoContext = async <RepoContext extends TaskRepoContext>({
     }
 
     try {
-        const context = await loadRemoteRepoContext(logger, taskTypeKey, repo);
+        const context = await loadRemoteRepoContext(logger, taskTypeKey);
         if (context != null && isTaskRepoContext(context)) {
             return context as RepoContext;
         }

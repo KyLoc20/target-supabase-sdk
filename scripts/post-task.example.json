@@ -1,0 +1,6 @@
+{
+  "name": "Weather Taipei",
+  "value": "weather",
+  "params": { "city": "Taipei" },
+  "taskStatus": "TODO"
+}

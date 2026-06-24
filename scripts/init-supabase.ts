@@ -1,0 +1,22 @@
+import { SupabaseInitializer } from "../src/supabase.js";
+import { loadEnvFiles } from "./load-env.js";
+
+export function requireEnv(name: string): string {
+    const value = process.env[name]?.trim();
+    if (value == null || value === "") {
+        throw new Error(`Missing required environment variable: ${name} (see .env.example)`);
+    }
+    return value;
+}
+
+/** Load `.env.local` / `.env` and initialize Supabase clients. */
+export async function initSupabaseFromEnv(projectRoot: string): Promise<void> {
+    loadEnvFiles(projectRoot);
+
+    await SupabaseInitializer.getInstance().initialize({
+        supabaseUrl: requireEnv("VITE_SUPABASE_URL"),
+        supabaseAnonKey: requireEnv("VITE_SUPABASE_ANON_KEY"),
+        supabaseNeedAuthUrl: process.env.VITE_SUPABASE_NEED_AUTH_URL,
+        supabaseNeedAuthAnonKey: process.env.VITE_SUPABASE_NEED_AUTH_ANON_KEY,
+    });
+}

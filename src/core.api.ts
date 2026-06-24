@@ -200,6 +200,83 @@ export const getTargetList = async <T extends Target = Target>({
   return generateResponse.success<T[]>((data ?? []) as T[]);
 };
 
+export interface ScanTargetListParams {
+  category: Target["category"];
+  filterList?: QueryFilter[];
+  orderBy?: QueryOrderBy;
+  selectFields?: string;
+  filterBuilder?: TargetFilterBuilder;
+  /** Stop after this many rows (optional guard against runaway scans). */
+  maxRows?: number;
+}
+
+/**
+ * Scan all rows matching `category` + `filterList` by paging until exhausted.
+ *
+ * Use for worker bootstrap / sync jobs that need the full matching set.
+ * For UI pagination, use {@link getTargetList} (single page, explicit pageNum).
+ *
+ * Internal batch size is fixed at {@link MAX_TARGET_LIST_PAGE_SIZE} (PostgREST max-rows).
+ * Callers receive the full merged result; they do not pass a per-request page size.
+ *
+ * Uses offset pagination (`.range`). Stable enough for small catalogs (e.g. Repo registry);
+ * for large tables under concurrent writes, consider a DB RPC or keyset pagination later.
+ */
+export const scanTargetList = async <T extends Target = Target>({
+  category,
+  filterList = [],
+  orderBy = { field: "created_at", ascending: false },
+  selectFields = "*",
+  filterBuilder,
+  maxRows,
+}: ScanTargetListParams) => {
+  const batchSize = MAX_TARGET_LIST_PAGE_SIZE;
+  validateTargetListOrderBy(orderBy);
+  if (maxRows != null && (!Number.isInteger(maxRows) || maxRows < 1)) {
+    throw new Error(`[scanTargetList] maxRows must be a positive integer, got ${maxRows}`);
+  }
+
+  const rows: T[] = [];
+  let pageNum = 0;
+
+  while (true) {
+    const query = buildCategoryScopedQuery({
+      category,
+      filterList,
+      filterBuilder,
+      select: selectFields,
+    });
+
+    const { data, error } = await query
+      .order(orderBy.field, { ascending: orderBy.ascending })
+      .range(pageNum * batchSize, (pageNum + 1) * batchSize - 1);
+
+    if (error) {
+      handleSupabaseError("scanTargetList", error, "Failed to scan target list.");
+    }
+
+    const page = (data ?? []) as T[];
+    if (page.length === 0) {
+      break;
+    }
+
+    rows.push(...page);
+
+    if (maxRows != null && rows.length >= maxRows) {
+      rows.length = maxRows;
+      break;
+    }
+
+    if (page.length < batchSize) {
+      break;
+    }
+
+    pageNum += 1;
+  }
+
+  return generateResponse.success(rows);
+};
+
 export interface GetTargetTotalCountParams extends BaseQueryParams {
   category: Target["category"];
   /** Custom query builder; `category` and `filterList` are still applied. */

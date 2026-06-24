@@ -31,8 +31,6 @@ export const TASK_REPO_SCRIPT_CATEGORY = "script" as const;
  */
 export interface TaskRepoScriptDetails {
     manifestVersion: number;
-    /** Parent repo / task type key — used when querying scripts from Supabase */
-    repoKey?: string;
     /** Inline ESM source — written to temp file then dynamically imported (Node) */
     source?: string;
     /** Absolute path to an ESM module on the worker machine */

@@ -1,5 +1,4 @@
-import { Target, TargetPayload } from "../core.interface";
-import { Repo } from "../repo/repo.interface";
+import { Target } from "../core.interface";
 
 export enum CategoryTask {
     TASK = "task",
@@ -50,7 +49,6 @@ export interface Task extends Target {
 export interface TaskDetails {
     manifestVersion: number;
     status: TaskStatus;
-    repo: TargetPayload<Repo>;
     params: unknown;
     /** [0,100] */
     progress: number;

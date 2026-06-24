@@ -34,6 +34,9 @@
     "clean": "node --input-type=module -e \"import fs from 'node:fs'; fs.rmSync('dist', { recursive: true, force: true })\"",
     "build": "pnpm clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json",
+    "worker": "tsx scripts/run-node-worker.ts",
+    "post-task": "tsx scripts/post-task.ts",
     "dev": "tsc -p tsconfig.build.json --watch",
     "pack:check": "npm pack --dry-run",
     "prepack": "pnpm build"
@@ -51,6 +54,7 @@
     "@types/wicg-file-system-access": "^2023.10.7",
     "lodash-es": "^4.17.21",
     "typescript": "~5.7.2",
+    "tsx": "^4.19.4",
     "zod": "^3.24.0"
   },
   "publishConfig": {
