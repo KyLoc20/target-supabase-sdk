@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { TaskNode } from "../src/node/task-node.js";
+import { TriggerNode } from "../src/node/trigger-node.js";
 import { initSupabaseFromEnv } from "./init-supabase.js";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -9,12 +9,12 @@ const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 async function main(): Promise<void> {
     await initSupabaseFromEnv(projectRoot);
 
-    const taskNode = new TaskNode();
-    await taskNode.start();
+    const triggerNode = new TriggerNode();
+    await triggerNode.start();
 }
 
 main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("[run-node-worker] fatal:", message);
+    console.error("[run-trigger-node] fatal:", message);
     process.exit(1);
 });

@@ -1,0 +1,17 @@
+{
+  "name": "Daily Taipei Weather",
+  "value": "daily-weather-taipei",
+  "status": "ENABLED",
+  "schedule": {
+    "kind": "daily",
+    "hour": 9,
+    "minute": 0
+  },
+  "action": {
+    "kind": "post_task",
+    "taskTypeKey": "weather",
+    "taskParams": { "city": "Taipei" },
+    "taskStatus": "TODO"
+  },
+  "tagList": []
+}

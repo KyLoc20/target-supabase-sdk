@@ -36,8 +36,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:scripts": "tsc -p tsconfig.scripts.json",
     "worker": "tsx scripts/run-node-worker.ts",
+    "worker:trigger": "tsx scripts/run-trigger-node.ts",
     "post-task": "tsx scripts/post-task.ts",
     "post-command": "tsx scripts/post-command.ts",
+    "post-trigger": "tsx scripts/post-trigger.ts",
     "dev": "tsc -p tsconfig.build.json --watch",
     "pack:check": "npm pack --dry-run",
     "prepack": "pnpm build"

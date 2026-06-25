@@ -72,7 +72,9 @@ export type {
 
 export * from "./node/node.interface";
 export * from "./node/node.api";
-export { NodeManager } from "./node/node-manager";
+export { TaskNode } from "./node/task-node";
+export { TriggerNode } from "./node/trigger-node";
+export { BaseNodeRuntime } from "./node/node-runtime.base";
 
 export * from "./repo/repo.interface";
 export * from "./repo/repo.api";

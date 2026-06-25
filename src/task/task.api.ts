@@ -44,7 +44,7 @@ const TASK_NODE_ID_FIELD = "details->>nodeId" as const;
 
 const taskIdSchema = z.string().trim().min(1);
 const nodeIdSchema = z.string().trim().min(1);
-/** Optional — orchestrator (e.g. NodeManager loop) passes its trace to correlate logs. */
+/** Optional — orchestrator (e.g. TaskNode loop) passes its trace to correlate logs. */
 const traceIdSchema = z.string().trim().min(1).optional();
 
 const patchChangeTaskStatusBaseSchema = {

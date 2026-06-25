@@ -156,7 +156,7 @@ async function registerTasks({
     };
 }
 
-/** 将 taskFn 与 params 闭包绑定，供 NodeManager 无参调用 `await taskFn()` */
+/** 将 taskFn 与 params 闭包绑定，供 TaskNode 无参调用 `await taskFn()` */
 function bindTaskFn(taskFn: TaskFn, taskParams: unknown): ExecutableTaskFn {
     const run = async () => taskFn(taskParams);
     return Object.assign(run, {
