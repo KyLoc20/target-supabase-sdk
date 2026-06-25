@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { pathToFileURL } from "node:url";
 
 import { LoggerWithContext } from "../shared/log/log-manager";
+import { resolvePathFromCwd, toFileImportHref } from "../shared/utils/config-path.utils";
 import { TaskRepoScriptRecord } from "../task/task-repo-context";
 import {
     getScriptLoadKey,
@@ -15,8 +15,7 @@ import {
 const importedModuleCache = new Map<string, LoadedRepoContext>();
 
 async function importFromFilePath(modulePath: string): Promise<unknown> {
-    const href = modulePath.includes("://") ? modulePath : pathToFileURL(modulePath).href;
-    return import(href);
+    return import(toFileImportHref(modulePath));
 }
 
 /** Resolve repo `details.url` to a value suitable for dynamic `import()`. */
@@ -25,8 +24,7 @@ export function resolveRepoEntryHref(url: string, cwd = process.cwd()): string {
     if (trimmed.includes("://")) {
         return trimmed;
     }
-    const absolute = isAbsolute(trimmed) ? trimmed : resolve(cwd, trimmed);
-    return pathToFileURL(absolute).href;
+    return toFileImportHref(resolvePathFromCwd(cwd, trimmed));
 }
 
 async function importFromSource(source: string, cacheKey: string): Promise<unknown> {

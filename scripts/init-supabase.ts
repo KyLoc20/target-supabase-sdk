@@ -14,9 +14,9 @@ export async function initSupabaseFromEnv(projectRoot: string): Promise<void> {
     loadEnvFiles(projectRoot);
 
     await SupabaseInitializer.getInstance().initialize({
-        supabaseUrl: requireEnv("VITE_SUPABASE_URL"),
-        supabaseAnonKey: requireEnv("VITE_SUPABASE_ANON_KEY"),
-        supabaseNeedAuthUrl: process.env.VITE_SUPABASE_NEED_AUTH_URL,
-        supabaseNeedAuthAnonKey: process.env.VITE_SUPABASE_NEED_AUTH_ANON_KEY,
+        supabaseUrl: requireEnv("SUPABASE_URL"),
+        supabaseAnonKey: requireEnv("SUPABASE_ANON_KEY"),
+        supabaseNeedAuthUrl: process.env.SUPABASE_NEED_AUTH_URL,
+        supabaseNeedAuthAnonKey: process.env.SUPABASE_NEED_AUTH_ANON_KEY,
     });
 }

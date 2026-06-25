@@ -1,3 +1,4 @@
 export default {
-    taskDir: "./tasks",
+    /** Relative to this file (`config/`) → project root `tasks/` */
+    taskDir: "../tasks",
 };

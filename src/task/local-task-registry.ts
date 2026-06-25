@@ -1,8 +1,14 @@
-import { access, readdir } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 
 import { RepoManager } from "../repo/repo-manager";
+import {
+    importJsConfigModule,
+    pathExists,
+    resolveFirstExistingPath,
+    resolvePathFromBaseDir,
+    resolvePathFromConfigFile,
+} from "../shared/utils/config-path.utils";
 import {
     BootstrapLocalTasksResult,
     TASK_LOCAL_PACKAGE_CONFIG_FILENAME,
@@ -25,21 +31,6 @@ const EMPTY_RESULT: BootstrapLocalTasksResult = {
     skipped: [],
     errors: [],
 };
-
-async function pathExists(path: string): Promise<boolean> {
-    try {
-        await access(path);
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-async function importConfigModule(configPath: string): Promise<unknown> {
-    const href = pathToFileURL(configPath).href;
-    const mod = await import(href);
-    return mod.default ?? mod;
-}
 
 function parseRootConfig(raw: unknown, configPath: string): TaskRunnerRootConfig {
     if (raw == null || typeof raw !== "object") {
@@ -77,30 +68,6 @@ function parseTaskPackageConfig(raw: unknown, configPath: string): TaskLocalPack
     };
 }
 
-async function resolveRootConfigPath(cwd: string, rootConfigPath?: string): Promise<string | null> {
-    if (rootConfigPath != null && rootConfigPath.trim() !== "") {
-        const resolved = isAbsolute(rootConfigPath) ? rootConfigPath : resolve(cwd, rootConfigPath);
-        return (await pathExists(resolved)) ? resolved : null;
-    }
-
-    const candidates = [
-        join(cwd, TASK_RUNNER_ROOT_CONFIG_RELATIVE_PATH),
-        join(cwd, TASK_RUNNER_ROOT_CONFIG_LEGACY_RELATIVE_PATH),
-    ];
-
-    for (const candidate of candidates) {
-        if (await pathExists(candidate)) {
-            return candidate;
-        }
-    }
-
-    return null;
-}
-
-function resolveEntryModulePath(taskPackageDir: string, entry: string): string {
-    return isAbsolute(entry) ? entry : resolve(taskPackageDir, entry);
-}
-
 function finalizeStatus(result: Omit<BootstrapLocalTasksResult, "status">): BootstrapLocalTasksResult["status"] {
     if (result.errors.length > 0 && result.registered.length === 0) {
         return "failed";
@@ -118,19 +85,27 @@ function finalizeStatus(result: Omit<BootstrapLocalTasksResult, "status">): Boot
  *
  * Host app layout (recommended):
  * ```
- * ./config/task.config.js       → { taskDir: "./tasks" }
+ * ./config/task.config.js       → { taskDir: "../tasks" }
  * ./tasks/my-task/task.config.js
  * ./tasks/my-task/index.mjs
  * ```
  *
- * Legacy fallback: `./task.config.js` at project root.
+ * `taskDir` / `entry` paths are relative to **their config file's directory** (see config-file-relative-paths skill).
+ *
+ * Legacy fallback: `./task.config.js` at project root (`taskDir: "./tasks"`).
  */
 export async function bootstrapLocalTasks(
     options: BootstrapLocalTasksOptions = {}
 ): Promise<BootstrapLocalTasksResult> {
     const cwd = options.cwd ?? process.cwd();
 
-    const rootConfigPath = await resolveRootConfigPath(cwd, options.rootConfigPath);
+    const rootConfigPath = await resolveFirstExistingPath(cwd, {
+        explicitPath: options.rootConfigPath,
+        candidatePaths: [
+            TASK_RUNNER_ROOT_CONFIG_RELATIVE_PATH,
+            TASK_RUNNER_ROOT_CONFIG_LEGACY_RELATIVE_PATH,
+        ],
+    });
     if (rootConfigPath == null) {
         return {
             ...EMPTY_RESULT,
@@ -145,11 +120,10 @@ export async function bootstrapLocalTasks(
     };
 
     try {
-        const rootConfigDir = dirname(rootConfigPath);
-        const rootRaw = await importConfigModule(rootConfigPath);
+        const rootRaw = await importJsConfigModule(rootConfigPath);
         const { taskDir } = parseRootConfig(rootRaw, rootConfigPath);
 
-        const tasksRoot = isAbsolute(taskDir) ? taskDir : resolve(rootConfigDir, taskDir);
+        const tasksRoot = resolvePathFromConfigFile(rootConfigPath, taskDir);
         if (!(await pathExists(tasksRoot))) {
             return {
                 status: "failed",
@@ -173,7 +147,7 @@ export async function bootstrapLocalTasks(
             }
 
             try {
-                const taskRaw = await importConfigModule(taskConfigPath);
+                const taskRaw = await importJsConfigModule(taskConfigPath);
                 const taskConfig = parseTaskPackageConfig(taskRaw, taskConfigPath);
 
                 if (taskConfig.enabled === false) {
@@ -181,7 +155,7 @@ export async function bootstrapLocalTasks(
                     continue;
                 }
 
-                const entryPath = resolveEntryModulePath(taskPackageDir, taskConfig.entry);
+                const entryPath = resolvePathFromBaseDir(taskPackageDir, taskConfig.entry);
                 if (!(await pathExists(entryPath))) {
                     throw new Error(`entry module not found: ${entryPath}`);
                 }

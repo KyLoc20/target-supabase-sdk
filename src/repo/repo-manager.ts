@@ -30,6 +30,12 @@ export interface GetRepoContextParams {
     taskTypeKey: string;
 }
 
+export interface GetRepoContextResult<T extends TaskRepoContext = TaskRepoContext> {
+    context: T | null;
+    /** Present when `context` is null — import / DB / format failure at repo layer */
+    error?: string;
+}
+
 function buildRemoteCacheKey(taskTypeKey: string, contentHash: string): string {
     return `${taskTypeKey}@${contentHash}`;
 }
@@ -87,13 +93,14 @@ async function loadLocalEntry(
 async function loadRemoteRepoContext(
     logger: LoggerWithContext,
     taskTypeKey: string
-): Promise<TaskRepoContext | null> {
-    logger.info("从 Supabase 加载 Repo", { topic: "repo", context: { taskTypeKey } });
+): Promise<GetRepoContextResult> {
+    logger.info("從 Supabase 加載 Repo", { topic: "repo", context: { taskTypeKey } });
 
     const remoteRepo = await fetchRemoteRepo(taskTypeKey);
     if (remoteRepo == null) {
-        logger.warn("Supabase 未找到 Repo", { topic: "repo", context: { taskTypeKey } });
-        return null;
+        const error = `Supabase 未找到 Repo (value=${taskTypeKey})`;
+        logger.warn(error, { topic: "repo", context: { taskTypeKey } });
+        return { context: null, error };
     }
 
     const repoUrl = remoteRepo.details?.url?.trim() ?? "";
@@ -101,8 +108,8 @@ async function loadRemoteRepoContext(
     const cacheKey = buildRemoteCacheKey(taskTypeKey, repoHash);
     const cached = remoteContextCache.get(cacheKey);
     if (cached != null) {
-        logger.info("命中远程 Repo 上下文缓存", { topic: "repo", context: { cacheKey } });
-        return cached;
+        logger.info("命中遠程 Repo 上下文緩存", { topic: "repo", context: { cacheKey } });
+        return { context: cached };
     }
 
     const scripts = await fetchRemoteScripts(taskTypeKey);
@@ -114,7 +121,7 @@ async function loadRemoteRepoContext(
             : null;
 
     if (loaded == null && repoUrl !== "") {
-        logger.info("未找到 script 行，尝试从 Repo.details.url 加载", {
+        logger.info("未找到 script 行，嘗試從 Repo.details.url 加載", {
             topic: "repo",
             context: { taskTypeKey, url: repoUrl },
         });
@@ -122,44 +129,50 @@ async function loadRemoteRepoContext(
     }
 
     if (loaded == null) {
-        logger.warn("无法从 Repo 加载 TaskRepoContext", {
+        const error = `無法從 Repo 加載 TaskRepoContext (hasUrl=${repoUrl !== ""}, scriptCount=${scripts.length})`;
+        logger.warn(error, {
             topic: "repo",
             context: { taskTypeKey, hasUrl: repoUrl !== "", scriptCount: scripts.length },
         });
-        return null;
+        return { context: null, error };
     }
 
     remoteContextCache.set(cacheKey, loaded.context);
-    return loaded.context;
+    return { context: loaded.context };
 }
 
 const getRepoContext = async <RepoContext extends TaskRepoContext>({
     logger,
     taskTypeKey,
-}: GetRepoContextParams): Promise<RepoContext | null> => {
+}: GetRepoContextParams): Promise<GetRepoContextResult<RepoContext>> => {
     const localEntry = localRepoRegistry.get(taskTypeKey);
     if (localEntry != null) {
-        logger.info("使用本地注册的 Repo", { topic: "repo", context: { taskTypeKey } });
+        logger.info("使用本地註冊的 Repo", { topic: "repo", context: { taskTypeKey } });
         const context = await loadLocalEntry(logger, localEntry, taskTypeKey);
         if (context != null && isTaskRepoContext(context)) {
-            return context as RepoContext;
+            return { context: context as RepoContext };
         }
-        logger.warn("本地 Repo 加载失败", { topic: "repo", context: { taskTypeKey } });
-        return null;
+        const error = "本地 Repo 模組加載失敗或未導出有效的 TaskRepoContext";
+        logger.warn(error, { topic: "repo", context: { taskTypeKey } });
+        return { context: null, error };
     }
 
     try {
-        const context = await loadRemoteRepoContext(logger, taskTypeKey);
-        if (context != null && isTaskRepoContext(context)) {
-            return context as RepoContext;
+        const result = await loadRemoteRepoContext(logger, taskTypeKey);
+        if (result.context != null && isTaskRepoContext(result.context)) {
+            return { context: result.context as RepoContext };
         }
-        return null;
+        return {
+            context: null,
+            error: result.error ?? "遠程 Repo 上下文無效",
+        };
     } catch (error) {
-        logger.error("从 Supabase 加载 Repo 失败", {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error("從 Supabase 加載 Repo 失敗", {
             topic: "repo",
-            context: { taskTypeKey, error: error instanceof Error ? error.message : error },
+            context: { taskTypeKey, error: message },
         });
-        return null;
+        return { context: null, error: message };
     }
 };
 

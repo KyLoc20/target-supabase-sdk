@@ -1,5 +1,7 @@
 import { generateResponse, Target, TargetPayload } from "./core.interface";
-import { supabase } from ".";
+import { SupabaseInitializer } from "./supabase";
+
+const supabase = SupabaseInitializer.getInstance();
 import { BaseValidator, handleSupabaseError } from "./core.utils";
 import { PostgrestFilterBuilder } from "@supabase/postgrest-js";
 import type { ZodType } from "zod";

@@ -305,12 +305,18 @@ class NodeManager {
             traceId: loopTraceId,
             nodeId,
         });
-        const { isSuccess: isPrepareSuccess, taskFn } = await TaskManager.prepareTask({ logger: prepareLogger, task });
+        const prepareResult = await TaskManager.prepareTask({ logger: prepareLogger, task });
+        const { isSuccess: isPrepareSuccess, taskFn, code, message, reason, step } = prepareResult;
         if (!isPrepareSuccess || taskFn == null) {
             prepareLogger.critical("任務準備失敗，無法繼續執行，中止任務並 RESET 為 OPEN", {
                 topic: "task",
                 context: {
-                    task
+                    taskId: task.id,
+                    taskTypeKey: task.value,
+                    code,
+                    message,
+                    reason,
+                    step,
                 },
             });
             await this.abortTaskRun({

@@ -1,6 +1,8 @@
-import { supabase } from "..";
+import { SupabaseInitializer } from "../supabase";
 import { generateResponse } from "../core.interface";
 import { handleSupabaseError } from "../core.utils";
+
+const supabase = SupabaseInitializer.getInstance();
 
 export interface LoginPayload {
   email: string;

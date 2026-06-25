@@ -30,15 +30,17 @@ cp .env.example .env.local
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `VITE_SUPABASE_URL` | Yes | Main Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Yes | Main project anon (public) key |
-| `VITE_SUPABASE_NEED_AUTH_URL` | No | Separate auth project URL |
-| `VITE_SUPABASE_NEED_AUTH_ANON_KEY` | No | Separate auth project anon key |
+| `SUPABASE_URL` | Yes | Main Supabase project URL |
+| `SUPABASE_ANON_KEY` | Yes | Main project anon (public) key |
+| `SUPABASE_NEED_AUTH_URL` | No | Separate auth project URL |
+| `SUPABASE_NEED_AUTH_ANON_KEY` | No | Separate auth project anon key |
+
+Used by `scripts/` (`pnpm worker`, `pnpm post-task`) via `.env.local`. Browser apps pass the same values to `supabase.initialize()` (e.g. `import.meta.env.VITE_SUPABASE_URL` if your bundler uses a `VITE_` prefix).
 
 ### Security
 
-- `VITE_*` variables are embedded in the client bundle at build time. Only use the **anon (public) key** — it is designed to be public when protected by Row Level Security (RLS).
-- **Never** put the `service_role` key in a `VITE_*` variable or any frontend code. Use it only in trusted server-side environments.
+- Only use the **anon (public) key** in client or script env — it is designed to be public when protected by Row Level Security (RLS).
+- **Never** put the `service_role` key in env files or frontend code. Use it only in trusted server-side environments.
 - Do not commit `.env` or `.env.local`. They are gitignored; only `.env.example` (placeholders) should be tracked.
 - Auth APIs return session tokens. Store them securely and never log them.
 

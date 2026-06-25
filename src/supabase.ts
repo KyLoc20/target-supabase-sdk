@@ -91,7 +91,7 @@ export class SupabaseInitializer {
     const authAnonKey = supabaseNeedAuthAnonKey;
 
     if (!mainUrl || !mainAnonKey) {
-      throw new Error("Missing required Supabase environment variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY");
+      throw new Error("Missing required Supabase environment variables: SUPABASE_URL, SUPABASE_ANON_KEY");
     }
 
     return {

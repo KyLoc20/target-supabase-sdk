@@ -62,7 +62,13 @@ export * from "./word/word.interface";
 export * from "./task/task.interface";
 export * from "./task/task.api";
 export { TaskManager } from "./task/task-manager";
-export type { RegisterTasksOptions, RegisterTasksResult } from "./task/task-manager";
+export type {
+    RegisterTasksOptions,
+    RegisterTasksResult,
+    PrepareTaskResponse,
+    PrepareTaskParams,
+    PrepareTaskFailureReason,
+} from "./task/task-manager";
 
 export * from "./node/node.interface";
 export * from "./node/node.api";

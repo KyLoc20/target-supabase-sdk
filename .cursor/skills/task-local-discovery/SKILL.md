@@ -52,17 +52,19 @@ Author (TS optional) → Build → JS artifact → runtime import("./entry.js")
 
 ## Host app layout
 
+See [config-file-relative-paths](../config-file-relative-paths/SKILL.md) for path resolution rules.
+
 ```text
 <host-project>/
-  config/task.config.js          ← { taskDir: "./tasks" }
+  config/task.config.js          ← { taskDir: "../tasks" }   (relative to config/)
   tasks/                         ← gitignored
     my-task/
-      task.config.js             ← { taskTypeKey, entry, ... }
+      task.config.js             ← { taskTypeKey, entry: "./index.mjs" }
       index.mjs
   tasks.example/                 ← committed template
 ```
 
-Legacy fallback: `./task.config.js` at project root (discouraged).
+Legacy fallback: `./task.config.js` at project root → `{ taskDir: "./tasks" }`.
 
 ---
 
@@ -132,7 +134,8 @@ Do not remove `bindTaskFn` or push param passing into `NodeManager` unless expli
 ### Root — `config/task.config.js`
 
 ```javascript
-export default { taskDir: "./tasks" };
+// taskDir is relative to this file's directory (config/), not project cwd
+export default { taskDir: "../tasks" };
 ```
 
 ### Per-task — `tasks/<name>/task.config.js`
@@ -226,6 +229,7 @@ Caches: module import cache; remote context cache by `taskTypeKey@repoHash`.
 
 ## Related skills
 
+- [config-file-relative-paths](../config-file-relative-paths/SKILL.md) — `taskDir` / `entry` path anchors
 - [target-list-query](../target-list-query/SKILL.md) — `scanTargetList` / `getTargetList` layering
 - [sdk-error-handling](../sdk-error-handling/SKILL.md) — throw vs envelope at boundaries
 - [task-state-machine](../task-state-machine/SKILL.md) — `patchClaimTask`, claim flow

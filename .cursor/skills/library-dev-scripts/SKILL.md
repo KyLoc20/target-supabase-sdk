@@ -60,7 +60,7 @@ tsconfig.scripts.json   ← extends root tsconfig; include scripts only
 
 **`run-node-worker.ts` responsibilities:**
 
-1. `loadEnvFiles(projectRoot)` — `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, optional auth project vars
+1. `loadEnvFiles(projectRoot)` — `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optional `SUPABASE_NEED_AUTH_*`
 2. `SupabaseInitializer.getInstance().initialize({ ... })`
 3. `await new NodeManager().start()` — blocks on main loop; exit via `shutdown` / signals
 

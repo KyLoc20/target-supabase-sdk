@@ -183,6 +183,7 @@ Do not rely on `Parameters<typeof TaskManager.registerTasks>[0]` in consumer doc
 ## Related skills
 
 - [sdk-error-handling](../sdk-error-handling/SKILL.md) — `*.api.ts` envelope, no throw
+- [barrel-import-cycles](../barrel-import-cycles/SKILL.md) — never `import from "."` inside `src/`
 - [task-local-discovery](../task-local-discovery/SKILL.md) — `TaskManager`, worker exports
 - [library-dev-scripts](../library-dev-scripts/SKILL.md) — `scripts/` not published API
 

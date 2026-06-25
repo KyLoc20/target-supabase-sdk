@@ -2,7 +2,7 @@ import { RepoManager } from "../repo/repo-manager";
 import { getScanRemoteRepoValues } from "../repo/repo.api";
 import { TASK_REPO_USAGE } from "../repo/repo.interface";
 import { LoggerWithContext } from "../shared/log/log-manager";
-import { Task } from "./task.interface";
+import { ResultCode, Task } from "./task.interface";
 import { TaskFn, TaskRepoContext, TaskRunResult, ExecutableTaskFn } from "./task-repo-context";
 
 export type {
@@ -32,9 +32,25 @@ import {
 } from "./local-task-registry";
 import type { BootstrapLocalTasksResult } from "./task-repo-context";
 
-interface PrepareTaskResponse {
+export type PrepareTaskFailureReason =
+    | "MISSING_PARAMS"
+    | "REPO_LOAD_FAILED"
+    | "PARAMS_VALIDATION_FAILED"
+    | "TASK_TYPE_KEY_MISMATCH";
+
+export interface PrepareTaskResponse {
     isSuccess: boolean;
     taskFn: ExecutableTaskFn | null;
+    code?: ResultCode;
+    message?: string;
+    reason?: PrepareTaskFailureReason;
+    /** Pipeline step for log aggregation */
+    step?: string;
+}
+
+export interface PrepareTaskParams {
+    logger: LoggerWithContext;
+    task: Task;
 }
 
 export interface RegisterTasksOptions {
@@ -158,7 +174,7 @@ function validateTaskParams(
     try {
         return validator(taskParams) === true;
     } catch (error) {
-        logger.warn("taskParamsValidator 抛出异常", {
+        logger.warn("taskParamsValidator 拋出異常", {
             topic: "task",
             context: { error: error instanceof Error ? error.message : error },
         });
@@ -167,97 +183,116 @@ function validateTaskParams(
 }
 
 /**
- * 将 Supabase 认领到的 Task 解析为可执行的 `ExecutableTaskFn`。
+ * 將 Supabase 認領到的 Task 解析為可執行的 `ExecutableTaskFn`。
  *
  * 流程：
- * 1. 从 task.details 取出 `params`；`task.value` 作为 taskTypeKey（同 {@link Repo.value}）
- * 2. {@link RepoManager.getRepoContext} — 本地注册优先，否则按 task.value 拉取 Repo 并用 `details.url` 或 script 行加载
- * 3. 用 Repo 导出的 taskParamsValidator 校验 params
- * 4. 确认 taskFn 合法后 bindTaskFn，返回闭包后的无参执行函数
+ * 1. 從 task.details 取出 `params`；`task.value` 作為 taskTypeKey（同 {@link Repo.value}）
+ * 2. {@link RepoManager.getRepoContext} — 本地註冊優先，否則按 task.value 拉取 Repo
+ * 3. 校驗 taskFn.taskTypeKey 與 task.value 一致
+ * 4. 用 Repo 導出的 taskParamsValidator 校驗 params
+ * 5. bindTaskFn，返回閉包後的無參執行函數
  *
- * 由 NodeManager.executeTask 在执行业务逻辑前调用；失败时返回 `{ isSuccess: false, taskFn: null }`。
+ * 失敗時返回 `{ isSuccess: false, code, message, reason, step }`（不 throw）。
  */
-const prepareTask = async ({
-    logger,
-    task,
-}: {
-    logger: LoggerWithContext;
-    task: Task;
-}): Promise<PrepareTaskResponse> => {
-    const fail = (): PrepareTaskResponse => ({ isSuccess: false, taskFn: null });
+const prepareTask = async ({ logger, task }: PrepareTaskParams): Promise<PrepareTaskResponse> => {
+    const fail = (params: {
+        reason: PrepareTaskFailureReason;
+        code: ResultCode;
+        message: string;
+        step: string;
+    }): PrepareTaskResponse => {
+        logger.warn(params.message, {
+            topic: "task",
+            context: {
+                taskId: task.id,
+                taskTypeKey: task.value,
+                reason: params.reason,
+                step: params.step,
+            },
+        });
+        return {
+            isSuccess: false,
+            taskFn: null,
+            code: params.code,
+            message: params.message,
+            reason: params.reason,
+            step: params.step,
+        };
+    };
 
     const { id: taskId, name: taskName, value: taskTypeKey, details } = task;
-    logger.info(`开始准备任务 ${taskName}-${taskTypeKey}`, {
+    logger.info(`開始準備任務 ${taskName}-${taskTypeKey}`, {
         topic: "task",
         context: { taskId, taskName, taskTypeKey },
     });
 
-    // Step 1: 任务详情必须携带运行时参数
     const { params: taskParams } = details;
     if (taskParams == null) {
-        logger.warn("任务缺少 params", {
-            topic: "task",
-            context: { taskId, taskTypeKey },
+        return fail({
+            reason: "MISSING_PARAMS",
+            code: ResultCode.PARAMS_NOT_VALID,
+            message: "任務缺少 params",
+            step: "params",
         });
-        return fail();
     }
 
-    logger.debug("任务详情校验通过，开始解析 Repo 上下文", {
+    logger.debug("任務詳情校驗通過，開始解析 Repo 上下文", {
         topic: "task",
-        context: { taskTypeKey },
+        context: { taskTypeKey, step: "repo_load" },
     });
 
-    // Step 2: 本地 registry 优先；远程按 task.value 查 Repo，从 script 行或 Repo.details.url 加载
-    const repoContext = await RepoManager.getRepoContext<TaskRepoContext>({
+    const { context: repoContext, error: repoError } = await RepoManager.getRepoContext<TaskRepoContext>({
         logger,
         taskTypeKey,
     });
 
     if (repoContext == null) {
-        logger.warn("无法加载 Repo 上下文", {
-            topic: "task",
-            context: { taskId, taskTypeKey },
+        return fail({
+            reason: "REPO_LOAD_FAILED",
+            code: ResultCode.REPO_NOT_VALID,
+            message: repoError ?? "無法加載 Repo 上下文",
+            step: "repo_load",
         });
-        return fail();
     }
 
-    logger.info("Repo 上下文加载成功", {
+    logger.info("Repo 上下文加載成功", {
         topic: "task",
         context: {
             taskTypeKey,
             taskFnDisplayName: repoContext.taskFn.displayName,
+            step: "repo_load",
         },
     });
 
-    // Step 3: 用 Repo 模块自带的 validator 校验 params 形状
-    logger.debug("开始校验任务参数", { topic: "task", context: { taskTypeKey } });
+    if (repoContext.taskFn.taskTypeKey !== taskTypeKey) {
+        return fail({
+            reason: "TASK_TYPE_KEY_MISMATCH",
+            code: ResultCode.REPO_NOT_VALID,
+            message: `taskFn.taskTypeKey (${repoContext.taskFn.taskTypeKey}) 與 task.value (${taskTypeKey}) 不一致`,
+            step: "task_type_key",
+        });
+    }
+
+    logger.debug("開始校驗任務參數", { topic: "task", context: { taskTypeKey, step: "params_validation" } });
     if (!validateTaskParams(repoContext.taskParamsValidator, taskParams, logger)) {
-        logger.warn("任务参数校验失败", {
-            topic: "task",
-            context: { taskId, taskTypeKey },
+        return fail({
+            reason: "PARAMS_VALIDATION_FAILED",
+            code: ResultCode.PARAMS_NOT_VALID,
+            message: "任務參數校驗失敗",
+            step: "params_validation",
         });
-        return fail();
     }
 
-    logger.debug("任务参数校验通过", { topic: "task", context: { taskTypeKey } });
+    logger.debug("任務參數校驗通過", { topic: "task", context: { taskTypeKey, step: "params_validation" } });
 
-    // Step 4: 确认导出的 taskFn 可调用
-    if (typeof repoContext.taskFn !== "function") {
-        logger.warn("任务函数不合法", {
-            topic: "task",
-            context: { taskId, taskTypeKey, taskFnType: typeof repoContext.taskFn },
-        });
-        return fail();
-    }
-
-    // Step 5: 闭包绑定 params，供 executeTask 直接 `await taskFn()` 执行
     const boundTaskFn = bindTaskFn(repoContext.taskFn, taskParams);
-    logger.success("任务准备完成", {
+    logger.success("任務準備完成", {
         topic: "task",
         context: {
             taskId,
             taskTypeKey,
             displayName: boundTaskFn.displayName,
+            step: "bind",
         },
     });
 
