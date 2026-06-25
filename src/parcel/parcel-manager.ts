@@ -206,4 +206,4 @@ const ParcelManager = {
   reassembly,
 };
 
-export default ParcelManager;
+export { ParcelManager };

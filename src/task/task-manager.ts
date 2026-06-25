@@ -1,4 +1,4 @@
-import RepoManager from "../repo/repo-manager";
+import { RepoManager } from "../repo/repo-manager";
 import { getScanRemoteRepoValues } from "../repo/repo.api";
 import { TASK_REPO_USAGE } from "../repo/repo.interface";
 import { LoggerWithContext } from "../shared/log/log-manager";
@@ -274,4 +274,4 @@ const TaskManager = {
     getRegisteredLocalTaskTypeKeys,
 };
 
-export default TaskManager;
+export { TaskManager };

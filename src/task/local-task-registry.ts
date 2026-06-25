@@ -2,7 +2,7 @@ import { access, readdir } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import RepoManager from "../repo/repo-manager";
+import { RepoManager } from "../repo/repo-manager";
 import {
     BootstrapLocalTasksResult,
     TASK_LOCAL_PACKAGE_CONFIG_FILENAME,

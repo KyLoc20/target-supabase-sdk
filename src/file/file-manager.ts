@@ -142,4 +142,4 @@ const FileManager = {
     verifyFileHash,
 };
 
-export default FileManager;
+export { FileManager };

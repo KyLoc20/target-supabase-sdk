@@ -64,11 +64,10 @@ Reference: `src/log/log-manager.ts` — `getInstance` + `setOptions` + `mergeLog
 
 ```typescript
 // Bottom of log-manager.ts
-const logger = LogManager.getInstance();
-export default logger;
+export const logManager = LogManager.getInstance();
 ```
 
-Any import of `logger` **creates the singleton** before app entry can pass options.
+Any import of `{ logManager }` **creates the singleton** before app entry can pass options.
 
 | Who wins | When |
 |----------|------|
@@ -143,7 +142,7 @@ Singletons resist isolated tests:
 |-------|---------|
 | Global state | Test A’s `setOptions` / history affects Test B |
 | No factory | Cannot inject fake `onLog` without touching real instance |
-| Import side effects | `import logger from "./log-manager"` locks defaults |
+| Import side effects | `import { logManager } from "./log-manager"` locks defaults |
 
 ### Mitigations
 

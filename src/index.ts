@@ -24,7 +24,7 @@ export type {
   LifecycleStatus as ParcelLifecycleStatus,
   Lifecycle as ParcelLifecycle,
 } from "./parcel/parcel.interface";
-export { default as ParcelManager } from "./parcel/parcel-manager";
+export { ParcelManager } from "./parcel/parcel-manager";
 export type { StorageAdapter, ParcelTargetBase } from "./parcel/parcel-manager";
 
 export * from "./file/file.interface";
@@ -61,13 +61,13 @@ export * from "./word/word.interface";
 
 export * from "./task/task.interface";
 export * from "./task/task.api";
-export { default as TaskManager } from "./task/task-manager";
+export { TaskManager } from "./task/task-manager";
 export type { RegisterTasksOptions, RegisterTasksResult } from "./task/task-manager";
 
 export * from "./node/node.interface";
 export * from "./node/node.api";
-export { default as NodeManager } from "./node/node-manager";
+export { NodeManager } from "./node/node-manager";
 
 export * from "./repo/repo.interface";
 export * from "./repo/repo.api";
-export { default as RepoManager } from "./repo/repo-manager";
+export { RepoManager } from "./repo/repo-manager";

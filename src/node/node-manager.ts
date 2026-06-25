@@ -1,9 +1,9 @@
 import { MAX_POLL_TARGET_LIST_SIZE } from "../core.api";
 import { getPollCommandList } from "../command/command.api";
 import { CommandType } from "../command/command.interface";
-import logManager, { type LoggerWithContext } from "../shared/log/log-manager";
+import { logManager, type LoggerWithContext } from "../shared/log/log-manager";
 import { getErrorMessage, toError } from "../shared/utils/error.utils";
-import TaskManager, { TaskRunResult } from "../task/task-manager";
+import { TaskManager, type TaskRunResult } from "../task/task-manager";
 import { patchChangeTaskStatus, patchClaimTask } from "../task/task.api";
 import { TaskStatusAction } from "../task/task.interface";
 import { patchChangeNodeStatus, patchNodeHeartBeat, patchStopNode, postRegisterNode } from "./node.api";
@@ -664,4 +664,4 @@ class NodeManager {
     }
 }
 
-export default NodeManager;
+export { NodeManager };

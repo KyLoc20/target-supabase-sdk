@@ -201,4 +201,4 @@ const RepoManager = {
     clearRepoScriptModuleCache,
 };
 
-export default RepoManager;
+export { RepoManager };

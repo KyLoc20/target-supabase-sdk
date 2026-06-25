@@ -1,4 +1,4 @@
-import logManager, { type LogContext, type LoggerWithContext } from "./log-manager";
+import { logManager, type LogContext, type LoggerWithContext } from "./log-manager";
 
 /**
  * Options for {@link createApiLogger}.

@@ -333,9 +333,7 @@ class LogManager {
     }
 }
 
-const logger = LogManager.getInstance();
-
-export default logger;
+export const logManager = LogManager.getInstance();
 export { LogManager, LogLevel };
 export { createApiLogger } from "./create-api-logger";
 export type { CreateApiLoggerOptions } from "./create-api-logger";
