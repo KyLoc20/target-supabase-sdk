@@ -233,7 +233,12 @@ class TaskNode extends BaseNodeRuntime {
     ): Promise<void> {
         const { logger, taskId, nodeId, taskTypeKey, cost, extra, traceId } = params;
         const outcomePrefix = outcome === "success" ? "任務成功" : "任務失敗";
-        const logContext = { taskTypeKey, taskId, nodeId };
+        const logContext = {
+            taskTypeKey,
+            taskId,
+            nodeId,
+            ...(extra != null && extra !== "" ? { extra } : {}),
+        };
         const extraValue = typeof extra === "string" ? extra : undefined;
 
         const { error: changeTaskStatusError } =
