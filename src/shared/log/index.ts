@@ -18,7 +18,6 @@ export {
     formatScopeLabels,
     normalizeScope,
     resolveLogData,
-    scopeForLoop,
     withModule,
 } from "./log-scope";
-export type { LogScope, LogScopeInput, LogScopePatch } from "./log-scope";
+export type { LogScope, LogScopeInput, LogScopePatch, CreateRootScopeInput, CreateChildScopeInput } from "./log-scope";

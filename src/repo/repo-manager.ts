@@ -24,16 +24,31 @@ type LocalRepoEntry =
 const localRepoRegistry = new Map<string, LocalRepoEntry>();
 const remoteContextCache = new Map<string, TaskRepoContext>();
 
+export type RepoContextFailureReason =
+    | "LOCAL_REPO_LOAD_FAILED"
+    | "LOCAL_REPO_NOT_FOUND"
+    | "REMOTE_REPO_NOT_FOUND"
+    | "REMOTE_REPO_LOAD_FAILED";
+
+export type RepoContextResolvedVia = "local" | "remote";
+
 export interface GetRepoContextParams {
     logger: LoggerWithScope;
     /** Task type key (`task.value`) — matches {@link Repo.value} for remote lookup; local registry key */
     taskTypeKey: string;
+    /**
+     * When false, skip Supabase fetch if the task type is not in the local registry.
+     * Default `true`.
+     */
+    includeRemote?: boolean;
 }
 
 export interface GetRepoContextResult<T extends TaskRepoContext = TaskRepoContext> {
     context: T | null;
     /** Present when `context` is null — import / DB / format failure at repo layer */
     error?: string;
+    failureReason?: RepoContextFailureReason;
+    resolvedVia?: RepoContextResolvedVia;
 }
 
 function buildRemoteCacheKey(taskTypeKey: string, contentHash: string): string {
@@ -100,7 +115,7 @@ async function loadRemoteRepoContext(
     if (remoteRepo == null) {
         const error = `Supabase 未找到 Repo (value=${taskTypeKey})`;
         logger.warn(error, { topic: "repo", data: { taskTypeKey } });
-        return { context: null, error };
+        return { context: null, error, failureReason: "REMOTE_REPO_NOT_FOUND" };
     }
 
     const repoUrl = remoteRepo.details?.url?.trim() ?? "";
@@ -109,7 +124,7 @@ async function loadRemoteRepoContext(
     const cached = remoteContextCache.get(cacheKey);
     if (cached != null) {
         logger.info("命中遠程 Repo 上下文緩存", { topic: "repo", data: { cacheKey } });
-        return { context: cached };
+        return { context: cached, resolvedVia: "remote" };
     }
 
     const scripts = await fetchRemoteScripts(taskTypeKey);
@@ -134,37 +149,45 @@ async function loadRemoteRepoContext(
             topic: "repo",
             data: { taskTypeKey, hasUrl: repoUrl !== "", scriptCount: scripts.length },
         });
-        return { context: null, error };
+        return { context: null, error, failureReason: "REMOTE_REPO_LOAD_FAILED" };
     }
 
     remoteContextCache.set(cacheKey, loaded.context);
-    return { context: loaded.context };
+    return { context: loaded.context, resolvedVia: "remote" };
 }
 
 const getRepoContext = async <RepoContext extends TaskRepoContext>({
     logger,
     taskTypeKey,
+    includeRemote = true,
 }: GetRepoContextParams): Promise<GetRepoContextResult<RepoContext>> => {
     const localEntry = localRepoRegistry.get(taskTypeKey);
     if (localEntry != null) {
         logger.info("使用本地註冊的 Repo", { topic: "repo", data: { taskTypeKey } });
         const context = await loadLocalEntry(logger, localEntry, taskTypeKey);
         if (context != null && isTaskRepoContext(context)) {
-            return { context: context as RepoContext };
+            return { context: context as RepoContext, resolvedVia: "local" };
         }
         const error = "本地 Repo 模組加載失敗或未導出有效的 TaskRepoContext";
         logger.warn(error, { topic: "repo", data: { taskTypeKey } });
-        return { context: null, error };
+        return { context: null, error, failureReason: "LOCAL_REPO_LOAD_FAILED" };
+    }
+
+    if (!includeRemote) {
+        const error = `本地未註冊 Repo (value=${taskTypeKey})`;
+        logger.warn(error, { topic: "repo", data: { taskTypeKey, includeRemote: false } });
+        return { context: null, error, failureReason: "LOCAL_REPO_NOT_FOUND" };
     }
 
     try {
         const result = await loadRemoteRepoContext(logger, taskTypeKey);
         if (result.context != null && isTaskRepoContext(result.context)) {
-            return { context: result.context as RepoContext };
+            return { context: result.context as RepoContext, resolvedVia: "remote" };
         }
         return {
             context: null,
             error: result.error ?? "遠程 Repo 上下文無效",
+            failureReason: result.failureReason ?? "REMOTE_REPO_LOAD_FAILED",
         };
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -172,7 +195,7 @@ const getRepoContext = async <RepoContext extends TaskRepoContext>({
             topic: "repo",
             data: { taskTypeKey, error: message },
         });
-        return { context: null, error: message };
+        return { context: null, error: message, failureReason: "REMOTE_REPO_LOAD_FAILED" };
     }
 };
 
@@ -196,6 +219,10 @@ function unregisterLocalRepo(taskTypeKey: string): void {
     localRepoRegistry.delete(taskTypeKey);
 }
 
+function hasLocalRepo(taskTypeKey: string): boolean {
+    return localRepoRegistry.has(taskTypeKey);
+}
+
 function getRegisteredLocalTaskTypeKeys(): string[] {
     return [...localRepoRegistry.keys()];
 }
@@ -209,6 +236,7 @@ const RepoManager = {
     registerLocalRepoContext,
     registerLocalModule,
     unregisterLocalRepo,
+    hasLocalRepo,
     getRegisteredLocalTaskTypeKeys,
     clearRemoteContextCache,
     clearRepoScriptModuleCache,

@@ -1,4 +1,5 @@
-import { logManager, scopeForLoop, type LoggerWithScope } from "../shared/log";
+import { logManager, type LoggerWithScope } from "../shared/log";
+import { scopeForNodeLoop } from "./node-log-scope";
 import { postTask } from "../task/task.api";
 import { TaskStatus } from "../task/task.interface";
 import { patchTriggerFired, scanEnabledTriggers } from "../trigger/trigger.api";
@@ -23,7 +24,11 @@ class TriggerNode extends BaseNodeRuntime {
     }
 
     protected async runLoopSteps(ctx: NodeLoopContext, heartbeatOk: boolean): Promise<void> {
-        const loopScope = scopeForLoop(`${this.runtimeModule}-loop-iteration`, ctx.loopTraceId, ctx.nodeId);
+        const loopScope = scopeForNodeLoop({
+            module: `${this.runtimeModule}-loop-iteration`,
+            traceId: ctx.loopTraceId,
+            nodeId: ctx.nodeId,
+        });
         if (!heartbeatOk) {
             const { logger } = logManager.withScope(loopScope);
             logger.warn("心跳失敗，本輪跳過 Trigger 評估", { topic: "trigger" });
@@ -34,7 +39,7 @@ class TriggerNode extends BaseNodeRuntime {
 
     async evaluateTriggers(ctx: NodeLoopContext): Promise<void> {
         const { loopTraceId, nodeId } = ctx;
-        const loopScope = scopeForLoop("evaluateTriggers", loopTraceId, nodeId);
+        const loopScope = scopeForNodeLoop({ module: "evaluateTriggers", traceId: loopTraceId, nodeId });
         const { logger } = logManager.withScope(loopScope);
 
         logger.debug("開始評估 Trigger", { topic: "trigger" });
@@ -79,7 +84,9 @@ class TriggerNode extends BaseNodeRuntime {
 
     private async fireTrigger(ctx: NodeLoopContext, trigger: Trigger, now: Date): Promise<boolean> {
         const { loopTraceId, nodeId } = ctx;
-        const { logger } = logManager.withScope(scopeForLoop("fireTrigger", loopTraceId, nodeId));
+        const { logger } = logManager.withScope(
+            scopeForNodeLoop({ module: "fireTrigger", traceId: loopTraceId, nodeId })
+        );
 
         const fireKey = buildFireKey(trigger, now);
         const action = trigger.details.action;

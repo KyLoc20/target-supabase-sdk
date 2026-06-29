@@ -26,13 +26,13 @@ description: >-
 ```typescript
 import { logManager } from "../shared/log/log-manager";
 import { createApiLogger } from "../shared/log/create-api-logger";
-import { scopeForLoop } from "../shared/log/log-scope";
+import { createRootScope } from "../shared/log/log-scope";
 ```
 
 ### With barrel (`src/shared/log/index.ts`)
 
 ```typescript
-import { logManager, createApiLogger, scopeForLoop } from "../shared/log";
+import { logManager, createApiLogger, createRootScope } from "../shared/log";
 ```
 
 Barrel 文件只做转发，不含业务逻辑：
@@ -40,7 +40,7 @@ Barrel 文件只做转发，不含业务逻辑：
 ```typescript
 export { logManager } from "./log-manager";
 export { createApiLogger } from "./create-api-logger";
-export { scopeForLoop } from "./log-scope";
+export { createRootScope, withModule, ... } from "./log-scope";
 ```
 
 | Benefit | Explanation |
@@ -126,7 +126,7 @@ export type { LogEntry, LogOptions, LoggerWithScope, LogRestParams } from "./log
 export { createApiLogger } from "./create-api-logger";
 export type { CreateApiLoggerOptions } from "./create-api-logger";
 
-export { createRootScope, scopeForLoop, withModule, ... } from "./log-scope";
+export { createRootScope, withModule, ... } from "./log-scope";
 export type { LogScope, LogScopePatch } from "./log-scope";
 ```
 

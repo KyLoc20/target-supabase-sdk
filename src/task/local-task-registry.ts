@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 import { RepoManager } from "../repo/repo-manager";
@@ -23,6 +23,11 @@ export interface BootstrapLocalTasksOptions {
     rootConfigPath?: string;
     /** Base directory for resolving root config (default `process.cwd()`) */
     cwd?: string;
+    /**
+     * When set with an unchanged config fingerprint, skip full scan if this key is already
+     * registered in {@link RepoManager}.
+     */
+    forTaskTypeKey?: string;
 }
 
 const EMPTY_RESULT: BootstrapLocalTasksResult = {
@@ -31,6 +36,14 @@ const EMPTY_RESULT: BootstrapLocalTasksResult = {
     skipped: [],
     errors: [],
 };
+
+type BootstrapCacheState = {
+    fingerprint: string | null;
+    lastResult: BootstrapLocalTasksResult | null;
+};
+
+let bootstrapCache: BootstrapCacheState = { fingerprint: null, lastResult: null };
+let bootstrapInFlight: Promise<BootstrapLocalTasksResult> | null = null;
 
 function parseRootConfig(raw: unknown, configPath: string): TaskRunnerRootConfig {
     if (raw == null || typeof raw !== "object") {
@@ -78,24 +91,46 @@ function finalizeStatus(result: Omit<BootstrapLocalTasksResult, "status">): Boot
     return "loaded";
 }
 
-/**
- * Discover local task packages from config files and register them with {@link RepoManager}.
- *
- * **Never throws** for missing root config — returns `{ status: "not_configured" }`.
- *
- * Host app layout (recommended):
- * ```
- * ./config/task.config.js       → { taskDir: "../tasks" }
- * ./tasks/my-task/task.config.js
- * ./tasks/my-task/index.mjs
- * ```
- *
- * `taskDir` / `entry` paths are relative to **their config file's directory** (see config-file-relative-paths skill).
- *
- * Legacy fallback: `./task.config.js` at project root (`taskDir: "./tasks"`).
- */
-export async function bootstrapLocalTasks(
-    options: BootstrapLocalTasksOptions = {}
+async function computeConfigFingerprint(rootConfigPath: string, tasksRoot: string): Promise<string> {
+    const rootStat = await stat(rootConfigPath);
+    const tasksRootStat = await stat(tasksRoot);
+    const entries = await readdir(tasksRoot, { withFileTypes: true });
+    const configMtims: number[] = [];
+
+    for (const entry of entries) {
+        if (!entry.isDirectory()) {
+            continue;
+        }
+        const configPath = join(tasksRoot, entry.name, TASK_LOCAL_PACKAGE_CONFIG_FILENAME);
+        if (await pathExists(configPath)) {
+            const configStat = await stat(configPath);
+            configMtims.push(configStat.mtimeMs);
+        }
+    }
+
+    configMtims.sort((a, b) => a - b);
+    return `${rootConfigPath}:${rootStat.mtimeMs}:${tasksRoot}:${tasksRootStat.mtimeMs}:${configMtims.join(",")}`;
+}
+
+function canUseCachedBootstrap(
+    fingerprint: string,
+    forTaskTypeKey: string | undefined
+): BootstrapLocalTasksResult | null {
+    if (bootstrapCache.fingerprint !== fingerprint || bootstrapCache.lastResult == null) {
+        return null;
+    }
+
+    if (forTaskTypeKey != null && forTaskTypeKey !== "") {
+        if (!RepoManager.hasLocalRepo(forTaskTypeKey)) {
+            return null;
+        }
+    }
+
+    return { ...bootstrapCache.lastResult, cached: true };
+}
+
+async function runBootstrapScan(
+    options: BootstrapLocalTasksOptions
 ): Promise<BootstrapLocalTasksResult> {
     const cwd = options.cwd ?? process.cwd();
 
@@ -107,10 +142,12 @@ export async function bootstrapLocalTasks(
         ],
     });
     if (rootConfigPath == null) {
-        return {
+        const result: BootstrapLocalTasksResult = {
             ...EMPTY_RESULT,
             message: `No root config (tried ${TASK_RUNNER_ROOT_CONFIG_RELATIVE_PATH}, ${TASK_RUNNER_ROOT_CONFIG_LEGACY_RELATIVE_PATH})`,
         };
+        bootstrapCache = { fingerprint: null, lastResult: result };
+        return result;
     }
 
     const result: Omit<BootstrapLocalTasksResult, "status"> = {
@@ -125,11 +162,19 @@ export async function bootstrapLocalTasks(
 
         const tasksRoot = resolvePathFromConfigFile(rootConfigPath, taskDir);
         if (!(await pathExists(tasksRoot))) {
-            return {
+            const failed: BootstrapLocalTasksResult = {
                 status: "failed",
                 message: `taskDir does not exist: ${tasksRoot}`,
                 ...result,
             };
+            bootstrapCache = { fingerprint: null, lastResult: failed };
+            return failed;
+        }
+
+        const fingerprint = await computeConfigFingerprint(rootConfigPath, tasksRoot);
+        const cached = canUseCachedBootstrap(fingerprint, options.forTaskTypeKey);
+        if (cached != null) {
+            return cached;
         }
 
         const entries = await readdir(tasksRoot, { withFileTypes: true });
@@ -171,7 +216,7 @@ export async function bootstrapLocalTasks(
         }
 
         const status = finalizeStatus(result);
-        return {
+        const finalResult: BootstrapLocalTasksResult = {
             status,
             message:
                 status === "empty"
@@ -179,13 +224,55 @@ export async function bootstrapLocalTasks(
                     : undefined,
             ...result,
         };
+        bootstrapCache = { fingerprint, lastResult: finalResult };
+        return finalResult;
     } catch (error) {
-        return {
+        const failed: BootstrapLocalTasksResult = {
             status: "failed",
             message: error instanceof Error ? error.message : String(error),
             ...result,
         };
+        bootstrapCache = { fingerprint: null, lastResult: failed };
+        return failed;
     }
+}
+
+/**
+ * Discover local task packages from config files and register them with {@link RepoManager}.
+ *
+ * **Never throws** for missing root config — returns `{ status: "not_configured" }`.
+ *
+ * Re-scans are skipped when the config fingerprint is unchanged (root config + taskDir mtimes).
+ * Concurrent calls share a single in-flight scan (single-flight).
+ *
+ * Host app layout (recommended):
+ * ```
+ * ./config/task.config.js       → { taskDir: "../tasks" }
+ * ./tasks/my-task/task.config.js
+ * ./tasks/my-task/index.mjs
+ * ```
+ *
+ * `taskDir` / `entry` paths are relative to **their config file's directory** (see config-file-relative-paths skill).
+ *
+ * Legacy fallback: `./task.config.js` at project root (`taskDir: "./tasks"`).
+ */
+export async function bootstrapLocalTasks(
+    options: BootstrapLocalTasksOptions = {}
+): Promise<BootstrapLocalTasksResult> {
+    if (bootstrapInFlight != null) {
+        return bootstrapInFlight;
+    }
+
+    bootstrapInFlight = runBootstrapScan(options).finally(() => {
+        bootstrapInFlight = null;
+    });
+    return bootstrapInFlight;
+}
+
+/** Clear fingerprint cache (tests / hot-reload tooling). */
+export function clearBootstrapLocalTasksCache(): void {
+    bootstrapCache = { fingerprint: null, lastResult: null };
+    bootstrapInFlight = null;
 }
 
 export function getRegisteredLocalTaskTypeKeys(): string[] {

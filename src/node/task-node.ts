@@ -1,9 +1,9 @@
 import {
     logManager,
-    scopeForLoop,
     withModule,
     type LoggerWithScope,
 } from "../shared/log";
+import { scopeForNodeLoop } from "./node-log-scope";
 import { getErrorMessage, toError } from "../shared/utils/error.utils";
 import { TaskManager, type TaskRunResult } from "../task/task-manager";
 import { patchChangeTaskStatus, patchClaimTask } from "../task/task.api";
@@ -17,6 +17,7 @@ import { BaseNodeRuntime } from "./node-runtime.base";
  */
 class TaskNode extends BaseNodeRuntime {
     private _availableTaskList: string[] = [];
+    private _includeRemote = true;
 
     get availableTaskList(): readonly string[] {
         return [...this._availableTaskList];
@@ -28,12 +29,17 @@ class TaskNode extends BaseNodeRuntime {
 
     protected async onBeforeRegisterNode(logger: LoggerWithScope): Promise<void> {
         logger.info("開始註冊任務", { topic: "node" });
-        const { availableTaskList } = await TaskManager.registerTasks({ logger });
+        const { availableTaskList, includeRemote } = await TaskManager.registerTasks({ logger });
         this._availableTaskList = availableTaskList;
+        this._includeRemote = includeRemote;
     }
 
     protected async runLoopSteps(ctx: NodeLoopContext, heartbeatOk: boolean): Promise<void> {
-        const loopScope = scopeForLoop(`${this.runtimeModule}-loop-iteration`, ctx.loopTraceId, ctx.nodeId);
+        const loopScope = scopeForNodeLoop({
+            module: `${this.runtimeModule}-loop-iteration`,
+            traceId: ctx.loopTraceId,
+            nodeId: ctx.nodeId,
+        });
         if (!heartbeatOk) {
             const { logger } = logManager.withScope(loopScope);
             logger.warn("心跳失敗，本輪跳過任務認領", { topic: "node" });
@@ -44,7 +50,7 @@ class TaskNode extends BaseNodeRuntime {
 
     async runAsWorker(ctx: NodeLoopContext) {
         const { loopTraceId, nodeId } = ctx;
-        const loopScope = scopeForLoop("runAsWorker", loopTraceId, nodeId);
+        const loopScope = scopeForNodeLoop({ module: "runAsWorker", traceId: loopTraceId, nodeId });
         const { logger } = logManager.withScope(loopScope);
 
         const availableTaskList = this.availableTaskList;
@@ -91,9 +97,18 @@ class TaskNode extends BaseNodeRuntime {
         });
 
         const taskTraceId = task.details.traceId ?? loopTraceId;
-        const taskScope = scopeForLoop("prepareTask", taskTraceId, nodeId, loopTraceId);
+        const taskScope = scopeForNodeLoop({
+            module: "prepareTask",
+            traceId: taskTraceId,
+            nodeId,
+            traceParentId: loopTraceId,
+        });
         const { logger: prepareLogger } = logManager.withScope(taskScope);
-        const prepareResult = await TaskManager.prepareTask({ logger: prepareLogger, task });
+        const prepareResult = await TaskManager.prepareTask({
+            logger: prepareLogger,
+            task,
+            includeRemote: this._includeRemote,
+        });
         const { isSuccess: isPrepareSuccess, taskFn, code, message, reason, step } = prepareResult;
         if (!isPrepareSuccess || taskFn == null) {
             prepareLogger.critical("任務準備失敗，無法繼續執行，中止任務並 RESET 為 OPEN", {
@@ -220,7 +235,7 @@ class TaskNode extends BaseNodeRuntime {
             taskTypeKey: string;
             nodeId: string;
             cost: TaskRunResult["cost"];
-            extra: TaskRunResult["extra"];
+            extra: TaskRunResult["extr\a"];
             traceId: string;
         }
     ): Promise<void> {
@@ -237,20 +252,20 @@ class TaskNode extends BaseNodeRuntime {
         const { error: changeTaskStatusError } =
             outcome === "success"
                 ? await patchChangeTaskStatus({
-                      id: taskId,
-                      action: TaskStatusAction.FINISH,
-                      nodeId,
-                      cost,
-                      extra: extraValue,
-                      traceId,
-                  })
+                    id: taskId,
+                    action: TaskStatusAction.FINISH,
+                    nodeId,
+                    cost,
+                    extra: extraValue,
+                    traceId,
+                })
                 : await patchChangeTaskStatus({
-                      id: taskId,
-                      action: TaskStatusAction.RESET,
-                      nodeId,
-                      extra: extraValue,
-                      traceId,
-                  });
+                    id: taskId,
+                    action: TaskStatusAction.RESET,
+                    nodeId,
+                    extra: extraValue,
+                    traceId,
+                });
 
         if (changeTaskStatusError) {
             const upperMessage = `${outcomePrefix}但是更新 TaskStatus 失敗，產生孤兒 Task，請儘快排查問題`;

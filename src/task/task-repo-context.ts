@@ -86,6 +86,8 @@ export interface BootstrapLocalTasksResult {
     registered: string[];
     skipped: { taskDir: string; reason: string }[];
     errors: { taskDir: string; error: string }[];
+    /** True when scan was skipped due to unchanged config fingerprint */
+    cached?: boolean;
 }
 
 /** Host app config directory (relative to `cwd`) — recommended for library consumers */

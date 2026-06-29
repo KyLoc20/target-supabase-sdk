@@ -1,9 +1,8 @@
-import { RepoManager } from "../repo/repo-manager";
 import { getScanRemoteRepoValues } from "../repo/repo.api";
 import { TASK_REPO_USAGE } from "../repo/repo.interface";
 import { LoggerWithScope } from "../shared/log";
 import { ResultCode, Task } from "./task.interface";
-import { TaskFn, TaskRepoContext, TaskRunResult, ExecutableTaskFn } from "./task-repo-context";
+import { TaskFn, TaskRunResult, ExecutableTaskFn } from "./task-repo-context";
 
 export type {
     TaskFn,
@@ -28,15 +27,21 @@ export {
 import {
     bootstrapLocalTasks,
     BootstrapLocalTasksOptions,
+    clearBootstrapLocalTasksCache,
     getRegisteredLocalTaskTypeKeys,
 } from "./local-task-registry";
 import type { BootstrapLocalTasksResult } from "./task-repo-context";
+import { TaskRepoValidation, type TaskRepoValidationFailureReason } from "./task-repo-validation";
 
-export type PrepareTaskFailureReason =
-    | "MISSING_PARAMS"
-    | "REPO_LOAD_FAILED"
-    | "PARAMS_VALIDATION_FAILED"
-    | "TASK_TYPE_KEY_MISMATCH";
+/** @deprecated use {@link TaskRepoValidationFailureReason} */
+export type PrepareTaskFailureReason = TaskRepoValidationFailureReason;
+
+export type {
+    TaskRepoValidationFailureReason,
+    ValidateTaskRepoAndParamsInput,
+    ValidateTaskRepoAndParamsResult,
+} from "./task-repo-validation";
+export { TaskRepoValidation } from "./task-repo-validation";
 
 export interface PrepareTaskResponse {
     isSuccess: boolean;
@@ -51,6 +56,12 @@ export interface PrepareTaskResponse {
 export interface PrepareTaskParams {
     logger: LoggerWithScope;
     task: Task;
+    /**
+     * When false, do not fetch Repo from Supabase during validation.
+     * Should match {@link RegisterTasksOptions.includeRemote} on the worker.
+     */
+    includeRemote?: boolean;
+    bootstrapLocalOptions?: BootstrapLocalTasksOptions;
 }
 
 export interface RegisterTasksOptions {
@@ -64,6 +75,7 @@ export interface RegisterTasksResult {
     availableTaskList: string[];
     local: BootstrapLocalTasksResult;
     remote: { values: string[] };
+    includeRemote: boolean;
 }
 
 function logLocalBootstrap(logger: LoggerWithScope, bootstrap: BootstrapLocalTasksResult): void {
@@ -153,6 +165,7 @@ async function registerTasks({
         availableTaskList,
         local,
         remote: { values: remoteValues },
+        includeRemote,
     };
 }
 
@@ -165,36 +178,23 @@ function bindTaskFn(taskFn: TaskFn, taskParams: unknown): ExecutableTaskFn {
     });
 }
 
-/** 调用 Repo 模块导出的 taskParamsValidator；抛错视为校验失败 */
-function validateTaskParams(
-    validator: TaskRepoContext["taskParamsValidator"],
-    taskParams: unknown,
-    logger: LoggerWithScope
-): boolean {
-    try {
-        return validator(taskParams) === true;
-    } catch (error) {
-        logger.warn("taskParamsValidator 拋出異常", {
-            topic: "task",
-            data: { error: error instanceof Error ? error.message : error },
-        });
-        return false;
-    }
-}
-
 /**
  * 將 Supabase 認領到的 Task 解析為可執行的 `ExecutableTaskFn`。
  *
  * 流程：
  * 1. 從 task.details 取出 `params`；`task.value` 作為 taskTypeKey（同 {@link Repo.value}）
- * 2. {@link RepoManager.getRepoContext} — 本地註冊優先，否則按 task.value 拉取 Repo
- * 3. 校驗 taskFn.taskTypeKey 與 task.value 一致
- * 4. 用 Repo 導出的 taskParamsValidator 校驗 params
- * 5. bindTaskFn，返回閉包後的無參執行函數
+ * 2. {@link TaskRepoValidation.validate} — 本地註冊優先；未命中時可選遠端（`includeRemote`）
+ *    Worker 在 registry 未命中時會補掃本地（`local_bootstrap_on_miss`）
+ * 3. bindTaskFn，返回閉包後的無參執行函數
  *
  * 失敗時返回 `{ isSuccess: false, code, message, reason, step }`（不 throw）。
  */
-const prepareTask = async ({ logger, task }: PrepareTaskParams): Promise<PrepareTaskResponse> => {
+const prepareTask = async ({
+    logger,
+    task,
+    includeRemote = true,
+    bootstrapLocalOptions,
+}: PrepareTaskParams): Promise<PrepareTaskResponse> => {
     const fail = (params: {
         reason: PrepareTaskFailureReason;
         code: ResultCode;
@@ -227,33 +227,42 @@ const prepareTask = async ({ logger, task }: PrepareTaskParams): Promise<Prepare
     });
 
     const { params: taskParams } = details;
-    if (taskParams == null) {
-        return fail({
-            reason: "MISSING_PARAMS",
-            code: ResultCode.PARAMS_NOT_VALID,
-            message: "任務缺少 params",
-            step: "params",
+
+    if (!getRegisteredLocalTaskTypeKeys().includes(taskTypeKey)) {
+        const bootstrap = await bootstrapLocalTasks({
+            ...bootstrapLocalOptions,
+            forTaskTypeKey: taskTypeKey,
+        });
+        logger.debug("本地 registry 未命中，補掃本地任務", {
+            topic: "task",
+            data: {
+                taskId,
+                taskTypeKey,
+                step: "local_bootstrap_on_miss",
+                status: bootstrap.status,
+                registered: bootstrap.registered,
+                cached: bootstrap.cached ?? false,
+                message: bootstrap.message,
+            },
         });
     }
 
-    logger.debug("任務詳情校驗通過，開始解析 Repo 上下文", {
-        topic: "task",
-        data: { taskTypeKey, step: "repo_load" },
-    });
-
-    const { context: repoContext, error: repoError } = await RepoManager.getRepoContext<TaskRepoContext>({
+    const validation = await TaskRepoValidation.validate({
         logger,
         taskTypeKey,
+        params: taskParams,
+        includeRemote,
     });
-
-    if (repoContext == null) {
+    if (!validation.isValid) {
         return fail({
-            reason: "REPO_LOAD_FAILED",
-            code: ResultCode.REPO_NOT_VALID,
-            message: repoError ?? "無法加載 Repo 上下文",
-            step: "repo_load",
+            reason: validation.reason,
+            code: validation.code,
+            message: validation.message,
+            step: validation.step,
         });
     }
+
+    const { repoContext } = validation;
 
     logger.info("Repo 上下文加載成功", {
         topic: "task",
@@ -263,27 +272,6 @@ const prepareTask = async ({ logger, task }: PrepareTaskParams): Promise<Prepare
             step: "repo_load",
         },
     });
-
-    if (repoContext.taskFn.taskTypeKey !== taskTypeKey) {
-        return fail({
-            reason: "TASK_TYPE_KEY_MISMATCH",
-            code: ResultCode.REPO_NOT_VALID,
-            message: `taskFn.taskTypeKey (${repoContext.taskFn.taskTypeKey}) 與 task.value (${taskTypeKey}) 不一致`,
-            step: "task_type_key",
-        });
-    }
-
-    logger.debug("開始校驗任務參數", { topic: "task", data: { taskTypeKey, step: "params_validation" } });
-    if (!validateTaskParams(repoContext.taskParamsValidator, taskParams, logger)) {
-        return fail({
-            reason: "PARAMS_VALIDATION_FAILED",
-            code: ResultCode.PARAMS_NOT_VALID,
-            message: "任務參數校驗失敗",
-            step: "params_validation",
-        });
-    }
-
-    logger.debug("任務參數校驗通過", { topic: "task", data: { taskTypeKey, step: "params_validation" } });
 
     const boundTaskFn = bindTaskFn(repoContext.taskFn, taskParams);
     logger.success("任務準備完成", {
@@ -307,6 +295,7 @@ const TaskManager = {
     prepareTask,
     bootstrapLocalTasks,
     getRegisteredLocalTaskTypeKeys,
+    clearBootstrapLocalTasksCache,
 };
 
 export { TaskManager };

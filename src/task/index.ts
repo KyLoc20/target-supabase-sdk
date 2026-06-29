@@ -39,3 +39,11 @@ export type {
 	RegisterTasksOptions,
 	RegisterTasksResult,
 } from "./task-manager";
+
+// task-repo-validation
+export { TaskRepoValidation } from "./task-repo-validation";
+export type {
+	TaskRepoValidationFailureReason,
+	ValidateTaskRepoAndParamsInput,
+	ValidateTaskRepoAndParamsResult,
+} from "./task-repo-validation";

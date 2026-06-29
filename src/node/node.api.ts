@@ -114,7 +114,7 @@ export const patchChangeNodeStatus = validateWithSchema(
     patchChangeNodeStatusSchema,
     "patchChangeNodeStatusSchema"
 )(async ({ nodeId, status, fromStatus, traceId }) => {
-    const logger = createApiLogger("patchChangeNodeStatus", { traceId, nodeId });
+    const logger = createApiLogger("patchChangeNodeStatus", { traceId, labels: { nodeId } });
 
     const data = await updateTargetDetails<Node, NodeDetails>({
         id: nodeId,

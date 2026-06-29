@@ -6,10 +6,10 @@ import {
     createChildScope,
     createRootScope,
     logManager,
-    scopeForLoop,
     type LoggerWithScope,
     type LogScope,
 } from "../shared/log";
+import { scopeForNodeLoop } from "./node-log-scope";
 import { getErrorMessage } from "../shared/utils/error.utils";
 import { patchChangeNodeStatus, patchNodeHeartBeat, patchStopNode, postRegisterNode } from "./node.api";
 import { NodeLoopContext, NodeStatus } from "./node.interface";
@@ -56,7 +56,7 @@ abstract class BaseNodeRuntime {
         this.isRunning = true;
         this.loopCount = 0;
         this.startupTraceId = logManager.generateTraceId();
-        this.startupScope = createRootScope(runtimeModule, this.startupTraceId);
+        this.startupScope = createRootScope({ module: runtimeModule, traceId: this.startupTraceId });
     }
 
     /** Hook: task registration, trigger config load, etc. Throw to abort bootstrap. */
@@ -210,11 +210,11 @@ abstract class BaseNodeRuntime {
         while (this.isRunning) {
             this.loopCount++;
             const loopTraceId = logManager.generateTraceId();
-            const loopScope = createChildScope(
-                `${this.runtimeModule}-loop-iteration`,
-                applyScopePatch(this.startupScope, { labels: { nodeId } }),
-                { traceId: loopTraceId }
-            );
+            const loopScope = createChildScope({
+                module: `${this.runtimeModule}-loop-iteration`,
+                parent: applyScopePatch(this.startupScope, { labels: { nodeId } }),
+                traceId: loopTraceId,
+            });
             const loopCtx: NodeLoopContext = { loopTraceId, nodeId };
             const { logger: iterLogger } = logManager.withScope(loopScope);
 
@@ -322,7 +322,12 @@ abstract class BaseNodeRuntime {
     async heartbeat(ctx: NodeLoopContext): Promise<boolean> {
         const { loopTraceId, nodeId } = ctx;
         const { logger } = logManager.withScope(
-            scopeForLoop("heartbeat", loopTraceId, nodeId, this.startupTraceId)
+            scopeForNodeLoop({
+                module: "heartbeat",
+                traceId: loopTraceId,
+                nodeId,
+                traceParentId: this.startupTraceId,
+            })
         );
 
         logger.info("開始發送心跳", { topic: "node" });
@@ -367,7 +372,12 @@ abstract class BaseNodeRuntime {
     async batchCommand(ctx: NodeLoopContext): Promise<void> {
         const { loopTraceId, nodeId } = ctx;
         const { logger } = logManager.withScope(
-            scopeForLoop("batchCommand", loopTraceId, nodeId, this.startupTraceId)
+            scopeForNodeLoop({
+                module: "batchCommand",
+                traceId: loopTraceId,
+                nodeId,
+                traceParentId: this.startupTraceId,
+            })
         );
 
         logger.debug("開始檢查控制指令", { topic: "node" });

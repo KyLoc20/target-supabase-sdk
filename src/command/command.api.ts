@@ -43,7 +43,7 @@ export const postCommand = validateWithSchema(
     postCommandSchema,
     "postCommandSchema"
 )(async ({ nodeId, command, traceId }) => {
-    const logger = createApiLogger("postCommand", { traceId, nodeId });
+    const logger = createApiLogger("postCommand", { traceId, labels: { nodeId } });
 
     const result = await createTarget<Command, PostCommandPayload>({
         payload: { nodeId, command, traceId },
@@ -70,7 +70,7 @@ export const getPollCommandList = validateWithSchema(
     getPollCommandListSchema,
     "getPollCommandListSchema"
 )(async ({ nodeId, size, traceId }) => {
-    const logger = createApiLogger("getPollCommandList", { traceId, nodeId });
+    const logger = createApiLogger("getPollCommandList", { traceId, labels: { nodeId } });
 
     const { data: dequeuedList = [] } = await pollTargetList<Command>({
         category: CategoryCommand.COMMAND,

@@ -3,6 +3,7 @@ import { generateResponse, type SupabaseResponse } from "../core.interface";
 import { createApiLogger, logManager, type LoggerWithScope } from "../shared/log";
 import { z } from "zod";
 import { CategoryTask, ResultCode, Task, TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
+import { TaskRepoValidation } from "./task-repo-validation";
 
 const TASK_STATUS_FIELD = "details->>status" as const;
 const TASK_NODE_ID_FIELD = "details->>nodeId" as const;
@@ -330,7 +331,7 @@ export const patchTaskProgress = validateWithSchema(
     patchTaskProgressSchema,
     "patchTaskProgressSchema"
 )(async ({ id, progress, nodeId, traceId }) => {
-    const logger = createApiLogger("patchTaskProgress", { traceId, nodeId });
+    const logger = createApiLogger("patchTaskProgress", { traceId, labels: { nodeId } });
     const data = await transitionTask({
         id,
         optimisticLockFilterList: lockOnDoingOwner(nodeId),
@@ -358,7 +359,7 @@ export const patchClaimTask = validateWithSchema(
     patchClaimTaskSchema,
     "patchClaimTaskSchema"
 )(async ({ nodeId, availableTaskList, traceId }): Promise<SupabaseResponse<Task | null>> => {
-    const logger = createApiLogger("patchClaimTask", { traceId, nodeId });
+    const logger = createApiLogger("patchClaimTask", { traceId, labels: { nodeId } });
 
     try {
         const { data: possibleTask } = await getPossibleTarget({
@@ -393,6 +394,12 @@ export const patchClaimTask = validateWithSchema(
 /**
  * Create a task row (scheduler / admin).
  *
+ * Validates `params` against the task Repo's `taskParamsValidator` before insert
+ * (same rules as {@link TaskManager.prepareTask} via {@link TaskRepoValidation.validate}).
+ *
+ * Local registry is scanned first (`bootstrapLocal: true`); when the task type is not
+ * registered locally, falls back to Supabase when `includeRemote` is true (default).
+ *
  * `taskStatus` defaults to **TODO** (worker-claimable). Pass **OPEN** for draft tasks
  * that require {@link patchChangeTaskStatus} `publish` before workers can claim.
  */
@@ -405,6 +412,28 @@ export const postTask = validateWithSchema(
         traceId: taskTraceId,
         traceParentId: traceParentId ?? null,
     });
+
+    const validation = await TaskRepoValidation.validate({
+        logger,
+        taskTypeKey: value,
+        params,
+        bootstrapLocal: true,
+    });
+    if (!validation.isValid) {
+        logger.warn(validation.message, {
+            topic: "task",
+            data: {
+                taskTypeKey: value,
+                reason: validation.reason,
+                step: validation.step,
+            },
+        });
+        return generateResponse.error(
+            validation.message,
+            undefined,
+            String(validation.code)
+        ) as SupabaseResponse<Task>;
+    }
 
     const result = await createTarget<Task, PostTaskPayload>({
         payload: { name, value, params, taskStatus, tagList, extra, traceId: taskTraceId, traceParentId },
