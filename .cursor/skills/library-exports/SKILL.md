@@ -1,9 +1,9 @@
 ---
 name: library-exports
 description: >-
-  Public API and package export conventions for target-supabase-sdk: index.ts barrel,
-  package.json exports, named vs default export, export type, Manager vs api vs core,
-  subpath exports, and tree-shaking. Use when adding exports, reviewing index.ts,
+  Public API and package export conventions for target-supabase-sdk: barrel (index.ts)
+  pattern, domain index.ts, root index.ts, package.json exports, named vs export type,
+  Manager vs api. Use when adding exports, reviewing index.ts, explaining barrel imports,
   publishing the package, or deciding what to expose to consumers.
 ---
 
@@ -11,13 +11,152 @@ description: >-
 
 ## One-line rule
 
-**Single package entry, named exports only, types via `export type`, public surface curated by domain — api + types + managers out; implementation details stay internal.**
+**Domain `index.ts` lists public symbols explicitly; root `src/index.ts` aggregates with `export * from "./<domain>"`. Named exports only; types via `export type`; internals never re-exported.**
+
+---
+
+## What is a barrel?
+
+**Barrel**（桶文件 / 聚合导出）= 目录下的 **`index.ts`**，把该目录多个 leaf 模块的符号**集中 re-export 到一个入口**。调用方 import 目录路径即可，不必逐个文件路径。
+
+命名来自 metaphor：多个「瓶子」（`*.api.ts`、`*-manager.ts`…）装进一个「桶」（`index.ts`），外部只对接桶口。
+
+### Without barrel
+
+```typescript
+import { logManager } from "../shared/log/log-manager";
+import { createApiLogger } from "../shared/log/create-api-logger";
+import { scopeForLoop } from "../shared/log/log-scope";
+```
+
+### With barrel (`src/shared/log/index.ts`)
+
+```typescript
+import { logManager, createApiLogger, scopeForLoop } from "../shared/log";
+```
+
+Barrel 文件只做转发，不含业务逻辑：
+
+```typescript
+export { logManager } from "./log-manager";
+export { createApiLogger } from "./create-api-logger";
+export { scopeForLoop } from "./log-scope";
+```
+
+| Benefit | Explanation |
+|---------|-------------|
+| Shorter imports | One path per domain |
+| Curated public API | Only listed symbols are public |
+| Refactor-friendly | Move/rename leaf files; update barrel only |
+
+**Barrel ≠ `export *` at domain layer.** Domain barrel uses **explicit lists** (see below). Root may use `export * from "./task"` because domain barrel is already curated.
+
+**Internal `src/` code** imports **leaf paths** (`from "./task.api"`, `from "../shared/log/log-manager"`) — not the domain barrel — to avoid cycles. See [barrel-import-cycles](../barrel-import-cycles/SKILL.md). **Exception:** cross-domain callers may use `from "../shared/log"` when importing another domain's public surface.
+
+---
+
+## Two-layer barrel (preferred — `task` & `shared/log` are references)
+
+```text
+src/task/task.interface.ts   ─┐
+src/task/task.api.ts         ─┼─► src/task/index.ts  (explicit list)
+src/task/task-manager.ts     ─┘         │
+                                        ▼
+                              src/index.ts  →  export * from "./task"
+                                        │
+                                        ▼
+                              package consumer: import { TaskManager } from "target-supabase-sdk"
+```
+
+Same pattern for infra domains not yet on root:
+
+```text
+src/shared/log/log-manager.ts      ─┐
+src/shared/log/log-scope.ts        ─┼─► src/shared/log/index.ts
+src/shared/log/create-api-logger.ts ─┘
+         ▲
+         └── src/*.api.ts imports from "../shared/log" (domain barrel OK cross-folder)
+```
+
+| Layer | File | Role |
+|-------|------|------|
+| **Domain barrel** | `src/<domain>/index.ts` | Single place to curate that domain's public API |
+| **Root barrel** | `src/index.ts` | `export * from "./task"` — no per-file paths for migrated domains |
+| **Leaf modules** | `*.interface.ts`, `*.api.ts`, `*-manager.ts` | Implementation; internal imports stay direct |
+
+**Internal code** in the **same domain** imports leaf modules (`from "./task.api"`, `from "./log-manager"`) — not `from "./index"` or `from "../task"` barrel. See [barrel-import-cycles](../barrel-import-cycles/SKILL.md).
+
+---
+
+## Domain barrel template (`src/task/index.ts`)
+
+```typescript
+/**
+ * Task domain public API — curated re-exports only.
+ * Internal modules (local-task-registry, task-repo-context, task.utils) stay private.
+ */
+
+// enums / runtime values from interface
+export { CategoryTask, TaskStatus, TaskStatusAction, ResultCode } from "./task.interface";
+export type { Task, TaskDetails, TaskFlow } from "./task.interface";
+
+// api — list every intended public symbol (not export *)
+export { patchClaimTask, patchClaimTaskSchema, postTask, postTaskSchema, ... } from "./task.api";
+export type { PatchClaimTaskPayload, PostTaskPayload, ... } from "./task.api";
+
+// manager — value + caller-facing types only
+export { TaskManager } from "./task-manager";
+export type { RegisterTasksOptions, RegisterTasksResult, PrepareTaskResponse, ... } from "./task-manager";
+```
+
+**Do not** `export * from "./task-manager"` if that file re-exports internal types from `task-repo-context` — cherry-pick in domain `index.ts` instead.
+
+**Keep private** (task example): `local-task-registry.ts`, `task-repo-context.ts`, `task.utils.ts`, `bootstrapLocalTasks`, script loaders.
+
+### Smaller domain example (`src/shared/log/index.ts`)
+
+```typescript
+/**
+ * Log domain public API — curated re-exports only.
+ */
+
+export { logManager, LogManager, LogLevel } from "./log-manager";
+export type { LogEntry, LogOptions, LoggerWithScope, LogRestParams } from "./log-manager";
+
+export { createApiLogger } from "./create-api-logger";
+export type { CreateApiLoggerOptions } from "./create-api-logger";
+
+export { createRootScope, scopeForLoop, withModule, ... } from "./log-scope";
+export type { LogScope, LogScopePatch } from "./log-scope";
+```
+
+Not exported via barrel: nothing else under `shared/log/` today. Consumers inside `src/` use `from "../shared/log"`; files inside `shared/log/` use `from "./log-manager"` etc.
+
+---
+
+## Root barrel (`src/index.ts`)
+
+Migrated domain — one line:
+
+```typescript
+export * from "./task";
+```
+
+Legacy domains (not yet migrated) may still use inline paths:
+
+```typescript
+export * from "./file/file.interface";
+export * from "./file/file.api";
+export { RepoManager } from "./repo/repo-manager";
+```
+
+When adding a new domain or refactoring an existing one, prefer **`src/<domain>/index.ts` + `export * from "./<domain>"`** at root.
+
+Root barrel: **no business logic** (except `supabase` singleton init).
 
 ---
 
 ## Entry & packaging (`package.json`)
-
-Current model (keep unless explicitly expanding):
 
 ```json
 {
@@ -29,97 +168,42 @@ Current model (keep unless explicitly expanding):
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
-  },
-  "peerDependencies": {
-    "@supabase/supabase-js": "^2.50.0",
-    "zod": "^3.23.0"
   }
 }
 ```
 
 | Field | Purpose |
 |-------|---------|
-| `exports["."]` | Single public entry — consumers import from package name only |
+| `exports["."]` | Single public entry |
 | `sideEffects: false` | Tree-shaking friendly |
-| `peerDependencies` | Supabase / Zod not bundled into the library |
-| `prepack` → `build` | Published tarball contains `dist/` + types |
+| `peerDependencies` | Supabase / Zod not bundled |
 
-**Later (optional):** subpath exports e.g. `"./task": "./dist/task/index.js"` when root `index.ts` grows too large — not required yet.
+Optional later: subpath `"./task": "./dist/task/index.js"` — not required while root re-exports task.
 
-`scripts/` and dev-only code **never** appear in `index.ts`.
-
----
-
-## Root barrel (`src/index.ts`)
-
-Role: **aggregate domain public APIs** — no business logic.
-
-Preferred layout per domain:
-
-```text
-types   → export * from "./task/task.interface"   (or export type { ... })
-api     → export * from "./task/task.api"
-manager → export { TaskManager } + export type { ... }
-```
-
-Avoid duplicate re-exports (e.g. same module exported twice).
+`scripts/` **never** in any barrel.
 
 ---
 
 ## What to export (public surface)
 
-| Layer | Export? | Examples |
-|-------|---------|----------|
-| `*.interface.ts` | ✅ | `Task`, `Repo`, `SupabaseResponse` |
-| `*.api.ts` | ✅ | `patchClaimTask`, `getScanRemoteRepoValues` |
-| `*-manager.ts` | ✅ (curated) | `TaskManager`, `NodeManager`, `RepoManager` |
-| Infra | ✅ | `SupabaseInitializer`, `supabase` singleton |
-| Stable helpers | ✅ sparingly | `isOptimisticLockError` |
-| `core.api.ts` | ✅ (legacy breadth) | tighten over time |
-| `*.script-loader.ts`, internal utils | ❌ | unless deliberate extension point |
-
-Organize by **consumer intent**:
-
-```text
-UI / scripts     → api functions + types
-Worker runtime   → managers + api + SupabaseInitializer
-Advanced / rare  → core helpers (minimize)
-```
-
-Document that `supabase` singleton requires `SupabaseInitializer.initialize()` first.
+| Layer | Export via domain `index.ts`? | Examples |
+|-------|-------------------------------|----------|
+| `*.interface.ts` | ✅ explicit | `Task`, `TaskStatus` |
+| `*.api.ts` | ✅ explicit | `patchClaimTask`, schemas |
+| `*-manager.ts` | ✅ curated | `TaskManager` + option/result types |
+| Infra | root `index.ts` | `SupabaseInitializer`, `supabase` |
+| `*.script-loader.ts`, `*-registry.ts`, `*.utils.ts` | ❌ | unless deliberate extension point |
 
 ---
 
-## Named exports only (managers & singletons)
+## Named exports & `export type`
 
-**All SDK modules use named exports — no `export default` in `src/`.**
-
-```typescript
-// task-manager.ts
-export const TaskManager = { registerTasks, prepareTask, ... };
-
-// index.ts
-export { TaskManager } from "./task/task-manager";
-export type { RegisterTasksOptions, RegisterTasksResult } from "./task/task-manager";
-```
-
-Managers: `TaskManager`, `NodeManager`, `RepoManager`, `ParcelManager`, `FileManager`.  
-Log singleton: `export const logManager` from `log-manager.ts` (internal; not in root `index.ts`).
-
-Types alongside values: `export type { ... }` from the same module path in `index.ts`.
-
----
-
-## `export` vs `export type`
+**No `export default` in `src/`.**
 
 | Content | Syntax |
 |---------|--------|
-| Functions, classes, const enums, managers | `export { foo }` |
+| Functions, enums, managers, Zod schemas | `export { foo }` |
 | Interfaces, type aliases | `export type { Foo }` |
-
-Benefits: `isolatedModules` / `verbatimModuleSyntax` safe; clear runtime vs type-only boundary.
-
-Callers:
 
 ```typescript
 import { TaskManager, patchClaimTask, type Task, type RegisterTasksOptions } from "target-supabase-sdk";
@@ -127,33 +211,15 @@ import { TaskManager, patchClaimTask, type Task, type RegisterTasksOptions } fro
 
 ---
 
-## `export *` — use with care
+## Why not `export *` at domain barrel?
 
-`export * from "./task/task.api"` re-exports **every** named export in that file as public API.
+| `export * from "./task.api"` at domain index | Explicit list in `src/task/index.ts` |
+|---------------------------------------------|--------------------------------------|
+| New internal export becomes public API | Add symbol deliberately to index |
+| Duplicate if two leaf files export same name | One export path per symbol |
+| Hard to review diff | Public surface visible in one file |
 
-| Pros | Cons |
-|------|------|
-| Low boilerplate | Internal rename/add becomes breaking change |
-| | Hard to see full public surface from one file |
-
-**Prefer** domain sub-barrels (`src/task/index.ts`) that list exports explicitly, then `export * from "./task"` at root — or cherry-pick like `RegisterTasksOptions` when the module also re-exports internals.
-
----
-
-## Manager + types pattern (this repo)
-
-```typescript
-// task-manager.ts — export runtime object + option/result types used by callers
-export interface RegisterTasksOptions { ... }
-export interface RegisterTasksResult { ... }
-export const TaskManager = { registerTasks, prepareTask, ... };
-
-// index.ts
-export { TaskManager } from "./task/task-manager";
-export type { RegisterTasksOptions, RegisterTasksResult } from "./task/task-manager";
-```
-
-Do not rely on `Parameters<typeof TaskManager.registerTasks>[0]` in consumer docs — export types explicitly.
+Root `export * from "./task"` is safe **because** `task/index.ts` is already curated.
 
 ---
 
@@ -161,36 +227,38 @@ Do not rely on `Parameters<typeof TaskManager.registerTasks>[0]` in consumer doc
 
 | ❌ Avoid | ✅ Instead |
 |----------|-----------|
-| Default export only, no type re-export | `export type { Options }` alongside named value |
-| Export script loaders / internal utils | Keep internal; expose via manager/api |
-| Duplicate `export *` same module in index | Single re-export path |
-| Throwing from `*.api.ts` | Envelope — see [sdk-error-handling](../sdk-error-handling/SKILL.md) |
-| Bundling peer deps | Keep in `peerDependencies` |
+| `export * from "./task-manager"` when it re-exports internals | Cherry-pick in `src/task/index.ts` |
+| Leaf module `import from "../index"` | Import sibling leaf paths |
+| Export registry / script-loader via domain index | Keep internal |
+| Default export only | Named + `export type` |
+| Duplicate task exports in root (inline + `export * from "./task"`) | Only domain barrel path |
 
 ---
 
 ## Checklist (new public symbol)
 
 - [ ] Belongs in public API (not internal helper)?
-- [ ] Exported from domain module, then `src/index.ts`?
-- [ ] Types use `export type`?
-- [ ] Manager uses `export { X }` (no default)?
-- [ ] `pnpm build` — types appear in `dist/index.d.ts`?
-- [ ] README / changelog if user-facing?
+- [ ] Added to **`src/<domain>/index.ts`** explicit list (enums/values vs `export type`)?
+- [ ] Root `src/index.ts` already has `export * from "./<domain>"` (or add domain barrel first)?
+- [ ] No duplicate export from two leaf files through same barrel?
+- [ ] `pnpm build` — symbol in `dist/index.d.ts`?
+- [ ] Internal imports still use leaf paths (no barrel cycle)?
 
 ---
 
 ## Related skills
 
-- [sdk-error-handling](../sdk-error-handling/SKILL.md) — `*.api.ts` envelope, no throw
 - [barrel-import-cycles](../barrel-import-cycles/SKILL.md) — never `import from "."` inside `src/`
-- [task-local-discovery](../task-local-discovery/SKILL.md) — `TaskManager`, worker exports
-- [library-dev-scripts](../library-dev-scripts/SKILL.md) — `scripts/` not published API
+- [sdk-error-handling](../sdk-error-handling/SKILL.md) — `*.api.ts` envelope
+- [task-local-discovery](../task-local-discovery/SKILL.md) — task internals not in public index
+- [library-dev-scripts](../library-dev-scripts/SKILL.md) — scripts not published
 
 ## Reference files
 
 | File | Role |
 |------|------|
-| `package.json` | `exports`, `types`, `peerDependencies` |
-| `src/index.ts` | Root barrel |
-| `dist/index.d.ts` | Published type surface (verify after build) |
+| `src/task/index.ts` | **Reference domain barrel** (explicit exports) |
+| `src/shared/log/index.ts` | **Reference infra barrel** (log public API) |
+| `src/index.ts` | Root aggregate (`export * from "./task"`) |
+| `package.json` | `exports`, `types` |
+| `dist/index.d.ts` | Verify published surface after `pnpm build` |

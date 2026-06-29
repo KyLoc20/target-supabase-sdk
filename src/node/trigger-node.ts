@@ -1,4 +1,4 @@
-import { logManager, type LoggerWithContext } from "../shared/log/log-manager";
+import { logManager, scopeForLoop, type LoggerWithScope } from "../shared/log";
 import { postTask } from "../task/task.api";
 import { TaskStatus } from "../task/task.interface";
 import { patchTriggerFired, scanEnabledTriggers } from "../trigger/trigger.api";
@@ -18,17 +18,14 @@ class TriggerNode extends BaseNodeRuntime {
         super("triggerNode");
     }
 
-    protected async onBeforeRegisterNode(logger: LoggerWithContext): Promise<void> {
+    protected async onBeforeRegisterNode(logger: LoggerWithScope): Promise<void> {
         logger.info("Trigger 節點啟動，跳過任務註冊", { topic: "trigger" });
     }
 
     protected async runLoopSteps(ctx: NodeLoopContext, heartbeatOk: boolean): Promise<void> {
+        const loopScope = scopeForLoop(`${this.runtimeModule}-loop-iteration`, ctx.loopTraceId, ctx.nodeId);
         if (!heartbeatOk) {
-            const { logger } = logManager.withContext({
-                module: `${this.runtimeModule}-loop-iteration`,
-                traceId: ctx.loopTraceId,
-                nodeId: ctx.nodeId,
-            });
+            const { logger } = logManager.withScope(loopScope);
             logger.warn("心跳失敗，本輪跳過 Trigger 評估", { topic: "trigger" });
             return;
         }
@@ -36,12 +33,9 @@ class TriggerNode extends BaseNodeRuntime {
     }
 
     async evaluateTriggers(ctx: NodeLoopContext): Promise<void> {
-        const { loopTraceId } = ctx;
-        const { logger } = logManager.withContext({
-            module: "evaluateTriggers",
-            traceId: loopTraceId,
-            nodeId: ctx.nodeId,
-        });
+        const { loopTraceId, nodeId } = ctx;
+        const loopScope = scopeForLoop("evaluateTriggers", loopTraceId, nodeId);
+        const { logger } = logManager.withScope(loopScope);
 
         logger.debug("開始評估 Trigger", { topic: "trigger" });
 
@@ -49,7 +43,7 @@ class TriggerNode extends BaseNodeRuntime {
         if (error) {
             logger.warn("掃描 Trigger 失敗", {
                 topic: "trigger",
-                context: { error: error.message },
+                data: { error: error.message },
             });
             return;
         }
@@ -75,7 +69,7 @@ class TriggerNode extends BaseNodeRuntime {
 
         logger.info("Trigger 評估完成", {
             topic: "trigger",
-            context: {
+            data: {
                 scanned: triggerList.length,
                 due: dueCount,
                 fired: firedCount,
@@ -84,12 +78,8 @@ class TriggerNode extends BaseNodeRuntime {
     }
 
     private async fireTrigger(ctx: NodeLoopContext, trigger: Trigger, now: Date): Promise<boolean> {
-        const { loopTraceId } = ctx;
-        const { logger } = logManager.withContext({
-            module: "fireTrigger",
-            traceId: loopTraceId,
-            nodeId: ctx.nodeId,
-        });
+        const { loopTraceId, nodeId } = ctx;
+        const { logger } = logManager.withScope(scopeForLoop("fireTrigger", loopTraceId, nodeId));
 
         const fireKey = buildFireKey(trigger, now);
         const action = trigger.details.action;
@@ -97,14 +87,14 @@ class TriggerNode extends BaseNodeRuntime {
         if (action.kind !== "post_task") {
             logger.warn("不支援的 Trigger action", {
                 topic: "trigger",
-                context: { triggerId: trigger.id, kind: action.kind },
+                data: { triggerId: trigger.id, kind: action.kind },
             });
             return false;
         }
 
         logger.info("Trigger 到期，準備 postTask", {
             topic: "trigger",
-            context: {
+            data: {
                 triggerId: trigger.id,
                 triggerKey: trigger.value,
                 fireKey,
@@ -120,7 +110,7 @@ class TriggerNode extends BaseNodeRuntime {
         if (postError) {
             logger.error("Trigger postTask 失敗", {
                 topic: "trigger",
-                context: {
+                data: {
                     triggerId: trigger.id,
                     fireKey,
                     error: postError.message,
@@ -139,7 +129,7 @@ class TriggerNode extends BaseNodeRuntime {
         if (patchError) {
             logger.warn("Trigger 已 postTask 但更新 lastFireKey 失敗", {
                 topic: "trigger",
-                context: {
+                data: {
                     triggerId: trigger.id,
                     taskId: task?.id,
                     fireKey,
@@ -151,11 +141,12 @@ class TriggerNode extends BaseNodeRuntime {
 
         logger.success("Trigger 觸發成功", {
             topic: "trigger",
-            context: {
+            data: {
                 triggerId: trigger.id,
                 triggerKey: trigger.value,
                 fireKey,
                 taskId: task?.id,
+                taskTraceId: task?.details.traceId,
             },
         });
         return true;
@@ -166,7 +157,7 @@ function buildPostTaskPayload(
     trigger: Trigger,
     action: TriggerPostTaskAction,
     extra: string,
-    traceId: string
+    loopTraceId: string
 ) {
     return {
         name: action.taskName ?? trigger.name,
@@ -175,7 +166,7 @@ function buildPostTaskPayload(
         taskStatus: action.taskStatus ?? TaskStatus.TODO,
         tagList: trigger.tagList ?? [],
         extra,
-        traceId,
+        traceParentId: loopTraceId,
     };
 }
 

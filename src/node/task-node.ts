@@ -1,4 +1,9 @@
-import { logManager, type LoggerWithContext } from "../shared/log/log-manager";
+import {
+    logManager,
+    scopeForLoop,
+    withModule,
+    type LoggerWithScope,
+} from "../shared/log";
 import { getErrorMessage, toError } from "../shared/utils/error.utils";
 import { TaskManager, type TaskRunResult } from "../task/task-manager";
 import { patchChangeTaskStatus, patchClaimTask } from "../task/task.api";
@@ -21,19 +26,16 @@ class TaskNode extends BaseNodeRuntime {
         super("taskNode");
     }
 
-    protected async onBeforeRegisterNode(logger: LoggerWithContext): Promise<void> {
+    protected async onBeforeRegisterNode(logger: LoggerWithScope): Promise<void> {
         logger.info("開始註冊任務", { topic: "node" });
         const { availableTaskList } = await TaskManager.registerTasks({ logger });
         this._availableTaskList = availableTaskList;
     }
 
     protected async runLoopSteps(ctx: NodeLoopContext, heartbeatOk: boolean): Promise<void> {
+        const loopScope = scopeForLoop(`${this.runtimeModule}-loop-iteration`, ctx.loopTraceId, ctx.nodeId);
         if (!heartbeatOk) {
-            const { logger } = logManager.withContext({
-                module: `${this.runtimeModule}-loop-iteration`,
-                traceId: ctx.loopTraceId,
-                nodeId: ctx.nodeId,
-            });
+            const { logger } = logManager.withScope(loopScope);
             logger.warn("心跳失敗，本輪跳過任務認領", { topic: "node" });
             return;
         }
@@ -42,11 +44,8 @@ class TaskNode extends BaseNodeRuntime {
 
     async runAsWorker(ctx: NodeLoopContext) {
         const { loopTraceId, nodeId } = ctx;
-        const { logger } = logManager.withContext({
-            module: "runAsWorker",
-            traceId: loopTraceId,
-            nodeId,
-        });
+        const loopScope = scopeForLoop("runAsWorker", loopTraceId, nodeId);
+        const { logger } = logManager.withScope(loopScope);
 
         const availableTaskList = this.availableTaskList;
         if (availableTaskList.length === 0) {
@@ -56,7 +55,7 @@ class TaskNode extends BaseNodeRuntime {
 
         logger.info("向 Supabase 認領任務", {
             topic: "task",
-            context: { availableTaskList },
+            data: { availableTaskList },
         });
         const { data: task, error: claimError } = await patchClaimTask({
             nodeId,
@@ -66,7 +65,7 @@ class TaskNode extends BaseNodeRuntime {
         if (claimError) {
             logger.error("認領任務 API 失敗", {
                 topic: "task",
-                context: {
+                data: {
                     availableTaskList,
                     error: claimError.message,
                 },
@@ -76,14 +75,14 @@ class TaskNode extends BaseNodeRuntime {
         if (task == null) {
             logger.info("本輪無匹配的 TODO 任務", {
                 topic: "task",
-                context: { availableTaskList },
+                data: { availableTaskList },
             });
             return;
         }
 
         logger.info("認領任務成功，準備執行", {
             topic: "task",
-            context: {
+            data: {
                 taskId: task.id,
                 taskName: task.name,
                 taskTypeKey: task.value,
@@ -91,17 +90,15 @@ class TaskNode extends BaseNodeRuntime {
             },
         });
 
-        const { logger: prepareLogger } = logManager.withContext({
-            module: "prepareTask",
-            traceId: loopTraceId,
-            nodeId,
-        });
+        const taskTraceId = task.details.traceId ?? loopTraceId;
+        const taskScope = scopeForLoop("prepareTask", taskTraceId, nodeId, loopTraceId);
+        const { logger: prepareLogger } = logManager.withScope(taskScope);
         const prepareResult = await TaskManager.prepareTask({ logger: prepareLogger, task });
         const { isSuccess: isPrepareSuccess, taskFn, code, message, reason, step } = prepareResult;
         if (!isPrepareSuccess || taskFn == null) {
             prepareLogger.critical("任務準備失敗，無法繼續執行，中止任務並 RESET 為 OPEN", {
                 topic: "task",
-                context: {
+                data: {
                     taskId: task.id,
                     taskTypeKey: task.value,
                     code,
@@ -114,20 +111,16 @@ class TaskNode extends BaseNodeRuntime {
                 logger: prepareLogger,
                 taskId: task.id,
                 nodeId,
-                traceId: loopTraceId,
+                traceId: taskTraceId,
             });
             return;
         }
 
-        const { logger: executeLogger } = logManager.withContext({
-            module: "executeTask",
-            traceId: loopTraceId,
-            nodeId,
-        });
+        const { logger: executeLogger } = logManager.withScope(withModule(taskScope, "executeTask"));
         const onExecuteAbort = async (error?: Error) => {
             logger.critical("任務執行遇到未知錯誤，中止任務並 RESET 為 OPEN", {
                 topic: "task",
-                context: {
+                data: {
                     taskId: task.id,
                     taskName: task.name,
                     taskTypeKey: task.value,
@@ -138,13 +131,13 @@ class TaskNode extends BaseNodeRuntime {
                 logger: executeLogger,
                 taskId: task.id,
                 nodeId,
-                traceId: loopTraceId,
+                traceId: taskTraceId,
             });
         };
 
         executeLogger.info("開始執行業務邏輯", {
             topic: "task",
-            context: { taskId: task.id, displayName: taskFn.displayName },
+            data: { taskId: task.id, displayName: taskFn.displayName },
         });
         const startTime = Date.now();
         let result: TaskRunResult | null = null;
@@ -161,7 +154,7 @@ class TaskNode extends BaseNodeRuntime {
 
         executeLogger.info("任務執行完成", {
             topic: "task",
-            context: { taskId: task.id, displayName: taskFn.displayName },
+            data: { taskId: task.id, displayName: taskFn.displayName },
         });
         const { isSuccess: isTaskSuccess, cost, extra } = result ?? { isSuccess: false, cost: 0, extra: null };
         if (isTaskSuccess) {
@@ -172,7 +165,7 @@ class TaskNode extends BaseNodeRuntime {
                 nodeId,
                 cost,
                 extra,
-                traceId: loopTraceId,
+                traceId: taskTraceId,
             });
         } else {
             await this.finalizeTaskRun("failure", {
@@ -182,25 +175,25 @@ class TaskNode extends BaseNodeRuntime {
                 nodeId,
                 cost,
                 extra,
-                traceId: loopTraceId,
+                traceId: taskTraceId,
             });
         }
         const duration = Date.now() - startTime;
         executeLogger.info("業務邏輯執行完成", {
             topic: "task",
-            context: { taskId: task.id, durationMs: duration },
+            data: { taskId: task.id, durationMs: duration },
         });
     }
 
     private async abortTaskRun(params: {
-        logger: LoggerWithContext;
+        logger: LoggerWithScope;
         taskId: string;
         nodeId: string;
         traceId: string;
         extra?: TaskRunResult["extra"];
     }): Promise<boolean> {
         const { logger, taskId, nodeId, traceId, extra } = params;
-        const logContext = { taskId, nodeId };
+        const logData = { taskId, nodeId };
         const extraValue = typeof extra === "string" ? extra : undefined;
 
         const { error } = await patchChangeTaskStatus({
@@ -212,17 +205,17 @@ class TaskNode extends BaseNodeRuntime {
         });
 
         if (error) {
-            logger.error(error.message, { topic: "task", context: logContext });
+            logger.error(error.message, { topic: "task", data: logData });
             return false;
         }
-        logger.info("任務已中止並 RESET 為 OPEN", { topic: "task", context: logContext });
+        logger.info("任務已中止並 RESET 為 OPEN", { topic: "task", data: logData });
         return true;
     }
 
     private async finalizeTaskRun(
         outcome: "success" | "failure",
         params: {
-            logger: LoggerWithContext;
+            logger: LoggerWithScope;
             taskId: string;
             taskTypeKey: string;
             nodeId: string;
@@ -233,7 +226,7 @@ class TaskNode extends BaseNodeRuntime {
     ): Promise<void> {
         const { logger, taskId, nodeId, taskTypeKey, cost, extra, traceId } = params;
         const outcomePrefix = outcome === "success" ? "任務成功" : "任務失敗";
-        const logContext = {
+        const logData = {
             taskTypeKey,
             taskId,
             nodeId,
@@ -261,14 +254,14 @@ class TaskNode extends BaseNodeRuntime {
 
         if (changeTaskStatusError) {
             const upperMessage = `${outcomePrefix}但是更新 TaskStatus 失敗，產生孤兒 Task，請儘快排查問題`;
-            logger.critical(upperMessage, { topic: "task", context: logContext });
+            logger.critical(upperMessage, { topic: "task", data: logData });
             throw new Error(upperMessage);
         }
-        logger.info("更新 TaskStatus 成功", { topic: "task", context: logContext });
+        logger.info("更新 TaskStatus 成功", { topic: "task", data: logData });
         if (outcome === "success") {
-            logger.success("任務執行結束，業務邏輯成功", { topic: "task", context: logContext });
+            logger.success("任務執行結束，業務邏輯成功", { topic: "task", data: logData });
         } else {
-            logger.warn("任務執行結束，業務邏輯失敗", { topic: "task", context: logContext });
+            logger.warn("任務執行結束，業務邏輯失敗", { topic: "task", data: logData });
         }
     }
 }

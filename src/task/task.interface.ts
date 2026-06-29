@@ -53,6 +53,8 @@ export interface TaskDetails {
     /** [0,100] */
     progress: number;
     nodeId: null | string;
+    /** Task lifecycle correlation id (written at postTask). */
+    traceId?: string;
     result?: {
         cost: number;
         code: ResultCode;

@@ -1,5 +1,12 @@
 import { isDevEnvironment } from "../../core.utils";
 import { generateUniqueId } from "../utils/id.utils";
+import {
+    applyScopePatch,
+    formatScopeLabels,
+    resolveLogData,
+    type LogScope,
+    type LogScopePatch,
+} from "./log-scope";
 
 /**
  * Log severity and semantics (low → high). `minLevel` filters by {@link LOG_LEVEL_RANK}.
@@ -31,43 +38,31 @@ const LOG_LEVEL_RANK: Record<LogLevel, number> = {
     [LogLevel.CRITICAL]: 5,
 };
 
-interface LogEntry {
+interface LogEntry extends LogScope {
     timestamp: number;
     level: LogLevel;
-    /** Tell people what happened, but more structured */
     message: string;
-    /** Category of a kind of log */
     topic: string | null;
-    /** Where the log comes from */
-    module: string;
-    /** Specific process — correlates one logical chain (loop, request). */
-    traceId: string;
-    /** Worker node id when the log is node-scoped; omit for scheduler / admin / API-only paths. */
-    nodeId?: string;
     extra?: string;
-    context?: unknown;
+    /** Per-line structured business payload. */
+    data?: unknown;
 }
 
-interface LogContext {
-    module: LogEntry["module"];
-    traceId: LogEntry["traceId"];
-    nodeId?: LogEntry["nodeId"];
-}
+type LogRestParams = {
+    topic?: LogEntry["topic"];
+    extra?: LogEntry["extra"];
+    data?: unknown;
+};
 
-type LogRestParams = Omit<LogParams, "message">;
+type LogParams = { message: LogEntry["message"] } & LogRestParams;
 
-interface LogEntryPayload {
+interface LogEntryPayload extends LogScope {
     message: LogEntry["message"];
     topic?: LogEntry["topic"];
     extra?: LogEntry["extra"];
-    context?: LogEntry["context"];
+    data?: LogEntry["data"];
     level: LogEntry["level"];
-    module: LogEntry["module"];
-    traceId: LogEntry["traceId"];
-    nodeId?: LogEntry["nodeId"];
 }
-
-type LogParams = Pick<LogEntryPayload, "message" | "topic" | "extra" | "context">;
 
 interface LogOptions {
     defaultTopic: LogEntry["topic"];
@@ -89,28 +84,24 @@ const DEFAULT_OPTIONS: LogOptions = {
     minLevel: isDevEnvironment() ? LogLevel.DEBUG : LogLevel.INFO,
 };
 
-interface LoggerWithContext {
-    /** Rank 0 — diagnostic detail; dev/troubleshooting only. */
+interface LoggerWithScope {
     debug: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    /** Rank 1 — normal operational flow. */
     info: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    /** Rank 2 — positive milestone (semantic INFO, not higher severity). */
     success: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    /** Rank 3 — recoverable anomaly; system continues. */
     warn: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    /** Rank 4 — a concrete operation failed; needs investigation. */
     error: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    /** Rank 5 — invariant / design / integrity breach; escalate immediately. */
     critical: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    /** Merge partial fields into this logger's bound context (e.g. nodeId after register). */
-    resetContext: (fields: Partial<LogContext>) => void;
+    /** Merge partial fields into this logger's bound scope. */
+    resetScope: (fields: LogScopePatch) => void;
+    /** @deprecated use {@link LoggerWithScope.resetScope} */
+    resetContext: (fields: LogScopePatch) => void;
 }
 
 function mergeLogOptions(options?: Partial<LogOptions>): LogOptions {
     return { ...DEFAULT_OPTIONS, ...options };
 }
 
-function formatContextValue(value: unknown): string {
+function formatDataValue(value: unknown): string {
     if (value === undefined) {
         return "";
     }
@@ -124,16 +115,19 @@ function formatContextValue(value: unknown): string {
     }
 }
 
-function validateLogContext(logContext: LogContext): void {
+function validateLogScope(logScope: LogScope): void {
     const missing: string[] = [];
-    if (!logContext.module?.trim()) {
+    if (!logScope.module?.trim()) {
         missing.push("module");
     }
-    if (!logContext.traceId?.trim()) {
+    if (!logScope.traceId?.trim()) {
         missing.push("traceId");
     }
+    if (logScope.traceParentId !== null && typeof logScope.traceParentId !== "string") {
+        missing.push("traceParentId");
+    }
     if (missing.length > 0) {
-        console.warn(`[LogManager] LogContext missing or empty: ${missing.join(", ")}`, logContext);
+        console.warn(`[LogManager] LogScope missing or invalid: ${missing.join(", ")}`, logScope);
     }
 }
 
@@ -183,16 +177,8 @@ class LogManager {
         return LOG_LEVEL_RANK[level] >= LOG_LEVEL_RANK[this.getMinLevel()];
     }
 
-    private createLogEntry({
-        level,
-        message,
-        topic,
-        module,
-        traceId,
-        nodeId,
-        extra,
-        context,
-    }: LogEntryPayload): LogEntry {
+    private createLogEntry(payload: LogEntryPayload): LogEntry {
+        const { level, message, topic, extra, data, module, traceId, traceParentId, labels } = payload;
         return {
             timestamp: Date.now(),
             level,
@@ -200,9 +186,10 @@ class LogManager {
             topic: topic === undefined ? this.options.defaultTopic : topic,
             module,
             traceId,
-            nodeId,
+            traceParentId,
+            labels,
             extra,
-            context,
+            data,
         };
     }
 
@@ -223,7 +210,7 @@ class LogManager {
 
         parts.push(this.formatLevelTag(entry));
         parts.push(
-            `traceId=${entry.traceId} nodeId=${entry.nodeId ?? "--"} module=${entry.module} topic=${entry.topic ?? "--"}`
+            `traceId=${entry.traceId} parent=${entry.traceParentId ?? "null"} labels=${formatScopeLabels(entry.labels)} module=${entry.module} topic=${entry.topic ?? "--"}`
         );
 
         if (this.options.formatPrefix) {
@@ -238,9 +225,9 @@ class LogManager {
             parts.push(`| extra=${entry.extra}`);
         }
 
-        const contextText = formatContextValue(entry.context);
-        if (contextText) {
-            parts.push(`| context=${contextText}`);
+        const dataText = formatDataValue(entry.data);
+        if (dataText) {
+            parts.push(`| data=${dataText}`);
         }
 
         return parts.join(" ");
@@ -260,21 +247,23 @@ class LogManager {
         }
     }
 
-    private log(
-        level: LogLevel,
-        message: LogParams["message"],
-        logContext: LogContext,
-        restParams?: LogRestParams
-    ) {
+    private log(level: LogLevel, message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
         if (!this.shouldLog(level)) {
             return;
         }
 
-        validateLogContext(logContext);
+        validateLogScope(logScope);
 
-        const { topic, extra, context } = restParams ?? {};
-        const { module, traceId, nodeId } = logContext;
-        const entry = this.createLogEntry({ level, message, topic, extra, context, module, traceId, nodeId });
+        const { topic, extra } = restParams ?? {};
+        const data = resolveLogData(restParams);
+        const entry = this.createLogEntry({
+            level,
+            message,
+            topic,
+            extra,
+            data,
+            ...logScope,
+        });
 
         this.history.push(entry);
         if (this.history.length > this.options.maxHistoryLength) {
@@ -290,51 +279,57 @@ class LogManager {
         return generateUniqueId();
     }
 
-    public debug(message: LogParams["message"], logContext: LogContext, restParams?: LogRestParams) {
-        this.log(LogLevel.DEBUG, message, logContext, restParams);
+    public debug(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+        this.log(LogLevel.DEBUG, message, logScope, restParams);
     }
 
-    public info(message: LogParams["message"], logContext: LogContext, restParams?: LogRestParams) {
-        this.log(LogLevel.INFO, message, logContext, restParams);
+    public info(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+        this.log(LogLevel.INFO, message, logScope, restParams);
     }
 
-    public success(message: LogParams["message"], logContext: LogContext, restParams?: LogRestParams) {
-        this.log(LogLevel.SUCCESS, message, logContext, restParams);
+    public success(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+        this.log(LogLevel.SUCCESS, message, logScope, restParams);
     }
 
-    public warn(message: LogParams["message"], logContext: LogContext, restParams?: LogRestParams) {
-        this.log(LogLevel.WARN, message, logContext, restParams);
+    public warn(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+        this.log(LogLevel.WARN, message, logScope, restParams);
     }
 
-    public error(message: LogParams["message"], logContext: LogContext, restParams?: LogRestParams) {
-        this.log(LogLevel.ERROR, message, logContext, restParams);
+    public error(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+        this.log(LogLevel.ERROR, message, logScope, restParams);
     }
 
-    public critical(message: LogParams["message"], logContext: LogContext, restParams?: LogRestParams) {
-        this.log(LogLevel.CRITICAL, message, logContext, restParams);
+    public critical(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+        this.log(LogLevel.CRITICAL, message, logScope, restParams);
     }
 
-    public withContext(context: LogContext): { logger: LoggerWithContext; context: LogContext } {
-        const boundContext: LogContext = { ...context };
+    public withScope(scope: LogScope): { logger: LoggerWithScope; scope: LogScope } {
+        const boundScope: LogScope = { ...scope, labels: scope.labels ? { ...scope.labels } : undefined };
 
-        const logger: LoggerWithContext = {
-            debug: (message, restParams) => this.debug(message, boundContext, restParams),
-            info: (message, restParams) => this.info(message, boundContext, restParams),
-            success: (message, restParams) => this.success(message, boundContext, restParams),
-            warn: (message, restParams) => this.warn(message, boundContext, restParams),
-            error: (message, restParams) => this.error(message, boundContext, restParams),
-            critical: (message, restParams) => this.critical(message, boundContext, restParams),
+        const logger: LoggerWithScope = {
+            debug: (message, restParams) => this.debug(message, boundScope, restParams),
+            info: (message, restParams) => this.info(message, boundScope, restParams),
+            success: (message, restParams) => this.success(message, boundScope, restParams),
+            warn: (message, restParams) => this.warn(message, boundScope, restParams),
+            error: (message, restParams) => this.error(message, boundScope, restParams),
+            critical: (message, restParams) => this.critical(message, boundScope, restParams),
+            resetScope: (fields) => {
+                const next = applyScopePatch(boundScope, fields);
+                boundScope.module = next.module;
+                boundScope.traceId = next.traceId;
+                boundScope.traceParentId = next.traceParentId;
+                boundScope.labels = next.labels;
+            },
             resetContext: (fields) => {
-                Object.assign(boundContext, fields);
+                logger.resetScope(fields);
             },
         };
 
-        return { logger, context: boundContext };
+        return { logger, scope: boundScope };
     }
+
 }
 
 export const logManager = LogManager.getInstance();
 export { LogManager, LogLevel };
-export { createApiLogger } from "./create-api-logger";
-export type { CreateApiLoggerOptions } from "./create-api-logger";
-export type { LogOptions, LogEntry, LogContext, LoggerWithContext, LogRestParams };
+export type { LogOptions, LogEntry, LoggerWithScope, LogRestParams };

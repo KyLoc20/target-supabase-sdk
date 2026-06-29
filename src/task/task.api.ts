@@ -1,6 +1,6 @@
 import { createTarget, getPossibleTarget, QueryFilter, updateTargetDetails, validateWithSchema, isOptimisticLockError, OPTIMISTIC_LOCK_FAILED_MESSAGE } from "../core.api";
 import { generateResponse, type SupabaseResponse } from "../core.interface";
-import { createApiLogger, type LoggerWithContext } from "../shared/log/log-manager";
+import { createApiLogger, logManager, type LoggerWithScope } from "../shared/log";
 import { z } from "zod";
 import { CategoryTask, ResultCode, Task, TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
 
@@ -46,6 +46,7 @@ const taskIdSchema = z.string().trim().min(1);
 const nodeIdSchema = z.string().trim().min(1);
 /** Optional — orchestrator (e.g. TaskNode loop) passes its trace to correlate logs. */
 const traceIdSchema = z.string().trim().min(1).optional();
+const traceParentIdSchema = z.string().trim().min(1).nullable().optional();
 
 const patchChangeTaskStatusBaseSchema = {
     id: taskIdSchema,
@@ -122,6 +123,7 @@ export const postTaskSchema = z.object({
     tagList: z.array(z.string()).optional().default([]),
     extra: z.string().optional(),
     traceId: traceIdSchema,
+    traceParentId: traceParentIdSchema,
 });
 
 export type PostTaskPayload = z.infer<typeof postTaskSchema>;
@@ -178,20 +180,20 @@ async function transitionTask({
 }
 
 function logTaskTransition(
-    logger: LoggerWithContext,
+    logger: LoggerWithScope,
     action: TaskStatusAction | "patchTaskProgress" | "patchClaimTask",
     task: Task,
-    context?: Record<string, unknown>
+    data?: Record<string, unknown>
 ): void {
     logger.info("任务状态迁移成功", {
         topic: "task",
-        context: {
+        data: {
             action,
             taskId: task.id,
             taskValue: task.value,
             status: task.details.status,
             nodeId: task.details.nodeId,
-            ...context,
+            ...data,
         },
     });
 }
@@ -314,7 +316,9 @@ export const patchChangeTaskStatus = validateWithSchema(
         }
         default: {
             const _exhaustive: never = action;
-            throw new Error(`[patchChangeTaskStatus] Unknown action: ${_exhaustive}`);
+            const message = `[patchChangeTaskStatus] Unknown action: ${String(_exhaustive)}`;
+            logger.error(message, { topic: "task", data: { action: String(_exhaustive) } });
+            return generateResponse.error(message);
         }
     }
 });
@@ -379,7 +383,7 @@ export const patchClaimTask = validateWithSchema(
             return generateResponse.error(OPTIMISTIC_LOCK_FAILED_MESSAGE, undefined, "OPTIMISTIC_LOCK") as SupabaseResponse<Task | null>;
         }
         const message = error instanceof Error ? error.message : String(error);
-        logger.error("認領任務失敗", { topic: "task", context: { error: message } });
+        logger.error("認領任務失敗", { topic: "task", data: { error: message } });
         return generateResponse.error(message) as SupabaseResponse<Task | null>;
     }
 });
@@ -395,11 +399,15 @@ export const patchClaimTask = validateWithSchema(
 export const postTask = validateWithSchema(
     postTaskSchema,
     "postTaskSchema"
-)(async ({ name, value, params, taskStatus, tagList, extra, traceId }) => {
-    const logger = createApiLogger("postTask", { traceId });
+)(async ({ name, value, params, taskStatus, tagList, extra, traceId, traceParentId }) => {
+    const taskTraceId = traceId?.trim() || logManager.generateTraceId();
+    const logger = createApiLogger("postTask", {
+        traceId: taskTraceId,
+        traceParentId: traceParentId ?? null,
+    });
 
     const result = await createTarget<Task, PostTaskPayload>({
-        payload: { name, value, params, taskStatus, tagList, extra, traceId },
+        payload: { name, value, params, taskStatus, tagList, extra, traceId: taskTraceId, traceParentId },
         createFn: () => ({
             name,
             value,
@@ -412,16 +420,18 @@ export const postTask = validateWithSchema(
                 params,
                 progress: 0,
                 nodeId: null,
+                traceId: taskTraceId,
             },
         }),
     });
 
     logger.info("任務已創建", {
         topic: "task",
-        context: {
+        data: {
             taskId: result.data?.id,
             taskTypeKey: value,
             status: taskStatus,
+            traceId: taskTraceId,
         },
     });
 

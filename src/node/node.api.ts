@@ -1,6 +1,6 @@
 import { createTarget, QueryFilter, updateTargetDetails, validateWithSchema } from "../core.api";
 import { generateResponse } from "../core.interface";
-import { createApiLogger } from "../shared/log/log-manager";
+import { createApiLogger } from "../shared/log";
 import { z } from "zod";
 import { CategoryNode, Node, NodeDetails, NodeStatus } from "./node.interface";
 
@@ -128,7 +128,7 @@ export const patchChangeNodeStatus = validateWithSchema(
 
     logger.info("节点状态更新成功", {
         topic: "node",
-        context: {
+        data: {
             nodeId,
             status,
             fromStatus,

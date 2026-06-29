@@ -1,7 +1,7 @@
 import { createTarget, scanTargetList, updateTargetDetails, validateWithSchema } from "../core.api";
 import { generateResponse, type SupabaseResponse } from "../core.interface";
 import { TaskStatus } from "../task/task.interface";
-import { createApiLogger } from "../shared/log/log-manager";
+import { createApiLogger } from "../shared/log";
 import { z } from "zod";
 import {
     CategoryTrigger,
@@ -77,7 +77,7 @@ export const scanEnabledTriggers = validateWithSchema(
         const rows = triggerList ?? [];
         logger.info("已掃描 ENABLED Trigger", {
             topic: "trigger",
-            context: { count: rows.length },
+            data: { count: rows.length },
         });
 
         return generateResponse.success(rows);
@@ -116,7 +116,7 @@ export const postTrigger = validateWithSchema(
 
     logger.info("Trigger 已創建", {
         topic: "trigger",
-        context: { triggerId: result.data?.id, triggerKey: value, status },
+        data: { triggerId: result.data?.id, triggerKey: value, status },
     });
 
     return result;
@@ -151,7 +151,7 @@ export const patchTriggerFired = validateWithSchema(
 
         logger.success("Trigger 觸發記錄已更新", {
             topic: "trigger",
-            context: { triggerId, fireKey },
+            data: { triggerId, fireKey },
         });
 
         return generateResponse.success(data);
@@ -159,7 +159,7 @@ export const patchTriggerFired = validateWithSchema(
         const message = error instanceof Error ? error.message : String(error);
         logger.warn("Trigger 觸發記錄更新失敗", {
             topic: "trigger",
-            context: { triggerId, fireKey, error: message },
+            data: { triggerId, fireKey, error: message },
         });
         return generateResponse.error(message);
     }

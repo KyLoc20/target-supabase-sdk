@@ -1,7 +1,7 @@
 import { RepoManager } from "../repo/repo-manager";
 import { getScanRemoteRepoValues } from "../repo/repo.api";
 import { TASK_REPO_USAGE } from "../repo/repo.interface";
-import { LoggerWithContext } from "../shared/log/log-manager";
+import { LoggerWithScope } from "../shared/log";
 import { ResultCode, Task } from "./task.interface";
 import { TaskFn, TaskRepoContext, TaskRunResult, ExecutableTaskFn } from "./task-repo-context";
 
@@ -49,12 +49,12 @@ export interface PrepareTaskResponse {
 }
 
 export interface PrepareTaskParams {
-    logger: LoggerWithContext;
+    logger: LoggerWithScope;
     task: Task;
 }
 
 export interface RegisterTasksOptions {
-    logger: LoggerWithContext;
+    logger: LoggerWithScope;
     local?: BootstrapLocalTasksOptions;
     /** When `true` (default), union local keys with remote `Repo.value` from Supabase. */
     includeRemote?: boolean;
@@ -66,30 +66,30 @@ export interface RegisterTasksResult {
     remote: { values: string[] };
 }
 
-function logLocalBootstrap(logger: LoggerWithContext, bootstrap: BootstrapLocalTasksResult): void {
+function logLocalBootstrap(logger: LoggerWithScope, bootstrap: BootstrapLocalTasksResult): void {
     switch (bootstrap.status) {
         case "not_configured":
             logger.info("未找到本地任務配置，跳過本地註冊", {
                 topic: "task",
-                context: { message: bootstrap.message },
+                data: { message: bootstrap.message },
             });
             break;
         case "failed":
             logger.warn("本地任務註冊失敗", {
                 topic: "task",
-                context: { message: bootstrap.message, errors: bootstrap.errors },
+                data: { message: bootstrap.message, errors: bootstrap.errors },
             });
             break;
         case "empty":
             logger.info("本地任務掃描完成，無已註冊任務", {
                 topic: "task",
-                context: { message: bootstrap.message, skipped: bootstrap.skipped },
+                data: { message: bootstrap.message, skipped: bootstrap.skipped },
             });
             break;
         case "loaded":
             logger.info("本地任務註冊完成", {
                 topic: "task",
-                context: {
+                data: {
                     registered: bootstrap.registered,
                     skipped: bootstrap.skipped,
                     errors: bootstrap.errors,
@@ -122,7 +122,7 @@ async function registerTasks({
     if (includeRemote) {
         logger.info("查詢遠程 Repo 列表", {
             topic: "task",
-            context: { usage: TASK_REPO_USAGE },
+            data: { usage: TASK_REPO_USAGE },
         });
         const { data, error: remoteError } = await getScanRemoteRepoValues({ usage: TASK_REPO_USAGE });
         if (remoteError) {
@@ -131,7 +131,7 @@ async function registerTasks({
         remoteValues = data ?? [];
         logger.info("遠程 Repo 查詢完成", {
             topic: "task",
-            context: { count: remoteValues.length, values: remoteValues },
+            data: { count: remoteValues.length, values: remoteValues },
         });
     }
 
@@ -142,7 +142,7 @@ async function registerTasks({
 
     logger.success("任務註冊完成", {
         topic: "task",
-        context: {
+        data: {
             availableTaskList,
             localRegistered: local.registered,
             remoteValues,
@@ -169,14 +169,14 @@ function bindTaskFn(taskFn: TaskFn, taskParams: unknown): ExecutableTaskFn {
 function validateTaskParams(
     validator: TaskRepoContext["taskParamsValidator"],
     taskParams: unknown,
-    logger: LoggerWithContext
+    logger: LoggerWithScope
 ): boolean {
     try {
         return validator(taskParams) === true;
     } catch (error) {
         logger.warn("taskParamsValidator 拋出異常", {
             topic: "task",
-            context: { error: error instanceof Error ? error.message : error },
+            data: { error: error instanceof Error ? error.message : error },
         });
         return false;
     }
@@ -203,7 +203,7 @@ const prepareTask = async ({ logger, task }: PrepareTaskParams): Promise<Prepare
     }): PrepareTaskResponse => {
         logger.warn(params.message, {
             topic: "task",
-            context: {
+            data: {
                 taskId: task.id,
                 taskTypeKey: task.value,
                 reason: params.reason,
@@ -223,7 +223,7 @@ const prepareTask = async ({ logger, task }: PrepareTaskParams): Promise<Prepare
     const { id: taskId, name: taskName, value: taskTypeKey, details } = task;
     logger.info(`開始準備任務 ${taskName}-${taskTypeKey}`, {
         topic: "task",
-        context: { taskId, taskName, taskTypeKey },
+        data: { taskId, taskName, taskTypeKey },
     });
 
     const { params: taskParams } = details;
@@ -238,7 +238,7 @@ const prepareTask = async ({ logger, task }: PrepareTaskParams): Promise<Prepare
 
     logger.debug("任務詳情校驗通過，開始解析 Repo 上下文", {
         topic: "task",
-        context: { taskTypeKey, step: "repo_load" },
+        data: { taskTypeKey, step: "repo_load" },
     });
 
     const { context: repoContext, error: repoError } = await RepoManager.getRepoContext<TaskRepoContext>({
@@ -257,7 +257,7 @@ const prepareTask = async ({ logger, task }: PrepareTaskParams): Promise<Prepare
 
     logger.info("Repo 上下文加載成功", {
         topic: "task",
-        context: {
+        data: {
             taskTypeKey,
             taskFnDisplayName: repoContext.taskFn.displayName,
             step: "repo_load",
@@ -273,7 +273,7 @@ const prepareTask = async ({ logger, task }: PrepareTaskParams): Promise<Prepare
         });
     }
 
-    logger.debug("開始校驗任務參數", { topic: "task", context: { taskTypeKey, step: "params_validation" } });
+    logger.debug("開始校驗任務參數", { topic: "task", data: { taskTypeKey, step: "params_validation" } });
     if (!validateTaskParams(repoContext.taskParamsValidator, taskParams, logger)) {
         return fail({
             reason: "PARAMS_VALIDATION_FAILED",
@@ -283,12 +283,12 @@ const prepareTask = async ({ logger, task }: PrepareTaskParams): Promise<Prepare
         });
     }
 
-    logger.debug("任務參數校驗通過", { topic: "task", context: { taskTypeKey, step: "params_validation" } });
+    logger.debug("任務參數校驗通過", { topic: "task", data: { taskTypeKey, step: "params_validation" } });
 
     const boundTaskFn = bindTaskFn(repoContext.taskFn, taskParams);
     logger.success("任務準備完成", {
         topic: "task",
-        context: {
+        data: {
             taskId,
             taskTypeKey,
             displayName: boundTaskFn.displayName,

@@ -5,7 +5,7 @@ import {
     validateWithSchema,
 } from "../core.api";
 import { generateResponse } from "../core.interface";
-import { createApiLogger } from "../shared/log/log-manager";
+import { createApiLogger } from "../shared/log";
 import { z } from "zod";
 import { CategoryCommand, Command, CommandType } from "./command.interface";
 
@@ -57,7 +57,7 @@ export const postCommand = validateWithSchema(
 
     logger.info("Command已入隊", {
         topic: "command",
-        context: { nodeId, command },
+        data: { nodeId, command },
     });
 
     return result;
@@ -81,7 +81,7 @@ export const getPollCommandList = validateWithSchema(
 
     logger.info("Command", {
         topic: "command",
-        context: { nodeId, dequeued: dequeuedList.length },
+        data: { nodeId, dequeued: dequeuedList.length },
     });
 
     return generateResponse.success(dequeuedList);

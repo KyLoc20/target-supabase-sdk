@@ -1,6 +1,6 @@
-import { getPossibleTarget } from "../core.api";
+﻿import { getPossibleTarget } from "../core.api";
 import { SupabaseInitializer } from "../supabase";
-import { LoggerWithContext } from "../shared/log/log-manager";
+import { LoggerWithScope } from "../shared/log";
 import type { TaskRepoContext, TaskRepoScriptRecord } from "../task/task-repo-context";
 import { TASK_REPO_SCRIPT_CATEGORY } from "../task/task-repo-context";
 import {
@@ -25,7 +25,7 @@ const localRepoRegistry = new Map<string, LocalRepoEntry>();
 const remoteContextCache = new Map<string, TaskRepoContext>();
 
 export interface GetRepoContextParams {
-    logger: LoggerWithContext;
+    logger: LoggerWithScope;
     /** Task type key (`task.value`) — matches {@link Repo.value} for remote lookup; local registry key */
     taskTypeKey: string;
 }
@@ -65,7 +65,7 @@ async function fetchRemoteScripts(taskTypeKey: string): Promise<TaskRepoScriptRe
 }
 
 async function loadLocalEntry(
-    logger: LoggerWithContext,
+    logger: LoggerWithScope,
     entry: LocalRepoEntry,
     taskTypeKey: string
 ): Promise<TaskRepoContext | null> {
@@ -91,15 +91,15 @@ async function loadLocalEntry(
 }
 
 async function loadRemoteRepoContext(
-    logger: LoggerWithContext,
+    logger: LoggerWithScope,
     taskTypeKey: string
 ): Promise<GetRepoContextResult> {
-    logger.info("從 Supabase 加載 Repo", { topic: "repo", context: { taskTypeKey } });
+    logger.info("從 Supabase 加載 Repo", { topic: "repo", data: { taskTypeKey } });
 
     const remoteRepo = await fetchRemoteRepo(taskTypeKey);
     if (remoteRepo == null) {
         const error = `Supabase 未找到 Repo (value=${taskTypeKey})`;
-        logger.warn(error, { topic: "repo", context: { taskTypeKey } });
+        logger.warn(error, { topic: "repo", data: { taskTypeKey } });
         return { context: null, error };
     }
 
@@ -108,7 +108,7 @@ async function loadRemoteRepoContext(
     const cacheKey = buildRemoteCacheKey(taskTypeKey, repoHash);
     const cached = remoteContextCache.get(cacheKey);
     if (cached != null) {
-        logger.info("命中遠程 Repo 上下文緩存", { topic: "repo", context: { cacheKey } });
+        logger.info("命中遠程 Repo 上下文緩存", { topic: "repo", data: { cacheKey } });
         return { context: cached };
     }
 
@@ -123,7 +123,7 @@ async function loadRemoteRepoContext(
     if (loaded == null && repoUrl !== "") {
         logger.info("未找到 script 行，嘗試從 Repo.details.url 加載", {
             topic: "repo",
-            context: { taskTypeKey, url: repoUrl },
+            data: { taskTypeKey, url: repoUrl },
         });
         loaded = await loadRepoContextFromUrl({ logger, url: repoUrl, taskTypeKey });
     }
@@ -132,7 +132,7 @@ async function loadRemoteRepoContext(
         const error = `無法從 Repo 加載 TaskRepoContext (hasUrl=${repoUrl !== ""}, scriptCount=${scripts.length})`;
         logger.warn(error, {
             topic: "repo",
-            context: { taskTypeKey, hasUrl: repoUrl !== "", scriptCount: scripts.length },
+            data: { taskTypeKey, hasUrl: repoUrl !== "", scriptCount: scripts.length },
         });
         return { context: null, error };
     }
@@ -147,13 +147,13 @@ const getRepoContext = async <RepoContext extends TaskRepoContext>({
 }: GetRepoContextParams): Promise<GetRepoContextResult<RepoContext>> => {
     const localEntry = localRepoRegistry.get(taskTypeKey);
     if (localEntry != null) {
-        logger.info("使用本地註冊的 Repo", { topic: "repo", context: { taskTypeKey } });
+        logger.info("使用本地註冊的 Repo", { topic: "repo", data: { taskTypeKey } });
         const context = await loadLocalEntry(logger, localEntry, taskTypeKey);
         if (context != null && isTaskRepoContext(context)) {
             return { context: context as RepoContext };
         }
         const error = "本地 Repo 模組加載失敗或未導出有效的 TaskRepoContext";
-        logger.warn(error, { topic: "repo", context: { taskTypeKey } });
+        logger.warn(error, { topic: "repo", data: { taskTypeKey } });
         return { context: null, error };
     }
 
@@ -170,7 +170,7 @@ const getRepoContext = async <RepoContext extends TaskRepoContext>({
         const message = error instanceof Error ? error.message : String(error);
         logger.error("從 Supabase 加載 Repo 失敗", {
             topic: "repo",
-            context: { taskTypeKey, error: message },
+            data: { taskTypeKey, error: message },
         });
         return { context: null, error: message };
     }

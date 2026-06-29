@@ -1,25 +1,39 @@
-import { logManager, type LogContext, type LoggerWithContext } from "./log-manager";
+import { logManager, type LoggerWithScope } from "./log-manager";
+import { normalizeScope, type LogScope, type LogScopePatch } from "./log-scope";
 
 /**
  * Options for {@link createApiLogger}.
  *
- * - **Core:** optional `traceId` (generated when omitted)
- * - **Business:** any other {@link LogContext} field (e.g. `nodeId`)
+ * - **Trace:** optional `traceId` / `traceParentId` (generated root when traceId omitted)
+ * - **Labels:** optional `labels` or legacy `nodeId` → `labels.nodeId`
  */
 export type CreateApiLoggerOptions = {
     traceId?: string;
-} & Partial<Omit<LogContext, "module" | "traceId">>;
+    traceParentId?: string | null;
+    labels?: Record<string, string>;
+    /** @deprecated use labels.nodeId */
+    nodeId?: string;
+} & Partial<Omit<LogScope, "module" | "traceId" | "traceParentId" | "labels">>;
 
 /**
  * Logger for one SDK API invocation.
  *
- * Binds required `module` + optional caller `traceId`; business fields (e.g. `nodeId`) are optional.
+ * Binds `module` + normalized {@link LogScope}.
  */
-export function createApiLogger(module: string, options?: CreateApiLoggerOptions): LoggerWithContext {
-    const { traceId, ...businessFields } = options ?? {};
-    return logManager.withContext({
-        module,
-        traceId: traceId ?? logManager.generateTraceId(),
-        ...businessFields,
-    }).logger;
+export function createApiLogger(module: string, options?: CreateApiLoggerOptions): LoggerWithScope {
+    const { traceId, traceParentId, labels, nodeId, ...rest } = options ?? {};
+    const scope = normalizeScope(
+        {
+            module,
+            traceId,
+            traceParentId: traceParentId ?? null,
+            labels,
+            nodeId,
+            ...rest,
+        },
+        { generateTraceId: true }
+    );
+    return logManager.withScope(scope).logger;
 }
+
+export type { LogScopePatch };

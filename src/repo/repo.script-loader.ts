@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
-import { LoggerWithContext } from "../shared/log/log-manager";
+import { LoggerWithScope } from "../shared/log";
 import { resolvePathFromCwd, toFileImportHref } from "../shared/utils/config-path.utils";
 import { TaskRepoScriptRecord } from "../task/task-repo-context";
 import {
@@ -41,7 +41,7 @@ export async function loadRepoContextFromScript({
     script,
     taskTypeKey,
 }: {
-    logger: LoggerWithContext;
+    logger: LoggerWithScope;
     script: TaskRepoScriptRecord;
     taskTypeKey: string;
 }): Promise<LoadedRepoContext | null> {
@@ -49,7 +49,7 @@ export async function loadRepoContextFromScript({
     const cacheKey = `${taskTypeKey}@${loadKey}`;
     const cached = importedModuleCache.get(cacheKey);
     if (cached != null) {
-        logger.info("命中 Repo 脚本模块缓存", { topic: "repo", context: { cacheKey } });
+        logger.info("命中 Repo 脚本模块缓存", { topic: "repo", data: { cacheKey } });
         return cached;
     }
 
@@ -58,16 +58,16 @@ export async function loadRepoContextFromScript({
     try {
         let moduleExports: unknown;
         if (source != null && source.trim() !== "") {
-            logger.info("从 source 动态加载 Repo 脚本", { topic: "repo", context: { scriptId: script.id } });
+            logger.info("从 source 动态加载 Repo 脚本", { topic: "repo", data: { scriptId: script.id } });
             moduleExports = await importFromSource(source, cacheKey);
         } else if (modulePath != null && modulePath.trim() !== "") {
             logger.info("从 modulePath 动态加载 Repo 脚本", {
                 topic: "repo",
-                context: { scriptId: script.id, modulePath },
+                data: { scriptId: script.id, modulePath },
             });
             moduleExports = await importFromFilePath(modulePath);
         } else {
-            logger.warn("脚本缺少 source 或 modulePath", { topic: "repo", context: { scriptId: script.id } });
+            logger.warn("脚本缺少 source 或 modulePath", { topic: "repo", data: { scriptId: script.id } });
             return null;
         }
 
@@ -75,7 +75,7 @@ export async function loadRepoContextFromScript({
         if (context == null) {
             logger.warn("脚本模块未导出合法的 TaskRepoContext", {
                 topic: "repo",
-                context: { scriptId: script.id, exportName: exportName ?? "default" },
+                data: { scriptId: script.id, exportName: exportName ?? "default" },
             });
             return null;
         }
@@ -86,7 +86,7 @@ export async function loadRepoContextFromScript({
     } catch (error) {
         logger.error("动态加载 Repo 脚本失败", {
             topic: "repo",
-            context: { scriptId: script.id, error: error instanceof Error ? error.message : error },
+            data: { scriptId: script.id, error: error instanceof Error ? error.message : error },
         });
         return null;
     }
@@ -98,7 +98,7 @@ export async function loadRepoContextFromUrl({
     taskTypeKey,
     exportName,
 }: {
-    logger: LoggerWithContext;
+    logger: LoggerWithScope;
     url: string;
     taskTypeKey: string;
     exportName?: string;
@@ -107,18 +107,18 @@ export async function loadRepoContextFromUrl({
     const cacheKey = `${taskTypeKey}@url:${href}`;
     const cached = importedModuleCache.get(cacheKey);
     if (cached != null) {
-        logger.info("命中 Repo URL 模块缓存", { topic: "repo", context: { cacheKey } });
+        logger.info("命中 Repo URL 模块缓存", { topic: "repo", data: { cacheKey } });
         return cached;
     }
 
     try {
-        logger.info("从 Repo URL 动态加载脚本", { topic: "repo", context: { url, href } });
+        logger.info("从 Repo URL 动态加载脚本", { topic: "repo", data: { url, href } });
         const moduleExports = await import(href);
         const context = normalizeRepoContextModule(moduleExports, taskTypeKey, exportName);
         if (context == null) {
             logger.warn("Repo URL 模块未导出合法的 TaskRepoContext", {
                 topic: "repo",
-                context: { url, exportName: exportName ?? "default" },
+                data: { url, exportName: exportName ?? "default" },
             });
             return null;
         }
@@ -128,7 +128,7 @@ export async function loadRepoContextFromUrl({
     } catch (error) {
         logger.error("从 Repo URL 动态加载失败", {
             topic: "repo",
-            context: { url, error: error instanceof Error ? error.message : error },
+            data: { url, error: error instanceof Error ? error.message : error },
         });
         return null;
     }
