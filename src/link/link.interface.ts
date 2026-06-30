@@ -6,7 +6,7 @@ export enum CategoryLink {
 }
 
 export interface Link extends Target {
-    /** 鏈接名稱 */
+    /** Should be unique */
     name: string;
     /** URL */
     value: string;

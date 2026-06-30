@@ -1,6 +1,6 @@
 import { logManager, type LoggerWithScope } from "../shared/log";
 import { scopeForNodeLoop } from "./node-log-scope";
-import { postTask } from "../task/task.api";
+import { postTask } from "../task/task-post.api";
 import { TaskStatus } from "../task/task.interface";
 import { patchTriggerFired, scanEnabledTriggers } from "../trigger/trigger.api";
 import type { Trigger, TriggerPostTaskAction } from "../trigger/trigger.interface";

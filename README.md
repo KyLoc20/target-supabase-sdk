@@ -46,6 +46,38 @@ Used by `scripts/` (`pnpm worker`, `pnpm post-task`) via `.env.local`. Browser a
 
 ## Usage
 
+### Browser / bundlers (default)
+
+Chrome extensions, React, Vite — import from the main entry (no Node built-ins):
+
+```typescript
+import { supabase, getTarget, postLinkCreate } from "target-supabase-sdk";
+```
+
+### Node.js workers / CLI
+
+Local task registry, repo script loading, TaskNode — use the `/node` entry:
+
+```typescript
+import { TaskManager, RepoManager, TaskNode, postTask } from "target-supabase-sdk/node";
+```
+
+> **Breaking change in 0.2.0:** `TaskManager`, `RepoManager`, and `postTask` are no longer on the default entry. Import them from `/node`.
+
+### Browser vs Node (package layout)
+
+Since **0.2.0**, the package ships two compiled entries:
+
+| Import | Built file | Runtime |
+|--------|------------|---------|
+| `target-supabase-sdk` | `dist/browser.js` | Chrome extension, React, Vite — no Node built-ins |
+| `target-supabase-sdk/node` | `dist/node.js` | Workers, CLI, TaskNode — includes browser API + Node-only code |
+| `target-supabase-sdk/browser` | `dist/browser.js` | Explicit alias of default |
+
+`src/browser.ts` is the curated browser public surface. `src/node.ts` re-exports browser and adds Node-only symbols (`TaskManager`, `postTask`, `RepoManager`, …).
+
+### Initialize Supabase
+
 ```typescript
 import { supabase, getTarget, loginUser } from "target-supabase-sdk";
 
@@ -58,6 +90,40 @@ await supabase.initialize({
 
 const target = await getTarget({ id: "..." });
 ```
+
+## Adding new modules (contributors)
+
+When adding a domain, API, or Manager, **classify browser vs Node before** registering exports. The default entry must stay bundler-safe (Chrome extensions, Webpack, Vite).
+
+### Decision flow
+
+1. **Scan static dependencies** — grep the new code and everything it imports for `node:fs`, `node:crypto`, `node:path`, etc.
+2. **Choose entry:**
+   - No `node:*` in the chain → add to `src/browser.ts` (and domain `index.ts`)
+   - Uses Node built-ins → add **only** to `src/node.ts` (consumers use `target-supabase-sdk/node`)
+   - Same file mixes both → **split** into separate leaf modules (example: `task.api.ts` vs `task-post.api.ts`)
+3. **Build** — `pnpm build` runs TypeScript compile plus `scripts/verify-browser-entry.mjs`, which walks the static import graph from `dist/browser.js` and fails if any module references `node:*`.
+
+```bash
+pnpm build
+# [verify:browser] OK — N module(s) in browser graph, no node: imports.
+```
+
+Node entry (`/node`) is validated by `tsc` compile only — no separate verify script.
+
+### Rules of thumb
+
+| Safe on default entry `.` | Node entry `/node` only |
+|---------------------------|-------------------------|
+| `*.interface.ts`, Supabase RPC `*.api.ts` | `TaskManager`, `RepoManager`, `TaskNode` |
+| `createTarget`, `postLinkCreate`, task `patch*` APIs | `postTask`, `TaskRepoValidation` |
+| `repo.api` (remote) | `local-task-registry`, `repo.script-loader` |
+
+**Do not rely on dynamic `import()`** to hide Node code: if `browser.ts` statically re-exports a file, bundlers include the whole module. Keep Node-only code in separate files that `browser.ts` never touches.
+
+**Internal imports:** within a domain, import leaf paths (`from "./task.api"`) not the domain barrel (`from "./index"`) to avoid cycles.
+
+Detailed conventions: `.cursor/skills/browser-node-exports/SKILL.md` and `.cursor/skills/library-exports/SKILL.md`.
 
 ## Development
 

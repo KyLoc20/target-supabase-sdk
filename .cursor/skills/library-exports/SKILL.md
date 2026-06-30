@@ -101,8 +101,10 @@ export { CategoryTask, TaskStatus, TaskStatusAction, ResultCode } from "./task.i
 export type { Task, TaskDetails, TaskFlow } from "./task.interface";
 
 // api — list every intended public symbol (not export *)
-export { patchClaimTask, patchClaimTaskSchema, postTask, postTaskSchema, ... } from "./task.api";
-export type { PatchClaimTaskPayload, PostTaskPayload, ... } from "./task.api";
+export { patchClaimTask, patchClaimTaskSchema, patchTaskProgress, patchTaskProgressSchema, ... } from "./task.api";
+export type { PatchClaimTaskPayload, PatchTaskProgressPayload, ... } from "./task.api";
+export { postTask, postTaskSchema } from "./task-post.api";
+export type { PostTaskPayload } from "./task-post.api";
 
 // manager — value + caller-facing types only
 export { TaskManager } from "./task-manager";
@@ -152,7 +154,11 @@ export { RepoManager } from "./repo/repo-manager";
 
 When adding a new domain or refactoring an existing one, prefer **`src/<domain>/index.ts` + `export * from "./<domain>"`** at root.
 
-Root barrel: **no business logic** (except `supabase` singleton init).
+Root barrel: **no business logic** (except `supabase` singleton in `browser.ts`).
+
+Since **0.2.0**, default entry is `src/browser.ts` (browser-safe). Node-only exports live in `src/node.ts` → `target-supabase-sdk/node`.
+
+**New module?** Grep static deps for `node:*`, register on `browser.ts` and/or `node.ts`, run `pnpm build` (verify-browser). Full workflow: [browser-node-exports](../browser-node-exports/SKILL.md#adding-a-new-module-decision-workflow).
 
 ---
 
@@ -178,7 +184,15 @@ Root barrel: **no business logic** (except `supabase` singleton init).
 | `sideEffects: false` | Tree-shaking friendly |
 | `peerDependencies` | Supabase / Zod not bundled |
 
-Optional later: subpath `"./task": "./dist/task/index.js"` — not required while root re-exports task.
+Optional subpaths (since 0.2.0):
+
+```json
+".": "./dist/browser.js",
+"./browser": "./dist/browser.js",
+"./node": "./dist/node.js"
+```
+
+See [browser-node-exports](../browser-node-exports/SKILL.md) for what belongs in each entry.
 
 `scripts/` **never** in any barrel.
 

@@ -3,7 +3,6 @@ import { generateResponse, type SupabaseResponse } from "../core.interface";
 import { createApiLogger, logManager, type LoggerWithScope } from "../shared/log";
 import { z } from "zod";
 import { CategoryTask, ResultCode, Task, TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
-import { TaskRepoValidation } from "./task-repo-validation";
 
 const TASK_STATUS_FIELD = "details->>status" as const;
 const TASK_NODE_ID_FIELD = "details->>nodeId" as const;
@@ -108,26 +107,6 @@ export const patchClaimTaskSchema = z.object({
 });
 
 export type PatchClaimTaskPayload = z.infer<typeof patchClaimTaskSchema>;
-
-/** Initial status for a new task — OPEN (draft) or TODO (claimable by workers). */
-const postTaskInitialStatusSchema = z
-    .union([z.literal(TaskStatus.OPEN), z.literal(TaskStatus.TODO)])
-    .optional()
-    .default(TaskStatus.TODO);
-
-export const postTaskSchema = z.object({
-    name: z.string().trim().min(1),
-    /** Task type key — matches `task.value`, {@link patchClaimTask}, {@link Repo.value}, and local Repo registry. */
-    value: z.string().trim().min(1),
-    params: z.unknown(),
-    taskStatus: postTaskInitialStatusSchema,
-    tagList: z.array(z.string()).optional().default([]),
-    extra: z.string().optional(),
-    traceId: traceIdSchema,
-    traceParentId: traceParentIdSchema,
-});
-
-export type PostTaskPayload = z.infer<typeof postTaskSchema>;
 
 // ─── Optimistic lock helpers ─────────────────────────────────────────────────
 
@@ -387,82 +366,4 @@ export const patchClaimTask = validateWithSchema(
         logger.error("認領任務失敗", { topic: "task", data: { error: message } });
         return generateResponse.error(message) as SupabaseResponse<Task | null>;
     }
-});
-
-// ─── postTask ────────────────────────────────────────────────────────────────
-
-/**
- * Create a task row (scheduler / admin).
- *
- * Validates `params` against the task Repo's `taskParamsValidator` before insert
- * (same rules as {@link TaskManager.prepareTask} via {@link TaskRepoValidation.validate}).
- *
- * Local registry is scanned first (`bootstrapLocal: true`); when the task type is not
- * registered locally, falls back to Supabase when `includeRemote` is true (default).
- *
- * `taskStatus` defaults to **TODO** (worker-claimable). Pass **OPEN** for draft tasks
- * that require {@link patchChangeTaskStatus} `publish` before workers can claim.
- */
-export const postTask = validateWithSchema(
-    postTaskSchema,
-    "postTaskSchema"
-)(async ({ name, value, params, taskStatus, tagList, extra, traceId, traceParentId }) => {
-    const taskTraceId = traceId?.trim() || logManager.generateTraceId();
-    const logger = createApiLogger("postTask", {
-        traceId: taskTraceId,
-        traceParentId: traceParentId ?? null,
-    });
-
-    const validation = await TaskRepoValidation.validate({
-        logger,
-        taskTypeKey: value,
-        params,
-        bootstrapLocal: true,
-    });
-    if (!validation.isValid) {
-        logger.warn(validation.message, {
-            topic: "task",
-            data: {
-                taskTypeKey: value,
-                reason: validation.reason,
-                step: validation.step,
-            },
-        });
-        return generateResponse.error(
-            validation.message,
-            undefined,
-            String(validation.code)
-        ) as SupabaseResponse<Task>;
-    }
-
-    const result = await createTarget<Task, PostTaskPayload>({
-        payload: { name, value, params, taskStatus, tagList, extra, traceId: taskTraceId, traceParentId },
-        createFn: () => ({
-            name,
-            value,
-            category: CategoryTask.TASK,
-            tagList,
-            extra,
-            details: {
-                manifestVersion: 0,
-                status: taskStatus,
-                params,
-                progress: 0,
-                nodeId: null,
-                traceId: taskTraceId,
-            },
-        }),
-    });
-
-    logger.info("任務已創建", {
-        topic: "task",
-        data: {
-            taskId: result.data?.id,
-            taskTypeKey: value,
-            status: taskStatus,
-            traceId: taskTraceId,
-        },
-    });
-
-    return result;
 });

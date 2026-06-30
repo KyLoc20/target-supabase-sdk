@@ -20,15 +20,14 @@ export {
 	patchClaimTaskSchema,
 	patchTaskProgress,
 	patchTaskProgressSchema,
-	postTask,
-	postTaskSchema,
 } from "./task.api";
 export type {
 	PatchChangeTaskStatusPayload,
 	PatchClaimTaskPayload,
 	PatchTaskProgressPayload,
-	PostTaskPayload,
 } from "./task.api";
+export { postTask, postTaskSchema } from "./task-post.api";
+export type { PostTaskPayload } from "./task-post.api";
 
 // task-manager
 export { TaskManager } from "./task-manager";
