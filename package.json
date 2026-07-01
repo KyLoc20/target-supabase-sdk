@@ -51,6 +51,8 @@
     "post-task": "tsx scripts/post-task.ts",
     "post-command": "tsx scripts/post-command.ts",
     "post-trigger": "tsx scripts/post-trigger.ts",
+    "parcel:split": "tsx scripts/parcel-split-local.ts",
+    "parcel:restore": "tsx scripts/parcel-restore-local.ts",
     "dev": "tsc -p tsconfig.build.json --watch",
     "pack:check": "npm pack --dry-run",
     "prepack": "pnpm build"

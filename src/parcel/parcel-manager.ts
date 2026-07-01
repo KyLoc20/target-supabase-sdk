@@ -1,46 +1,73 @@
-import type { Chunk, Parcel, ParcelDetails } from "./parcel.interface";
+import { type TargetDraft } from "../core.interface";
+import { CategoryParcel, type Chunk, type Parcel, type ParcelCrypto, type ParcelDetails } from "./parcel.interface";
 
 const MANIFEST_VERSION = 1;
-const DEFAULT_CHUNK_SIZE = 256 * 1024; // 256KB
+const DEFAULT_CHUNK_SIZE = 2 * 1024 * 1024; // 2MB
+const AES_GCM_ALGORITHM = "AES-GCM-256";
+const KEY_DERIVATION_PBKDF2 = "PBKDF2-SHA256";
+const PBKDF2_ITERATIONS = 100_000;
 const AES_GCM_IV_LENGTH = 12;
 const AES_GCM_TAG_LENGTH = 128;
 
-/** IV 存在 Parcel.extra 中的 JSON 键 */
-const EXTRA_IV_KEY = "iv";
+/** @deprecated Legacy IV in Target.extra — read only for old parcels */
+const LEGACY_EXTRA_IV_KEY = "iv";
 
-/** 可插拔的存储适配器：不同文件系统 */
+/** Pluggable storage backend; chunks are round-robin distributed across adapters */
 export interface StorageAdapter {
-  /** 上传一段数据，返回可下载的 URL */
+  /** Written to {@link Chunk.provider} (e.g. `"s3"`, `"ipfs"`) */
+  provider?: string;
   upload(data: ArrayBuffer, pathOrKey: string): Promise<{ url: string }>;
 }
 
-interface CreateOptions {
-  /** 每个 chunk 的字节数，默认 256KB */
+export interface CreateOptions {
+  /** Bytes per chunk after split (plaintext or ciphertext). Default 2MB */
   chunkSize?: number;
-  /** AES-GCM 加密密钥；不传则生成并返回 */
+  /**
+   * When `true`, encrypt the whole file before chunking.
+   * Default `false` — plaintext shards across platforms (anti single-platform review).
+   */
+  encrypt?: boolean;
+  /** User passphrase (e.g. `"apple"`); derives AES key via PBKDF2 when `encrypt` is true */
+  passphrase?: string;
+  /** Raw AES-GCM key; mutually exclusive with `passphrase` */
   key?: CryptoKey;
 }
 
-interface CreateResult {
-  /** 元数据，chunk 的 url 由 save 填充 */
+export interface ReassembleOptions {
+  /** Raw AES-GCM key (parcels without passphrase-based KDF) */
+  key?: CryptoKey;
+  /** Passphrase when `details.crypto.keyDerivation` is PBKDF2 */
+  passphrase?: string;
+}
+
+export interface CreateResult {
   details: ParcelDetails;
-  /** 已加密的 chunk 数据，供 save 上传 */
+  /** Chunk payloads to upload (plaintext or ciphertext per `details.crypto`) */
   chunks: ArrayBuffer[];
-  /** Base64 编码的 IV，需在 save 时写入 Parcel.extra 供 reassembly 使用 */
-  ivBase64: string;
-  /** 若 create 时未传 key，则返回此处，调用方需妥善保存 */
+  /** Present when `encrypt` and key was generated — caller must persist */
   key?: CryptoKey;
 }
 
-/** 调用方提供的 Target 基础字段，用于拼成完整 Parcel */
-export type ParcelTargetBase = Pick<Parcel, "id" | "category" | "name" | "value" | "tagList" | "created_at">;
+/** Identity fields for {@link save} — `id` / `created_at` come from {@link postParcel}. */
+export interface ParcelSaveInput {
+  name: string;
+  value: string;
+  tagList?: string[];
+}
 
 function getCrypto(): Crypto {
   if (typeof globalThis !== "undefined" && globalThis.crypto) return globalThis.crypto;
   throw new Error("ParcelManager: crypto not available");
 }
 
-/** 计算 ArrayBuffer 的 SHA-256，返回 hex 字符串 */
+function bytesToBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+}
+
 async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
   const crypto = getCrypto();
   const hash = await crypto.subtle.digest("SHA-256", buffer);
@@ -49,152 +76,359 @@ async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
     .join("");
 }
 
-/** AES-GCM 加密 */
 async function encrypt(data: ArrayBuffer, key: CryptoKey, iv: Uint8Array): Promise<ArrayBuffer> {
   const crypto = getCrypto();
-  const ivCopy = new Uint8Array(iv);
-  return crypto.subtle.encrypt({ name: "AES-GCM", iv: ivCopy, tagLength: AES_GCM_TAG_LENGTH }, key, data);
+  return crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: new Uint8Array(iv), tagLength: AES_GCM_TAG_LENGTH },
+    key,
+    data
+  );
 }
 
-/** AES-GCM 解密 */
 async function decrypt(data: ArrayBuffer, key: CryptoKey, iv: Uint8Array): Promise<ArrayBuffer> {
   const crypto = getCrypto();
-  const ivCopy = new Uint8Array(iv);
-  return crypto.subtle.decrypt({ name: "AES-GCM", iv: ivCopy, tagLength: AES_GCM_TAG_LENGTH }, key, data);
+  return crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: new Uint8Array(iv), tagLength: AES_GCM_TAG_LENGTH },
+    key,
+    data
+  );
 }
 
-/** 生成 AES-GCM 密钥（256 位） */
+function isDecryptAuthFailure(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "OperationError") {
+    return true;
+  }
+  if (error instanceof Error) {
+    return /operation failed|operation-specific|decrypt|OperationError/i.test(error.message);
+  }
+  return false;
+}
+
+async function decryptPayload(
+  data: ArrayBuffer,
+  key: CryptoKey,
+  iv: Uint8Array,
+  usedPassphrase: boolean
+): Promise<ArrayBuffer> {
+  try {
+    return await decrypt(data, key, iv);
+  } catch (error) {
+    if (isDecryptAuthFailure(error)) {
+      throw new Error(
+        usedPassphrase
+          ? "ParcelManager.reassemble: 解密失败，口令错误或密文已损坏"
+          : "ParcelManager.reassemble: 解密失败，密钥错误或密文已损坏"
+      );
+    }
+    throw error;
+  }
+}
+
 async function generateKey(): Promise<CryptoKey> {
   const crypto = getCrypto();
   return crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
 }
 
-/** 将文件加密后拆分成多个 chunk */
-async function create(file: ArrayBuffer, options: CreateOptions = {}): Promise<CreateResult> {
-  const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
-  let key = options.key;
-  const generatedKey = !key;
-  if (!key) key = await generateKey();
-
+async function deriveKeyFromPassphrase(passphrase: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
   const crypto = getCrypto();
-  const iv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_LENGTH));
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: new Uint8Array(salt),
+      iterations,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
 
-  const encrypted = await encrypt(file, key, iv);
-  const totalSize = encrypted.byteLength;
+function usesPassphraseDerivation(crypto: ParcelCrypto): boolean {
+  return crypto.keyDerivation === KEY_DERIVATION_PBKDF2;
+}
 
+async function resolveDecryptionKey(crypto: ParcelCrypto, options: ReassembleOptions): Promise<CryptoKey> {
+  if (usesPassphraseDerivation(crypto)) {
+    if (options.passphrase == null || options.passphrase === "") {
+      throw new Error("ParcelManager.reassemble: 口令加密 Parcel 需要提供 passphrase");
+    }
+    if (crypto.salt == null || crypto.salt === "") {
+      throw new Error("ParcelManager.reassemble: 缺少 details.crypto.salt");
+    }
+    const iterations = crypto.pbkdf2Iterations ?? PBKDF2_ITERATIONS;
+    const salt = base64ToBytes(crypto.salt);
+    return deriveKeyFromPassphrase(options.passphrase, salt, iterations);
+  }
+  if (options.key != null) {
+    return options.key;
+  }
+  throw new Error("ParcelManager.reassemble: 加密 Parcel 需要提供 key");
+}
+
+async function buildChunkList(
+  payload: ArrayBuffer,
+  chunkSize: number
+): Promise<{ chunks: ArrayBuffer[]; chunkList: Chunk[] }> {
   const chunks: ArrayBuffer[] = [];
   const chunkList: Chunk[] = [];
   let offset = 0;
   let index = 0;
 
-  while (offset < totalSize) {
-    const end = Math.min(offset + chunkSize, totalSize);
-    const chunkBuffer = encrypted.slice(offset, end);
-    chunks.push(chunkBuffer);
+  while (offset < payload.byteLength) {
+    const end = Math.min(offset + chunkSize, payload.byteLength);
+    const chunkBuffer = payload.slice(offset, end);
     const checksum = await sha256Hex(chunkBuffer);
+    chunks.push(chunkBuffer);
     chunkList.push({
       index,
       size: chunkBuffer.byteLength,
       checksum,
-      url: "", // 由 save 填充
+      url: "",
     });
     offset = end;
     index += 1;
   }
 
-  const checksum = await sha256Hex(file);
+  return { chunks, chunkList };
+}
 
-  const details: ParcelDetails = {
-    manifestVersion: MANIFEST_VERSION,
-    chunkList: chunkList,
-    checksum,
-    size: file.byteLength,
-  };
+function concatBuffers(buffers: ArrayBuffer[]): ArrayBuffer {
+  const total = buffers.reduce((sum, buffer) => sum + buffer.byteLength, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const buffer of buffers) {
+    merged.set(new Uint8Array(buffer), offset);
+    offset += buffer.byteLength;
+  }
+  return merged.buffer;
+}
+
+function isEncryptionEnabled(details: ParcelDetails, parcelExtra?: string): boolean {
+  if (details.crypto != null) {
+    return details.crypto.enabled === true;
+  }
+  if (parcelExtra == null || parcelExtra.trim() === "") {
+    return false;
+  }
+  try {
+    const legacy = JSON.parse(parcelExtra) as Record<string, unknown>;
+    return typeof legacy[LEGACY_EXTRA_IV_KEY] === "string";
+  } catch {
+    return false;
+  }
+}
+
+function resolveCrypto(details: ParcelDetails, parcelExtra?: string): ParcelCrypto | null {
+  if (details.crypto?.enabled === true) {
+    return details.crypto;
+  }
+  if (parcelExtra == null || parcelExtra.trim() === "") {
+    return null;
+  }
+  try {
+    const legacy = JSON.parse(parcelExtra) as Record<string, unknown>;
+    const iv = legacy[LEGACY_EXTRA_IV_KEY];
+    if (typeof iv !== "string" || iv === "") {
+      return null;
+    }
+    return { enabled: true, algorithm: AES_GCM_ALGORITHM, iv };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Split a file into chunks. Default: plaintext shards; optional whole-file AES-GCM before split.
+ */
+async function create(file: ArrayBuffer, options: CreateOptions = {}): Promise<CreateResult> {
+  const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
+  const encryptEnabled = options.encrypt === true;
+  const plaintextChecksum = await sha256Hex(file);
+
+  if (!encryptEnabled) {
+    const { chunks, chunkList } = await buildChunkList(file, chunkSize);
+    return {
+      details: {
+        manifestVersion: MANIFEST_VERSION,
+        chunkList,
+        checksum: plaintextChecksum,
+        size: file.byteLength,
+      },
+      chunks,
+    };
+  }
+
+  if (options.passphrase != null && options.key != null) {
+    throw new Error("ParcelManager.create: passphrase 與 key 不能同時指定");
+  }
+
+  const cryptoApi = getCrypto();
+  const iv = cryptoApi.getRandomValues(new Uint8Array(AES_GCM_IV_LENGTH));
+  let key: CryptoKey;
+  let generatedKey = false;
+  let cryptoMeta: ParcelCrypto;
+
+  if (options.passphrase != null && options.passphrase !== "") {
+    const salt = cryptoApi.getRandomValues(new Uint8Array(16));
+    key = await deriveKeyFromPassphrase(options.passphrase, salt, PBKDF2_ITERATIONS);
+    cryptoMeta = {
+      enabled: true,
+      algorithm: AES_GCM_ALGORITHM,
+      iv: bytesToBase64(iv),
+      keyDerivation: KEY_DERIVATION_PBKDF2,
+      salt: bytesToBase64(salt),
+      pbkdf2Iterations: PBKDF2_ITERATIONS,
+    };
+  } else if (options.key != null) {
+    key = options.key;
+    cryptoMeta = {
+      enabled: true,
+      algorithm: AES_GCM_ALGORITHM,
+      iv: bytesToBase64(iv),
+    };
+  } else {
+    key = await generateKey();
+    generatedKey = true;
+    cryptoMeta = {
+      enabled: true,
+      algorithm: AES_GCM_ALGORITHM,
+      iv: bytesToBase64(iv),
+    };
+  }
+
+  const encrypted = await encrypt(file, key, iv);
+  const { chunks, chunkList } = await buildChunkList(encrypted, chunkSize);
 
   const result: CreateResult = {
-    details,
+    details: {
+      manifestVersion: MANIFEST_VERSION,
+      chunkList,
+      checksum: plaintextChecksum,
+      size: file.byteLength,
+      crypto: cryptoMeta,
+    },
     chunks,
-    ivBase64: btoa(String.fromCharCode(...iv)),
   };
-  if (generatedKey) result.key = key;
+  if (generatedKey) {
+    result.key = key;
+  }
   return result;
 }
 
-/** 将 chunk 均匀分布到不同文件系统并存储 */
+/** Upload chunks round-robin across storage adapters */
 async function save(
   createResult: CreateResult,
   fileSystems: StorageAdapter[],
-  targetBase: ParcelTargetBase
-): Promise<Parcel> {
-  if (fileSystems.length === 0) throw new Error("ParcelManager.save: fileSystems 不能为空");
-  const { details, chunks, ivBase64 } = createResult;
-
-  const chunkListWithUrls: Chunk[] = [];
-  for (let i = 0; i < chunks.length; i++) {
-    const fs = fileSystems[i % fileSystems.length];
-    const pathOrKey = `chunk-${i}-${details.checksum.slice(0, 8)}`;
-    const { url } = await fs.upload(chunks[i], pathOrKey);
-    chunkListWithUrls.push({ ...details.chunkList[i], url });
+  input: ParcelSaveInput
+): Promise<TargetDraft<Parcel>> {
+  if (fileSystems.length === 0) {
+    throw new Error("ParcelManager.save: fileSystems 不能为空");
   }
 
-  const extra = JSON.stringify({ [EXTRA_IV_KEY]: ivBase64 });
+  const { details, chunks } = createResult;
+  const chunkListWithUrls: Chunk[] = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const adapter = fileSystems[i % fileSystems.length];
+    const pathOrKey = `chunk-${i}-${details.checksum.slice(0, 8)}`;
+    const { url } = await adapter.upload(chunks[i], pathOrKey);
+    chunkListWithUrls.push({
+      ...details.chunkList[i],
+      url,
+      provider: adapter.provider,
+    });
+  }
 
   return {
-    ...targetBase,
-    category: "parcel" as Parcel["category"],
+    name: input.name,
+    value: input.value,
+    tagList: input.tagList ?? [],
+    category: CategoryParcel.PARCEL,
     details: {
       ...details,
       chunkList: chunkListWithUrls,
     },
-    extra,
   };
 }
 
-/** 根据 Parcel 下载各 chunk，重组并校验后返回原文件 */
-async function reassembly(parcel: Parcel, key: CryptoKey): Promise<ArrayBuffer> {
-  const { details } = parcel;
-  let ivBase64: string | undefined;
-  try {
-    const extra = parcel.extra ? JSON.parse(parcel.extra) : {};
-    ivBase64 = extra[EXTRA_IV_KEY];
-  } catch {
-    throw new Error("ParcelManager.reassembly: 无法从 extra 解析 IV");
-  }
-  if (!ivBase64 || typeof ivBase64 !== "string") {
-    throw new Error("ParcelManager.reassembly: Parcel.extra 中缺少 iv");
-  }
-
-  const iv = Uint8Array.from(atob(ivBase64), (c) => c.charCodeAt(0));
-  if (iv.length !== AES_GCM_IV_LENGTH) {
-    throw new Error("ParcelManager.reassembly: IV 长度无效");
-  }
-
-  const sortedChunks = [...details.chunkList].sort((a, b) => a.index - b.index);
+async function downloadAndVerifyChunks(chunkList: Chunk[]): Promise<ArrayBuffer[]> {
+  const sortedChunks = [...chunkList].sort((a, b) => a.index - b.index);
   const buffers: ArrayBuffer[] = [];
 
   for (const chunkMeta of sortedChunks) {
     const res = await fetch(chunkMeta.url);
-    if (!res.ok) throw new Error(`ParcelManager.reassembly: 下载 chunk ${chunkMeta.index} 失败: ${res.status}`);
+    if (!res.ok) {
+      throw new Error(`ParcelManager.reassemble: 下载 chunk ${chunkMeta.index} 失败: ${res.status}`);
+    }
     const chunkBuffer = await res.arrayBuffer();
     const chunkChecksum = await sha256Hex(chunkBuffer);
     if (chunkChecksum !== chunkMeta.checksum) {
-      throw new Error(`ParcelManager.reassembly: chunk ${chunkMeta.index} 校验失败 (checksum 不一致)`);
+      throw new Error(`ParcelManager.reassemble: chunk ${chunkMeta.index} 校验失败 (checksum 不一致)`);
     }
     buffers.push(chunkBuffer);
   }
 
-  const totalEncryptedLength = buffers.reduce((s, b) => s + b.byteLength, 0);
-  const encrypted = new Uint8Array(totalEncryptedLength);
-  let offset = 0;
-  for (const b of buffers) {
-    encrypted.set(new Uint8Array(b), offset);
-    offset += b.byteLength;
+  return buffers;
+}
+
+function verifyPlaintextSize(buffer: ArrayBuffer, details: ParcelDetails): void {
+  if (buffer.byteLength !== details.size) {
+    throw new Error(
+      `ParcelManager.reassemble: 重组后大小与 details.size 不一致 (${buffer.byteLength} !== ${details.size})`
+    );
+  }
+}
+
+/**
+ * Fetch chunks from {@link Parcel.details.chunkList}, reassemble, optionally decrypt, verify checksum.
+ * Encrypted parcels: pass `{ passphrase }` for PBKDF2 parcels, or `{ key }` for raw-key parcels.
+ */
+async function reassemble(parcel: Parcel, options: ReassembleOptions = {}): Promise<ArrayBuffer> {
+  const { details } = parcel;
+  const encrypted = isEncryptionEnabled(details, parcel.extra);
+
+  const buffers = await downloadAndVerifyChunks(details.chunkList);
+  const merged = concatBuffers(buffers);
+
+  if (!encrypted) {
+    verifyPlaintextSize(merged, details);
+    const fileChecksum = await sha256Hex(merged);
+    if (fileChecksum !== details.checksum) {
+      throw new Error("ParcelManager.reassemble: 重组后文件校验失败 (sha256 与 details.checksum 不一致)");
+    }
+    return merged;
   }
 
-  const decrypted = await decrypt(encrypted.buffer, key, iv);
+  const cryptoMeta = resolveCrypto(details, parcel.extra);
+  if (cryptoMeta?.iv == null || cryptoMeta.iv === "") {
+    throw new Error("ParcelManager.reassemble: 加密 Parcel 缺少 details.crypto.iv");
+  }
+
+  const iv = base64ToBytes(cryptoMeta.iv);
+  if (iv.length !== AES_GCM_IV_LENGTH) {
+    throw new Error("ParcelManager.reassemble: IV 长度无效");
+  }
+
+  const key = await resolveDecryptionKey(cryptoMeta, options);
+  const usedPassphrase = usesPassphraseDerivation(cryptoMeta);
+  const decrypted = await decryptPayload(merged, key, iv, usedPassphrase);
+  verifyPlaintextSize(decrypted, details);
   const fileChecksum = await sha256Hex(decrypted);
   if (fileChecksum !== details.checksum) {
-    throw new Error("ParcelManager.reassembly: 重组后文件校验失败 (sha256 与 details.checksum 不一致)");
+    throw new Error(
+      usedPassphrase
+        ? "ParcelManager.reassemble: 解密后校验失败，口令错误或数据已损坏"
+        : "ParcelManager.reassemble: 解密后文件校验失败 (sha256 与 details.checksum 不一致)"
+    );
   }
 
   return decrypted;
@@ -203,7 +437,7 @@ async function reassembly(parcel: Parcel, key: CryptoKey): Promise<ArrayBuffer> 
 const ParcelManager = {
   create,
   save,
-  reassembly,
+  reassemble,
 };
 
 export { ParcelManager };

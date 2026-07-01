@@ -177,7 +177,8 @@ import { postTask } from "target-supabase-sdk/node";
 `pnpm build` runs `scripts/verify-browser-entry.mjs` (graph walker: `scripts/verify-graph.mjs`):
 
 - Static import graph from `dist/browser.js`
-- Fails if any module contains `from "node:fs"` etc.
+- Follows relative `./` and `../` imports (bounded to `dist/`)
+- Fails if any reachable module contains `from "node:fs"` etc.
 
 Node entry is not separately verified — `tsc` compile is sufficient.
 
@@ -198,6 +199,7 @@ Node entry is not separately verified — `tsc` compile is sufficient.
 
 ## Related
 
+- [browser-bundle-verification](../browser-bundle-verification/SKILL.md) — verify-graph, external tools, layered CI, **Future TODO**
 - [library-exports](../library-exports/SKILL.md) — domain barrel rules
 - [task-local-discovery](../task-local-discovery/SKILL.md) — why local-task-registry stays private
 - chrome-extension-starter: `.cursor/skills/target-supabase-sdk-browser-bundle/` — consumer notes (shim optional after SDK 0.2.0)
@@ -208,7 +210,7 @@ Node entry is not separately verified — `tsc` compile is sufficient.
 |------|------|
 | `src/browser.ts` | Browser public surface |
 | `src/node.ts` | Node public surface |
-| `scripts/verify-graph.mjs` | Shared static import graph walker |
+| `scripts/verify-graph.mjs` | Static graph walker: `./` + `../`, `dist/`-bounded, resolves `dir/index.js` |
 | `scripts/verify-browser-entry.mjs` | Browser entry guard (no `node:*`) |
 | `src/task/task.api.ts` | Browser-safe task patch APIs |
 | `src/task/task-post.api.ts` | Node-only `postTask` |

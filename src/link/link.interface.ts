@@ -1,7 +1,6 @@
 import { Target } from "../core.interface";
 
 export enum CategoryLink {
-    /** HTML by default */
     LINK = "link",
 }
 

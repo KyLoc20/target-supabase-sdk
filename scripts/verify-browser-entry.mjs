@@ -7,7 +7,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(ROOT, "dist");
 
 const browserEntry = join(DIST, "browser.js");
-const graph = resolveGraph(browserEntry);
+const graph = resolveGraph(browserEntry, { distRoot: DIST });
 const offenders = graph.filter((file) =>
 	NODE_BUILTIN_IMPORT_PATTERN.test(readFileSync(file, "utf8")),
 );

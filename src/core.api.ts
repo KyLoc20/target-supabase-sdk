@@ -1,4 +1,4 @@
-import { generateResponse, Target, TargetPayload } from "./core.interface";
+import { generateResponse, Target, TargetDraft } from "./core.interface";
 import { SupabaseInitializer } from "./supabase";
 
 const supabase = SupabaseInitializer.getInstance();
@@ -599,7 +599,7 @@ export const createTarget = async <T extends Target, P extends object>({
 }: {
   payload: P;
   validator?: new () => BaseValidator<P>;
-  createFn: (validPayload: P) => TargetPayload<T>;
+  createFn: (validPayload: P) => TargetDraft<T>;
   /** Business-key filters; if another row matches after insert, conflict handling runs. */
   checkRedundancyFilterList?: QueryFilter[];
   /**

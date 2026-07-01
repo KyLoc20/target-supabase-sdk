@@ -11,7 +11,8 @@ export interface Target {
   created_at: string;
 }
 
-export type TargetPayload<T extends Target> = Omit<T, "id" | "created_at">;
+/** Target row before persistence — no `id` or `created_at`. */
+export type TargetDraft<T extends Target> = Omit<T, "id" | "created_at">;
 
 export enum StatusCode {
   SUCCESS = 200,
