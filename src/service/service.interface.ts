@@ -1,7 +1,8 @@
 import { Target } from "../core.interface";
-import { Lifecycle } from "./base.interface";
+import { ServiceLifecycle } from "./base.interface";
 
 export interface Service extends Target {
+  name: string;
   /** "storage-service" 唯一键 */
   value: string;
   category: CategoryService;
@@ -9,19 +10,14 @@ export interface Service extends Target {
 }
 
 export enum CategoryService {
-  SERVICE = "service",
-}
-
-export enum ServiceStatus {
-  ACTIVE = "ACTIVE",
-  DEPRECATED = "DEPRECATED",
-  SUNSET = "SUNSET",
+  SERVICE = "service"
 }
 
 export interface ServiceDetails {
+  manifestVersion: number;
   /** 能力 Api keys */
-  apis: string[];
+  apiKeys: string[];
   /** 依赖的服务 Service keys */
   dependencies: string[];
-  lifecycle: Lifecycle;
+  lifecycle: ServiceLifecycle;
 }

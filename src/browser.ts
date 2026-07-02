@@ -30,45 +30,26 @@ export type {
 export { ParcelManager } from "./parcel/parcel-manager";
 export type { StorageAdapter, ParcelSaveInput, CreateOptions, CreateResult, ReassembleOptions } from "./parcel/parcel-manager";
 export {
-    postParcel,
-    postParcelSchema,
-    getParcel,
-    getParcelSchema,
-    deleteParcel,
-    deleteParcelSchema,
-    parcelDetailsSchema,
+	postParcel,
+	postParcelSchema,
+	getParcel,
+	getParcelSchema,
+	deleteParcel,
+	deleteParcelSchema,
+	parcelDetailsSchema,
 } from "./parcel/parcel.api";
 export type { PostParcelPayload, GetParcelPayload, DeleteParcelPayload } from "./parcel/parcel.api";
 export {
-    publishParcel,
-    restoreParcel,
-    restoreParcelById,
+	publishParcel,
+	restoreParcel,
+	restoreParcelById,
 } from "./parcel/parcel.service";
 export type {
-    PublishParcelInput,
-    PublishParcelResult,
-    RestoreParcelByIdInput,
-    RestoreParcelByIdResult,
+	PublishParcelInput,
+	PublishParcelResult,
+	RestoreParcelByIdInput,
+	RestoreParcelByIdResult,
 } from "./parcel/parcel.service";
-
-export * from "./question-list/question-list.interface";
-export * from "./question-list/question-list.api";
-
-export * from "./review/review.interface";
-export * from "./review/review.api";
-
-export type {
-	ReviewV2,
-	ReviewV2Details,
-	ReviewResult,
-} from "./review-v2/review.interface";
-export * from "./review-v2/review-setting.interface";
-export {
-	postReview as postReviewV2,
-	PostReviewValidator as PostReviewV2Validator,
-} from "./review-v2/apis/post-review.api";
-export type { PostReviewPayload as PostReviewV2Payload } from "./review-v2/apis/post-review.api";
-export * from "./review-v2/apis/post-review-setting.api";
 
 export * from "./service/base.interface";
 export * from "./service/service.interface";

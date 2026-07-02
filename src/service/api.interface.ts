@@ -1,5 +1,5 @@
 import { Target } from "../core.interface";
-import { Field, Lifecycle } from "./base.interface";
+import { FieldDefinition, ServiceLifecycle } from "./base.interface";
 
 export interface Api extends Target {
   /** "core.post.target.0" 唯一键 领域 + METHOD + content + VERSION */
@@ -24,15 +24,13 @@ export interface ApiDetails {
   /** /v0/core/target */
   path: string;
   request: {
-    query: {
-      [key: string]: Field;
-    };
+    query: FieldDefinition[];
   };
   response: {
-    "200": { [key: string]: Field };
+    "200": FieldDefinition[];
   };
   manifestVersion: number;
-  lifecycle: Lifecycle;
+  lifecycle: ServiceLifecycle;
   /** TODO "application/octet-stream" */
   // contentType: string;
   /** TODO "application/json" */
