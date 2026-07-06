@@ -8,8 +8,14 @@ export interface LogScope {
     labels?: Readonly<Record<string, string>>;
 }
 
-/** Partial update for {@link LogScope} / {@link applyScopePatch}. */
+/** Partial update for {@link patchScope}. */
 export type LogScopePatch = Partial<Omit<LogScope, "labels">> & {
+    labels?: Record<string, string>;
+};
+
+/** Fields allowed on {@link LoggerWithScope.resetScope} — no trace identity changes. */
+export type LoggerResetScopePatch = {
+    module?: string;
     labels?: Record<string, string>;
 };
 
@@ -19,6 +25,17 @@ interface NormalizeScopeOptions {
     /** When true and traceId is missing, generate a new id. */
     generateTraceId?: boolean;
 }
+
+/** Input for {@link patchScope}. */
+export type PatchScopeInput = {
+    scope: LogScope;
+    patch: LogScopePatch;
+    /**
+     * When `false` (default), `patch.traceId` / `patch.traceParentId` are ignored.
+     * New spans: use {@link createScope}.
+     */
+    allowTraceMutation?: boolean;
+};
 
 function mergeLabels(
     base?: Readonly<Record<string, string>>,
@@ -44,64 +61,50 @@ export function normalizeScope(input: LogScopeInput, options?: NormalizeScopeOpt
     };
 }
 
-/** Input for {@link createRootScope}. */
-export type CreateRootScopeInput = {
+/** Input for {@link createScope}. */
+export type CreateScopeInput = {
     module: string;
-    traceId?: string;
-    labels?: Record<string, string>;
+    traceId: string;
     traceParentId?: string | null;
+    labels?: Record<string, string>;
+    /** When set, default traceParentId to parent.traceId and merge labels. */
+    parent?: LogScope;
 };
 
-/** Root scope: traceParentId defaults to null. */
-export function createRootScope(input: CreateRootScopeInput): LogScope {
-    return normalizeScope(
-        {
-            module: input.module,
-            traceId: input.traceId,
-            traceParentId: input.traceParentId ?? null,
-            labels: input.labels,
-        },
-        { generateTraceId: true }
-    );
+/** Build a scope; optional parent links trace chain and merges labels. */
+export function createScope(input: CreateScopeInput): LogScope {
+    const { module, parent, traceId, traceParentId, labels } = input;
+    return normalizeScope({
+        module,
+        traceId,
+        traceParentId: traceParentId ?? (parent != null ? parent.traceId : null),
+        labels: parent != null ? mergeLabels(parent.labels, labels) : mergeLabels(undefined, labels),
+    });
 }
 
-/** Input for {@link createChildScope}. */
-export type CreateChildScopeInput = {
-    module: string;
-    parent: LogScope;
-    traceId?: string;
-    traceParentId?: string | null;
-    labels?: Record<string, string>;
-};
+/** Merge patch into scope (labels deep-merge). Returns a new scope. */
+export function patchScope(input: PatchScopeInput): LogScope {
+    const { scope, patch, allowTraceMutation = false } = input;
+    const traceId =
+        allowTraceMutation && patch.traceId != null && patch.traceId !== ""
+            ? patch.traceId
+            : scope.traceId;
+    const traceParentId =
+        allowTraceMutation && patch.traceParentId !== undefined ? patch.traceParentId : scope.traceParentId;
 
-/** Child scope: parent link defaults to parent.traceId; labels merge with parent. */
-export function createChildScope(input: CreateChildScopeInput): LogScope {
-    const { module, parent, traceId, traceParentId, labels } = input;
-    return normalizeScope(
-        {
-            module,
-            traceId,
-            traceParentId: traceParentId ?? parent.traceId,
-            labels: mergeLabels(parent.labels, labels),
-        },
-        { generateTraceId: true }
-    );
+    return normalizeScope({
+        module: patch.module ?? scope.module,
+        traceId,
+        traceParentId,
+        labels: mergeLabels(scope.labels, patch.labels),
+    });
 }
 
 /** Same trace chain, different module (e.g. prepareTask vs executeTask). */
 export function withModule(scope: LogScope, module: string): LogScope {
-    return { ...scope, module };
+    return patchScope({ scope, patch: { module } });
 }
 
-/** Merge patch into scope (labels deep-merge). */
-export function applyScopePatch(scope: LogScope, patch: LogScopePatch): LogScope {
-    return normalizeScope({
-        module: patch.module ?? scope.module,
-        traceId: patch.traceId ?? scope.traceId,
-        traceParentId: patch.traceParentId !== undefined ? patch.traceParentId : scope.traceParentId,
-        labels: mergeLabels(scope.labels, patch.labels),
-    });
-}
 export function formatScopeLabels(labels?: Readonly<Record<string, string>>): string {
     if (labels == null || Object.keys(labels).length === 0) {
         return "--";

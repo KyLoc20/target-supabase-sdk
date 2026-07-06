@@ -4,20 +4,23 @@
 
 // log-manager
 export { logManager, LogManager, LogLevel } from "./log-manager";
-export type { LogEntry, LogOptions, LoggerWithScope, LogRestParams } from "./log-manager";
+export type { LogEntry, LogOptions, LoggerWithScope, LogRestParams, WithScopeOptions } from "./log-manager";
 
-// create-api-logger
-export { createApiLogger } from "./create-api-logger";
-export type { CreateApiLoggerOptions } from "./create-api-logger";
+// create-logger
+export { createLogger } from "./create-logger";
+export type {
+    CreateLoggerInput,
+    CreateLoggerFromModuleInput,
+    CreateLoggerFromScopeInput,
+} from "./create-logger";
 
 // log-scope
 export {
-    applyScopePatch,
-    createChildScope,
-    createRootScope,
+    patchScope,
+    createScope,
     formatScopeLabels,
     normalizeScope,
     resolveLogData,
     withModule,
 } from "./log-scope";
-export type { LogScope, LogScopeInput, LogScopePatch, CreateRootScopeInput, CreateChildScopeInput } from "./log-scope";
+export type { LogScope, LogScopeInput, LogScopePatch, LoggerResetScopePatch, PatchScopeInput, CreateScopeInput } from "./log-scope";

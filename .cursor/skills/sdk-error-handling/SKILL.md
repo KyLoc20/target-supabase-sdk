@@ -91,7 +91,7 @@ Reference: `patchClaimTask`, `getScanRemoteRepoValues`.
 
 ### 3. Do not swallow errors silently
 
-- Log inside API when useful (`createApiLogger`)
+- Log inside API when useful (`createLogger`)
 - Return `error.code` for machine-readable branches (lock conflict, validation, etc.)
 - Do not use `success(null)` for failures that need retry semantics
 

@@ -25,22 +25,22 @@ description: >-
 
 ```typescript
 import { logManager } from "../shared/log/log-manager";
-import { createApiLogger } from "../shared/log/create-api-logger";
-import { createRootScope } from "../shared/log/log-scope";
+import { createLogger } from "../shared/log/create-logger";
+import { createScope } from "../shared/log/log-scope";
 ```
 
 ### With barrel (`src/shared/log/index.ts`)
 
 ```typescript
-import { logManager, createApiLogger, createRootScope } from "../shared/log";
+import { logManager, createLogger, createScope } from "../shared/log";
 ```
 
 Barrel 文件只做转发，不含业务逻辑：
 
 ```typescript
 export { logManager } from "./log-manager";
-export { createApiLogger } from "./create-api-logger";
-export { createRootScope, withModule, ... } from "./log-scope";
+export { createLogger } from "./create-logger";
+export { createScope, withModule, ... } from "./log-scope";
 ```
 
 | Benefit | Explanation |
@@ -73,7 +73,7 @@ Same pattern for infra domains not yet on root:
 ```text
 src/shared/log/log-manager.ts      ─┐
 src/shared/log/log-scope.ts        ─┼─► src/shared/log/index.ts
-src/shared/log/create-api-logger.ts ─┘
+src/shared/log/create-logger.ts ─┘
          ▲
          └── src/*.api.ts imports from "../shared/log" (domain barrel OK cross-folder)
 ```
@@ -125,11 +125,11 @@ export type { RegisterTasksOptions, RegisterTasksResult, PrepareTaskResponse, ..
 export { logManager, LogManager, LogLevel } from "./log-manager";
 export type { LogEntry, LogOptions, LoggerWithScope, LogRestParams } from "./log-manager";
 
-export { createApiLogger } from "./create-api-logger";
-export type { CreateApiLoggerOptions } from "./create-api-logger";
+export { createLogger } from "./create-logger";
+export type { CreateLoggerInput } from "./create-logger";
 
-export { createRootScope, withModule, ... } from "./log-scope";
-export type { LogScope, LogScopePatch } from "./log-scope";
+export { createScope, withModule, ... } from "./log-scope";
+export type { LogScope, LogScopePatch, CreateScopeInput } from "./log-scope";
 ```
 
 Not exported via barrel: nothing else under `shared/log/` today. Consumers inside `src/` use `from "../shared/log"`; files inside `shared/log/` use `from "./log-manager"` etc.

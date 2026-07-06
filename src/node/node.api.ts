@@ -1,10 +1,11 @@
 import { createTarget, QueryFilter, updateTargetDetails, validateWithSchema } from "../core.api";
 import { generateResponse } from "../core.interface";
-import { createApiLogger } from "../shared/log";
+import { createLogger } from "../shared/log";
 import { z } from "zod";
 import { CategoryNode, Node, NodeDetails, NodeStatus } from "./node.interface";
 
 const NODE_STATUS_FIELD = "details->>status" as const;
+const LOG_TOPIC_NODE = "node";
 
 const nodeIdSchema = z.string().trim().min(1);
 const traceIdSchema = z.string().trim().min(1).optional();
@@ -114,7 +115,7 @@ export const patchChangeNodeStatus = validateWithSchema(
     patchChangeNodeStatusSchema,
     "patchChangeNodeStatusSchema"
 )(async ({ nodeId, status, fromStatus, traceId }) => {
-    const logger = createApiLogger("patchChangeNodeStatus", { traceId, labels: { nodeId } });
+    const logger = createLogger({ module: "patchChangeNodeStatus", traceId, labels: { nodeId } });
 
     const data = await updateTargetDetails<Node, NodeDetails>({
         id: nodeId,
@@ -127,7 +128,7 @@ export const patchChangeNodeStatus = validateWithSchema(
     });
 
     logger.info("节点状态更新成功", {
-        topic: "node",
+        topic: LOG_TOPIC_NODE,
         data: {
             nodeId,
             status,

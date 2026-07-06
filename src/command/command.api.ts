@@ -5,7 +5,7 @@ import {
     validateWithSchema,
 } from "../core.api";
 import { generateResponse } from "../core.interface";
-import { createApiLogger } from "../shared/log";
+import { createLogger } from "../shared/log";
 import { z } from "zod";
 import { CategoryCommand, Command, CommandType } from "./command.interface";
 
@@ -43,7 +43,7 @@ export const postCommand = validateWithSchema(
     postCommandSchema,
     "postCommandSchema"
 )(async ({ nodeId, command, traceId }) => {
-    const logger = createApiLogger("postCommand", { traceId, labels: { nodeId } });
+    const logger = createLogger({ module: "postCommand", traceId, labels: { nodeId } });
 
     const result = await createTarget<Command, PostCommandPayload>({
         payload: { nodeId, command, traceId },
@@ -70,7 +70,7 @@ export const getPollCommandList = validateWithSchema(
     getPollCommandListSchema,
     "getPollCommandListSchema"
 )(async ({ nodeId, size, traceId }) => {
-    const logger = createApiLogger("getPollCommandList", { traceId, labels: { nodeId } });
+    const logger = createLogger({ module: "getPollCommandList", traceId, labels: { nodeId } });
 
     const { data: dequeuedList = [] } = await pollTargetList<Command>({
         category: CategoryCommand.COMMAND,
@@ -79,10 +79,17 @@ export const getPollCommandList = validateWithSchema(
         ascending: true,
     });
 
-    logger.info("Command", {
-        topic: "command",
-        data: { nodeId, dequeued: dequeuedList.length },
-    });
+    if (dequeuedList.length === 0) {
+        logger.debug("Command", {
+            topic: "command",
+            data: { nodeId, dequeued: dequeuedList.length },
+        });
+    } else {
+        logger.info("Command", {
+            topic: "command",
+            data: { nodeId, dequeued: dequeuedList.length },
+        });
+    }
 
     return generateResponse.success(dequeuedList);
 });

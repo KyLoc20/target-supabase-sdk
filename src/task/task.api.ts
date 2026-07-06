@@ -1,6 +1,6 @@
-import { createTarget, getPossibleTarget, QueryFilter, updateTargetDetails, validateWithSchema, isOptimisticLockError, OPTIMISTIC_LOCK_FAILED_MESSAGE } from "../core.api";
+import { getPossibleTarget, QueryFilter, updateTargetDetails, validateWithSchema, isOptimisticLockError, OPTIMISTIC_LOCK_FAILED_MESSAGE } from "../core.api";
 import { generateResponse, type SupabaseResponse } from "../core.interface";
-import { createApiLogger, logManager, type LoggerWithScope } from "../shared/log";
+import { createLogger, type LoggerWithScope } from "../shared/log";
 import { z } from "zod";
 import { CategoryTask, ResultCode, Task, TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
 
@@ -206,7 +206,7 @@ export const patchChangeTaskStatus = validateWithSchema(
     patchChangeTaskStatusSchema,
     "patchChangeTaskStatusSchema"
 )(async (params) => {
-    const logger = createApiLogger("patchChangeTaskStatus", { traceId: params.traceId });
+    const logger = createLogger({ module: "patchChangeTaskStatus", traceId: params.traceId });
     const { id, action, extra } = params;
     const updateExtraFn = extra == null ? undefined : () => extra;
 
@@ -310,7 +310,7 @@ export const patchTaskProgress = validateWithSchema(
     patchTaskProgressSchema,
     "patchTaskProgressSchema"
 )(async ({ id, progress, nodeId, traceId }) => {
-    const logger = createApiLogger("patchTaskProgress", { traceId, labels: { nodeId } });
+    const logger = createLogger({ module: "patchTaskProgress", traceId, labels: { nodeId } });
     const data = await transitionTask({
         id,
         optimisticLockFilterList: lockOnDoingOwner(nodeId),
@@ -338,7 +338,7 @@ export const patchClaimTask = validateWithSchema(
     patchClaimTaskSchema,
     "patchClaimTaskSchema"
 )(async ({ nodeId, availableTaskList, traceId }): Promise<SupabaseResponse<Task | null>> => {
-    const logger = createApiLogger("patchClaimTask", { traceId, labels: { nodeId } });
+    const logger = createLogger({ module: "patchClaimTask", traceId, labels: { nodeId } });
 
     try {
         const { data: possibleTask } = await getPossibleTarget({

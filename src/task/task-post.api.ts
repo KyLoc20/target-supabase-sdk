@@ -1,6 +1,6 @@
 import { createTarget, validateWithSchema } from "../core.api";
 import { generateResponse, type SupabaseResponse } from "../core.interface";
-import { createApiLogger, logManager } from "../shared/log";
+import { createLogger, logManager } from "../shared/log";
 import { z } from "zod";
 import { CategoryTask, ResultCode, Task, TaskStatus } from "./task.interface";
 import { TaskRepoValidation } from "./task-repo-validation";
@@ -47,7 +47,8 @@ export const postTask = validateWithSchema(
 	traceParentId,
 }) => {
 	const taskTraceId = traceId?.trim() || logManager.generateTraceId();
-	const logger = createApiLogger("postTask", {
+	const logger = createLogger({
+		module: "postTask",
 		traceId: taskTraceId,
 		traceParentId: traceParentId ?? null,
 	});

@@ -58,7 +58,7 @@ Attempting DOING/DONE reset without `nodeId` fails optimistic lock (only TODO ro
 
 ## Logging
 
-Each public API call: `createApiLogger(module, { traceId?, …businessFields })` from `shared/log/create-api-logger.ts`.
+Each public API call: `createLogger({ module, traceId?, labels?, … })` from `shared/log/create-logger.ts`.
 
 - **Core:** `module` (required), `traceId` (optional — inherits orchestrator trace when passed)
 - **Business (optional):** other `LogContext` fields, e.g. `nodeId` for worker APIs; omitted lines show `nodeId=--`

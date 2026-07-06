@@ -1,11 +1,11 @@
 import { isDevEnvironment } from "../../core.utils";
 import { generateUniqueId } from "../utils/id.utils";
 import {
-    applyScopePatch,
     formatScopeLabels,
+    patchScope,
     resolveLogData,
     type LogScope,
-    type LogScopePatch,
+    type LoggerResetScopePatch,
 } from "./log-scope";
 
 /**
@@ -42,14 +42,14 @@ interface LogEntry extends LogScope {
     timestamp: number;
     level: LogLevel;
     message: string;
-    topic: string | null;
+    topic: string;
     extra?: string;
     /** Per-line structured business payload. */
     data?: unknown;
 }
 
 type LogRestParams = {
-    topic?: LogEntry["topic"];
+    topic: string;
     extra?: LogEntry["extra"];
     data?: unknown;
 };
@@ -58,14 +58,13 @@ type LogParams = { message: LogEntry["message"] } & LogRestParams;
 
 interface LogEntryPayload extends LogScope {
     message: LogEntry["message"];
-    topic?: LogEntry["topic"];
+    topic: LogEntry["topic"];
     extra?: LogEntry["extra"];
     data?: LogEntry["data"];
     level: LogEntry["level"];
 }
 
 interface LogOptions {
-    defaultTopic: LogEntry["topic"];
     formatTimestamp: boolean;
     formatEmoji: boolean;
     formatPrefix: string;
@@ -75,8 +74,13 @@ interface LogOptions {
     onLog?: (entry: LogEntry) => void;
 }
 
+/** Per-scoped-logger options for {@link LogManager.withScope}. */
+interface WithScopeOptions {
+    /** Overrides global {@link LogOptions.minLevel} for this logger instance. */
+    minLevel?: LogLevel;
+}
+
 const DEFAULT_OPTIONS: LogOptions = {
-    defaultTopic: null,
     formatTimestamp: true,
     formatEmoji: true,
     formatPrefix: "",
@@ -85,16 +89,14 @@ const DEFAULT_OPTIONS: LogOptions = {
 };
 
 interface LoggerWithScope {
-    debug: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    info: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    success: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    warn: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    error: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    critical: (message: LogParams["message"], restParams?: LogRestParams) => void;
-    /** Merge partial fields into this logger's bound scope. */
-    resetScope: (fields: LogScopePatch) => void;
-    /** @deprecated use {@link LoggerWithScope.resetScope} */
-    resetContext: (fields: LogScopePatch) => void;
+    debug: (message: LogParams["message"], restParams: LogRestParams) => void;
+    info: (message: LogParams["message"], restParams: LogRestParams) => void;
+    success: (message: LogParams["message"], restParams: LogRestParams) => void;
+    warn: (message: LogParams["message"], restParams: LogRestParams) => void;
+    error: (message: LogParams["message"], restParams: LogRestParams) => void;
+    critical: (message: LogParams["message"], restParams: LogRestParams) => void;
+    /** Merge labels / module into this logger's bound scope (trace fields are not mutable). */
+    resetScope: (patch: LoggerResetScopePatch) => void;
 }
 
 function mergeLogOptions(options?: Partial<LogOptions>): LogOptions {
@@ -173,8 +175,9 @@ class LogManager {
         return this.options.minLevel ?? DEFAULT_OPTIONS.minLevel ?? LogLevel.INFO;
     }
 
-    private shouldLog(level: LogLevel): boolean {
-        return LOG_LEVEL_RANK[level] >= LOG_LEVEL_RANK[this.getMinLevel()];
+    private shouldLog(level: LogLevel, scopeMinLevel?: LogLevel): boolean {
+        const minLevel = scopeMinLevel ?? this.getMinLevel();
+        return LOG_LEVEL_RANK[level] >= LOG_LEVEL_RANK[minLevel];
     }
 
     private createLogEntry(payload: LogEntryPayload): LogEntry {
@@ -183,7 +186,7 @@ class LogManager {
             timestamp: Date.now(),
             level,
             message,
-            topic: topic === undefined ? this.options.defaultTopic : topic,
+            topic,
             module,
             traceId,
             traceParentId,
@@ -210,7 +213,7 @@ class LogManager {
 
         parts.push(this.formatLevelTag(entry));
         parts.push(
-            `traceId=${entry.traceId} parent=${entry.traceParentId ?? "null"} labels=${formatScopeLabels(entry.labels)} module=${entry.module} topic=${entry.topic ?? "--"}`
+            `traceId=${entry.traceId} parent=${entry.traceParentId ?? "null"} labels=${formatScopeLabels(entry.labels)} module=${entry.module} topic=${entry.topic}`
         );
 
         if (this.options.formatPrefix) {
@@ -247,14 +250,23 @@ class LogManager {
         }
     }
 
-    private log(level: LogLevel, message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
-        if (!this.shouldLog(level)) {
+    private log(
+        level: LogLevel,
+        message: LogParams["message"],
+        logScope: LogScope,
+        restParams: LogRestParams,
+        scopeMinLevel?: LogLevel
+    ) {
+        if (!this.shouldLog(level, scopeMinLevel)) {
             return;
         }
 
         validateLogScope(logScope);
+        if (!restParams.topic?.trim()) {
+            throw new Error("[LogManager] topic is required on every log call");
+        }
 
-        const { topic, extra } = restParams ?? {};
+        const { topic, extra } = restParams;
         const data = resolveLogData(restParams);
         const entry = this.createLogEntry({
             level,
@@ -279,49 +291,56 @@ class LogManager {
         return generateUniqueId();
     }
 
-    public debug(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+    public debug(message: LogParams["message"], logScope: LogScope, restParams: LogRestParams) {
         this.log(LogLevel.DEBUG, message, logScope, restParams);
     }
 
-    public info(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+    public info(message: LogParams["message"], logScope: LogScope, restParams: LogRestParams) {
         this.log(LogLevel.INFO, message, logScope, restParams);
     }
 
-    public success(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+    public success(message: LogParams["message"], logScope: LogScope, restParams: LogRestParams) {
         this.log(LogLevel.SUCCESS, message, logScope, restParams);
     }
 
-    public warn(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+    public warn(message: LogParams["message"], logScope: LogScope, restParams: LogRestParams) {
         this.log(LogLevel.WARN, message, logScope, restParams);
     }
 
-    public error(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+    public error(message: LogParams["message"], logScope: LogScope, restParams: LogRestParams) {
         this.log(LogLevel.ERROR, message, logScope, restParams);
     }
 
-    public critical(message: LogParams["message"], logScope: LogScope, restParams?: LogRestParams) {
+    public critical(message: LogParams["message"], logScope: LogScope, restParams: LogRestParams) {
         this.log(LogLevel.CRITICAL, message, logScope, restParams);
     }
 
-    public withScope(scope: LogScope): { logger: LoggerWithScope; scope: LogScope } {
+    public withScope(
+        scope: LogScope,
+        options?: WithScopeOptions
+    ): { logger: LoggerWithScope; scope: LogScope } {
         const boundScope: LogScope = { ...scope, labels: scope.labels ? { ...scope.labels } : undefined };
+        const scopeMinLevel = options?.minLevel;
 
         const logger: LoggerWithScope = {
-            debug: (message, restParams) => this.debug(message, boundScope, restParams),
-            info: (message, restParams) => this.info(message, boundScope, restParams),
-            success: (message, restParams) => this.success(message, boundScope, restParams),
-            warn: (message, restParams) => this.warn(message, boundScope, restParams),
-            error: (message, restParams) => this.error(message, boundScope, restParams),
-            critical: (message, restParams) => this.critical(message, boundScope, restParams),
-            resetScope: (fields) => {
-                const next = applyScopePatch(boundScope, fields);
+            debug: (message, restParams) => this.log(LogLevel.DEBUG, message, boundScope, restParams, scopeMinLevel),
+            info: (message, restParams) => this.log(LogLevel.INFO, message, boundScope, restParams, scopeMinLevel),
+            success: (message, restParams) =>
+                this.log(LogLevel.SUCCESS, message, boundScope, restParams, scopeMinLevel),
+            warn: (message, restParams) => this.log(LogLevel.WARN, message, boundScope, restParams, scopeMinLevel),
+            error: (message, restParams) => this.log(LogLevel.ERROR, message, boundScope, restParams, scopeMinLevel),
+            critical: (message, restParams) =>
+                this.log(LogLevel.CRITICAL, message, boundScope, restParams, scopeMinLevel),
+            resetScope: (patch) => {
+                const next = patchScope({
+                    scope: boundScope,
+                    patch,
+                    allowTraceMutation: false,
+                });
                 boundScope.module = next.module;
                 boundScope.traceId = next.traceId;
                 boundScope.traceParentId = next.traceParentId;
                 boundScope.labels = next.labels;
-            },
-            resetContext: (fields) => {
-                logger.resetScope(fields);
             },
         };
 
@@ -332,4 +351,4 @@ class LogManager {
 
 export const logManager = LogManager.getInstance();
 export { LogManager, LogLevel };
-export type { LogOptions, LogEntry, LoggerWithScope, LogRestParams };
+export type { LogOptions, LogEntry, LoggerWithScope, LogRestParams, WithScopeOptions };

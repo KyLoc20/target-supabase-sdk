@@ -1,12 +1,13 @@
-import { logManager, type LoggerWithScope } from "../shared/log";
-import { scopeForNodeLoop } from "./node-log-scope";
+import { createLogger, createScope, logManager, LogLevel, type LoggerWithScope } from "../shared/log";
 import { postTask } from "../task/task-post.api";
 import { TaskStatus } from "../task/task.interface";
 import { patchTriggerFired, scanEnabledTriggers } from "../trigger/trigger.api";
 import type { Trigger, TriggerPostTaskAction } from "../trigger/trigger.interface";
 import { buildFireKey, isTriggerDue } from "../trigger/trigger.utils";
-import { NodeLoopContext } from "./node.interface";
+import { NodeLoopContext } from "./node-runtime.base";
 import { BaseNodeRuntime } from "./node-runtime.base";
+
+const LOG_TOPIC_TRIGGER = "trigger";
 
 /**
  * Dedicated trigger scheduler node.
@@ -20,18 +21,22 @@ class TriggerNode extends BaseNodeRuntime {
     }
 
     protected async onBeforeRegisterNode(logger: LoggerWithScope): Promise<void> {
-        logger.info("Trigger 節點啟動，跳過任務註冊", { topic: "trigger" });
+        logger.info("Trigger 節點啟動，跳過任務註冊", { topic: LOG_TOPIC_TRIGGER });
+    }
+
+    protected loopLoggerMinLevel(): LogLevel {
+        return LogLevel.WARN;
     }
 
     protected async runLoopSteps(ctx: NodeLoopContext, heartbeatOk: boolean): Promise<void> {
-        const loopScope = scopeForNodeLoop({
+        const loopScope = createScope({
             module: `${this.runtimeModule}-loop-iteration`,
             traceId: ctx.loopTraceId,
-            nodeId: ctx.nodeId,
+            labels: { nodeId: ctx.nodeId },
         });
         if (!heartbeatOk) {
-            const { logger } = logManager.withScope(loopScope);
-            logger.warn("心跳失敗，本輪跳過 Trigger 評估", { topic: "trigger" });
+            const logger = createLogger({ scope: loopScope });
+            logger.warn("心跳失敗，本輪跳過 Trigger 評估", { topic: LOG_TOPIC_TRIGGER });
             return;
         }
         await this.evaluateTriggers(ctx);
@@ -39,21 +44,21 @@ class TriggerNode extends BaseNodeRuntime {
 
     async evaluateTriggers(ctx: NodeLoopContext): Promise<void> {
         const { loopTraceId, nodeId } = ctx;
-        const loopScope = scopeForNodeLoop({ module: "evaluateTriggers", traceId: loopTraceId, nodeId });
-        const { logger } = logManager.withScope(loopScope);
+        const loopScope = createScope({ module: "evaluateTriggers", traceId: loopTraceId, labels: { nodeId } });
+        const logger = createLogger({ scope: loopScope });
 
-        logger.debug("開始評估 Trigger", { topic: "trigger" });
+        logger.debug("開始評估 Trigger", { topic: LOG_TOPIC_TRIGGER });
 
         const { data: triggerList = [], error } = await scanEnabledTriggers({ traceId: loopTraceId });
         if (error) {
             logger.warn("掃描 Trigger 失敗", {
-                topic: "trigger",
+                topic: LOG_TOPIC_TRIGGER,
                 data: { error: error.message },
             });
             return;
         }
         if (triggerList.length === 0) {
-            logger.info("無 ENABLED Trigger", { topic: "trigger" });
+            logger.debug("無 ENABLED Trigger", { topic: LOG_TOPIC_TRIGGER });
             return;
         }
 
@@ -72,35 +77,46 @@ class TriggerNode extends BaseNodeRuntime {
             }
         }
 
-        logger.info("Trigger 評估完成", {
-            topic: "trigger",
-            data: {
-                scanned: triggerList.length,
-                due: dueCount,
-                fired: firedCount,
-            },
-        });
+        if (firedCount === 0) {
+            logger.debug("Trigger 評估完成", {
+                topic: LOG_TOPIC_TRIGGER,
+                data: {
+                    scanned: triggerList.length,
+                    due: dueCount,
+                    fired: firedCount,
+                },
+            });
+        } else {
+            logger.info("Trigger 評估完成", {
+                topic: LOG_TOPIC_TRIGGER,
+                data: {
+                    scanned: triggerList.length,
+                    due: dueCount,
+                    fired: firedCount,
+                },
+            });
+        }
     }
 
     private async fireTrigger(ctx: NodeLoopContext, trigger: Trigger, now: Date): Promise<boolean> {
         const { loopTraceId, nodeId } = ctx;
-        const { logger } = logManager.withScope(
-            scopeForNodeLoop({ module: "fireTrigger", traceId: loopTraceId, nodeId })
-        );
+        const logger = createLogger({
+            scope: createScope({ module: "fireTrigger", traceId: loopTraceId, labels: { nodeId } }),
+        });
 
         const fireKey = buildFireKey(trigger, now);
         const action = trigger.details.action;
 
         if (action.kind !== "post_task") {
             logger.warn("不支援的 Trigger action", {
-                topic: "trigger",
+                topic: LOG_TOPIC_TRIGGER,
                 data: { triggerId: trigger.id, kind: action.kind },
             });
             return false;
         }
 
         logger.info("Trigger 到期，準備 postTask", {
-            topic: "trigger",
+            topic: LOG_TOPIC_TRIGGER,
             data: {
                 triggerId: trigger.id,
                 triggerKey: trigger.value,
@@ -116,7 +132,7 @@ class TriggerNode extends BaseNodeRuntime {
 
         if (postError) {
             logger.error("Trigger postTask 失敗", {
-                topic: "trigger",
+                topic: LOG_TOPIC_TRIGGER,
                 data: {
                     triggerId: trigger.id,
                     fireKey,
@@ -135,7 +151,7 @@ class TriggerNode extends BaseNodeRuntime {
 
         if (patchError) {
             logger.warn("Trigger 已 postTask 但更新 lastFireKey 失敗", {
-                topic: "trigger",
+                topic: LOG_TOPIC_TRIGGER,
                 data: {
                     triggerId: trigger.id,
                     taskId: task?.id,
@@ -147,7 +163,7 @@ class TriggerNode extends BaseNodeRuntime {
         }
 
         logger.success("Trigger 觸發成功", {
-            topic: "trigger",
+            topic: LOG_TOPIC_TRIGGER,
             data: {
                 triggerId: trigger.id,
                 triggerKey: trigger.value,

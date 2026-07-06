@@ -51,9 +51,36 @@ export type {
 	RestoreParcelByIdResult,
 } from "./parcel/parcel.service";
 
-export * from "./service/base.interface";
-export * from "./service/service.interface";
-export * from "./service/api.interface";
+export {
+	postApi,
+	postApiSchema,
+	getApi,
+	getApiSchema,
+	postService,
+	postServiceSchema,
+	getService,
+	getServiceSchema,
+	apiDetailsSchema,
+	serviceDetailsSchema,
+	serviceLifecycleSchema,
+	fieldDefinitionSchema,
+	schemaDefinitionSchema,
+	discoverService,
+	CategoryService,
+	ApiMethod,
+	ServiceLifecycleStatus,
+} from "./service/index";
+export type {
+	PostApiPayload,
+	GetApiPayload,
+	PostServicePayload,
+	GetServicePayload,
+	DiscoverServiceInput,
+	Api,
+	ApiDetails,
+	Service,
+	ServiceDetails,
+} from "./service/index";
 
 export * from "./link/link.interface";
 export * from "./link/link.api";
@@ -90,3 +117,6 @@ export * from "./node/node.api";
 
 export * from "./repo/repo.interface";
 export * from "./repo/repo.api";
+
+export { createLogger, logManager, LogLevel } from "./shared/log";
+export type { CreateLoggerInput, LoggerWithScope, LogScope, LogScopePatch } from "./shared/log";

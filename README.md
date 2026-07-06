@@ -91,6 +91,69 @@ await supabase.initialize({
 const target = await getTarget({ id: "..." });
 ```
 
+### Service catalog
+
+Register and discover HTTP-backed services and their Api capabilities in Supabase Target rows.
+
+```typescript
+import {
+  postApi,
+  postService,
+  getService,
+  getApi,
+  discoverService,
+  ApiMethod,
+  ServiceLifecycleStatus,
+} from "target-supabase-sdk";
+
+// Register an Api capability
+await postApi({
+  name: "Upload Chunk",
+  value: "storage.post.chunk.0",
+  tagList: [],
+  details: {
+    method: ApiMethod.POST,
+    path: "/v0/chunks",
+    endpoint: "http://localhost:3100/v0/chunks",
+    request: { query: [] },
+    response: { "200": [] },
+    manifestVersion: 0,
+    lifecycle: {
+      status: ServiceLifecycleStatus.ACTIVE,
+      activeSince: "2026-01-01",
+      deprecatedAt: null,
+      sunsetAt: null,
+    },
+  },
+});
+
+// Register a Service that references Api keys
+await postService({
+  name: "Storage Service",
+  value: "storage-service",
+  tagList: [],
+  details: {
+    manifestVersion: 0,
+    apiKeys: ["storage.post.chunk.0"],
+    dependencies: [],
+    lifecycle: { /* same shape as Api */ },
+  },
+});
+
+// Discover — only returns ACTIVE services
+const { data: service } = await discoverService({ value: "storage-service" });
+```
+
+| API | Description |
+|-----|-------------|
+| `postApi` / `getApi` | Create or fetch Api Target rows |
+| `postService` / `getService` | Create or fetch Service Target rows (`getService` optional `lifecycleStatus` filter) |
+| `discoverService` | Resolve a single ACTIVE service by `value`; errors: `SERVICE_NOT_FOUND`, `SERVICE_NOT_AVAILABLE` |
+
+Types: `Service`, `Api`, `ApiDetails` (`method`, `path`, `endpoint`, `request`, `response`), `FieldDefinition` for inline schemas.
+
+**Example consumer:** [`../storage-service`](../storage-service) — Express server that bootstraps catalog rows on startup and serves chunk upload/download.
+
 ## Adding new modules (contributors)
 
 When adding a domain, API, or Manager, **classify browser vs Node before** registering exports. The default entry must stay bundler-safe (Chrome extensions, Webpack, Vite).

@@ -21,8 +21,14 @@ Do not claim plaintext sharding provides secrecy. Do not claim encryption alone 
 ## Crypto pipeline (current implementation)
 
 ```text
-plaintext ──AES-GCM-256 (whole file, single IV)──► ciphertext ──fixed-size split──► chunks
+plaintext ──AES-GCM-256 (whole file, single IV)──► ciphertext + 16B auth tag ──size-aware split──► chunks
 ```
+
+**Default chunk sizing** (`resolveChunkSize`, no explicit `chunkSize`):
+- Split target size = plaintext bytes, or **plaintext + 16** when encrypting (GCM tag)
+- Payload ≤ 50 MB → at most **2** chunks
+- Payload > 50 MB → ~16 MB per chunk, max **64** chunks
+- `CreateOptions.chunkSize` overrides
 
 - Passphrase → PBKDF2-SHA256 (100k iter) + per-parcel `salt` → AES key (`details.crypto`).
 - Raw key mode: `encrypt` without passphrase; caller persists `CreateResult.key` (e.g. `.parcel.key.jwk`).

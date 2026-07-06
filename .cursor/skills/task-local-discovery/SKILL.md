@@ -279,3 +279,4 @@ Caches: bootstrap fingerprint; module import cache; remote context cache by `tas
 - [sdk-error-handling](../sdk-error-handling/SKILL.md) — throw vs envelope at boundaries
 - [task-state-machine](../task-state-machine/SKILL.md) — `patchClaimTask`, claim flow
 - [singleton-pitfalls](../singleton-pitfalls/SKILL.md) — `SupabaseInitializer` before remote bootstrap
+- [single-flight](../single-flight/SKILL.md) — `bootstrapLocalTasks` concurrent dedupe pattern

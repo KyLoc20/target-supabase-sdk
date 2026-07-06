@@ -1,7 +1,7 @@
 import { createTarget, scanTargetList, updateTargetDetails, validateWithSchema } from "../core.api";
 import { generateResponse, type SupabaseResponse } from "../core.interface";
 import { TaskStatus } from "../task/task.interface";
-import { createApiLogger } from "../shared/log";
+import { createLogger } from "../shared/log";
 import { z } from "zod";
 import {
     CategoryTrigger,
@@ -65,7 +65,7 @@ export const scanEnabledTriggers = validateWithSchema(
     scanEnabledTriggersSchema,
     "scanEnabledTriggersSchema"
 )(async ({ traceId }) => {
-    const logger = createApiLogger("scanEnabledTriggers", { traceId });
+    const logger = createLogger({ module: "scanEnabledTriggers", traceId });
 
     try {
         const { data: triggerList } = await scanTargetList<Trigger>({
@@ -75,7 +75,7 @@ export const scanEnabledTriggers = validateWithSchema(
         });
 
         const rows = triggerList ?? [];
-        logger.info("已掃描 ENABLED Trigger", {
+        logger.debug("已掃描 ENABLED Trigger", {
             topic: "trigger",
             data: { count: rows.length },
         });
@@ -92,7 +92,7 @@ export const postTrigger = validateWithSchema(
     postTriggerSchema,
     "postTriggerSchema"
 )(async ({ name, value, status, schedule, action, tagList, traceId }) => {
-    const logger = createApiLogger("postTrigger", { traceId });
+    const logger = createLogger({ module: "postTrigger", traceId });
 
     const details = {
         manifestVersion: 0,
@@ -130,7 +130,7 @@ export const patchTriggerFired = validateWithSchema(
     patchTriggerFiredSchema,
     "patchTriggerFiredSchema"
 )(async ({ triggerId, fireKey, expectedLastFireKey, traceId }) => {
-    const logger = createApiLogger("patchTriggerFired", { traceId });
+    const logger = createLogger({ module: "patchTriggerFired", traceId });
     const now = Date.now();
 
     try {

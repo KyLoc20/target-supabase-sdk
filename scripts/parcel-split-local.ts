@@ -16,7 +16,7 @@ function printUsage(): void {
 
 Options:
   --file <path>         Local file to split (required)
-  --chunk-size <bytes>  Chunk size in bytes (default: 2097152 = 2MB)
+  --chunk-size <bytes>  Override auto chunk size (default: dynamic by file size)
   --encrypt             Encrypt before chunking (optional)
   --passphrase <text>   Encryption passphrase (e.g. apple); implies --encrypt
   --help                Show this help

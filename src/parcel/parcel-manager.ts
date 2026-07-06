@@ -2,12 +2,21 @@ import { type TargetDraft } from "../core.interface";
 import { CategoryParcel, type Chunk, type Parcel, type ParcelCrypto, type ParcelDetails } from "./parcel.interface";
 
 const MANIFEST_VERSION = 1;
-const DEFAULT_CHUNK_SIZE = 2 * 1024 * 1024; // 2MB
+const DEFAULT_CHUNK_SIZE = 2 * 1024 * 1024; // 2MB — fallback for empty input only
+const MB = 1024 * 1024;
+/** Source files at or below this size use at most 2 chunks */
+const SMALL_FILE_MAX_BYTES = 50 * MB;
+/** Target per-chunk size for larger files */
+const PREFERRED_CHUNK_BYTES = 16 * MB;
+/** Cap chunk count for very large files */
+const MAX_CHUNK_COUNT = 64;
 const AES_GCM_ALGORITHM = "AES-GCM-256";
 const KEY_DERIVATION_PBKDF2 = "PBKDF2-SHA256";
 const PBKDF2_ITERATIONS = 100_000;
 const AES_GCM_IV_LENGTH = 12;
 const AES_GCM_TAG_LENGTH = 128;
+/** Auth tag bytes Web Crypto appends to AES-GCM ciphertext */
+const AES_GCM_AUTH_TAG_BYTES = AES_GCM_TAG_LENGTH / 8;
 
 /** @deprecated Legacy IV in Target.extra — read only for old parcels */
 const LEGACY_EXTRA_IV_KEY = "iv";
@@ -20,7 +29,10 @@ export interface StorageAdapter {
 }
 
 export interface CreateOptions {
-  /** Bytes per chunk after split (plaintext or ciphertext). Default 2MB */
+  /**
+   * Bytes per chunk after split (plaintext or ciphertext).
+   * When omitted, derived from source file size — see {@link resolveChunkSize}.
+   */
   chunkSize?: number;
   /**
    * When `true`, encrypt the whole file before chunking.
@@ -201,6 +213,39 @@ async function buildChunkList(
   return { chunks, chunkList };
 }
 
+/**
+ * Derive per-chunk byte size from the buffer that will be split.
+ *
+ * | Payload size | Policy |
+ * |--------------|--------|
+ * | ≤ 50 MB | At most **2** chunks (`ceil(size / 2)` per chunk) |
+ * | > 50 MB | Target ~16 MB per chunk; chunk count capped at **64** |
+ *
+ * For encrypted parcels, pass plaintext size + {@link AES_GCM_AUTH_TAG_BYTES}
+ * (GCM auth tag is appended before split).
+ *
+ * Explicit `chunkSize` in {@link CreateOptions} overrides this table.
+ */
+function resolveChunkSize(fileSize: number, override?: number): number {
+  if (override != null) {
+    if (!Number.isFinite(override) || override <= 0) {
+      throw new Error("ParcelManager.create: chunkSize must be a positive number");
+    }
+    return override;
+  }
+  if (fileSize <= 0) {
+    return DEFAULT_CHUNK_SIZE;
+  }
+  if (fileSize <= SMALL_FILE_MAX_BYTES) {
+    return Math.ceil(fileSize / 2);
+  }
+  const targetChunks = Math.min(
+    MAX_CHUNK_COUNT,
+    Math.max(2, Math.ceil(fileSize / PREFERRED_CHUNK_BYTES))
+  );
+  return Math.ceil(fileSize / targetChunks);
+}
+
 function concatBuffers(buffers: ArrayBuffer[]): ArrayBuffer {
   const total = buffers.reduce((sum, buffer) => sum + buffer.byteLength, 0);
   const merged = new Uint8Array(total);
@@ -250,8 +295,11 @@ function resolveCrypto(details: ParcelDetails, parcelExtra?: string): ParcelCryp
  * Split a file into chunks. Default: plaintext shards; optional whole-file AES-GCM before split.
  */
 async function create(file: ArrayBuffer, options: CreateOptions = {}): Promise<CreateResult> {
-  const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
   const encryptEnabled = options.encrypt === true;
+  const splitPayloadSize = encryptEnabled
+    ? file.byteLength + AES_GCM_AUTH_TAG_BYTES
+    : file.byteLength;
+  const chunkSize = resolveChunkSize(splitPayloadSize, options.chunkSize);
   const plaintextChecksum = await sha256Hex(file);
 
   if (!encryptEnabled) {

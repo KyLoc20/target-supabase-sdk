@@ -2,18 +2,28 @@ import { MAX_POLL_TARGET_LIST_SIZE } from "../core.api";
 import { getPollCommandList } from "../command/command.api";
 import { CommandType } from "../command/command.interface";
 import {
-    applyScopePatch,
-    createChildScope,
-    createRootScope,
+    createScope,
+    createLogger,
     logManager,
+    LogLevel,
+    patchScope,
     type LoggerWithScope,
     type LogScope,
 } from "../shared/log";
-import { scopeForNodeLoop } from "./node-log-scope";
 import { getErrorMessage } from "../shared/utils/error.utils";
 import { patchChangeNodeStatus, patchNodeHeartBeat, patchStopNode, postRegisterNode } from "./node.api";
-import { NodeLoopContext, NodeStatus } from "./node.interface";
+import { NodeStatus } from "./node.interface";
 import { formatHeartbeat, getRandomInterval } from "./node.utils";
+
+/** 主循环单轮运行时上下文 — 由 start() 创建并向下传递 */
+export interface NodeLoopContext {
+    loopTraceId: string;
+    nodeId: string;
+}
+
+const LOG_TOPIC_NODE = "node";
+const LOG_TOPIC_COMMAND = "command";
+const LOG_TOPIC_PROCESS = "process";
 
 /**
  * Shared node process runtime: bootstrap, main-loop frame, heartbeat, commands, shutdown.
@@ -21,6 +31,8 @@ import { formatHeartbeat, getRandomInterval } from "./node.utils";
  */
 abstract class BaseNodeRuntime {
     protected static readonly HEARTBEAT_FAILURE_THRESHOLD = 3;
+    /** Log `nodeId` label while startup has not yet received an assigned id from Supabase. */
+    private static readonly NODE_ID_PENDING_ASSIGNMENT = "pending-node-id";
 
     protected readonly runtimeModule: string;
 
@@ -53,10 +65,10 @@ abstract class BaseNodeRuntime {
 
     protected constructor(runtimeModule: string) {
         this.runtimeModule = runtimeModule;
-        this.isRunning = true;
+        this.isRunning = false;
         this.loopCount = 0;
         this.startupTraceId = logManager.generateTraceId();
-        this.startupScope = createRootScope({ module: runtimeModule, traceId: this.startupTraceId });
+        this.startupScope = createScope({ module: runtimeModule, traceId: this.startupTraceId });
     }
 
     /** Hook: task registration, trigger config load, etc. Throw to abort bootstrap. */
@@ -65,8 +77,13 @@ abstract class BaseNodeRuntime {
     /** Hook: one iteration body after commands + heartbeat gate. */
     protected abstract runLoopSteps(ctx: NodeLoopContext, heartbeatOk: boolean): Promise<void>;
 
+    /** Hook: minimum log level for main-loop scoped loggers (heartbeat, batchCommand, iteration). */
+    protected loopLoggerMinLevel(): LogLevel {
+        return LogLevel.INFO;
+    }
+
     private getLogNodeId(): string {
-        return this.localNodeId ?? "bootstrap";
+        return this.localNodeId ?? BaseNodeRuntime.NODE_ID_PENDING_ASSIGNMENT;
     }
 
     protected isShuttingDown(): boolean {
@@ -79,17 +96,17 @@ abstract class BaseNodeRuntime {
 
     private registerProcessLifecycle(logger: LoggerWithScope): void {
         process.on("SIGTERM", () => {
-            logger.warn("收到 SIGTERM 信號，準備關閉節點", { topic: "process" });
+            logger.warn("收到 SIGTERM 信號，準備關閉節點", { topic: LOG_TOPIC_PROCESS });
             this.requestShutdown("SIGTERM");
         });
         process.on("SIGINT", () => {
-            logger.warn("收到 SIGINT 信號，準備關閉節點", { topic: "process" });
+            logger.warn("收到 SIGINT 信號，準備關閉節點", { topic: LOG_TOPIC_PROCESS });
             this.requestShutdown("SIGINT");
         });
         process.on("uncaughtException", (error) => {
             if (this.shutdownPromise != null) {
-                logger.critical("shutdown 進行中發生未捕獲異常", {
-                    topic: "process",
+                logger.critical("shutdown 進行中發生未捕獲異常，立即關閉節點", {
+                    topic: LOG_TOPIC_PROCESS,
                     data: {
                         name: error.name,
                         message: error.message,
@@ -99,8 +116,8 @@ abstract class BaseNodeRuntime {
                 process.exit(1);
                 return;
             }
-            logger.error("未捕獲的異常，準備關閉節點", {
-                topic: "process",
+            logger.critical("未捕獲的異常，準備關閉節點", {
+                topic: LOG_TOPIC_PROCESS,
                 data: {
                     name: error.name,
                     message: error.message,
@@ -112,7 +129,7 @@ abstract class BaseNodeRuntime {
         process.on("unhandledRejection", (reason) => {
             if (this.shutdownPromise != null) {
                 logger.error("shutdown 進行中發生未處理的 Promise 拒絕", {
-                    topic: "process",
+                    topic: LOG_TOPIC_PROCESS,
                     data: {
                         reason: getErrorMessage(reason),
                         stack: reason instanceof Error ? reason.stack : undefined,
@@ -121,7 +138,7 @@ abstract class BaseNodeRuntime {
                 return;
             }
             logger.error("未處理的 Promise 拒絕，準備關閉節點", {
-                topic: "process",
+                topic: LOG_TOPIC_PROCESS,
                 data: {
                     reason: getErrorMessage(reason),
                     stack: reason instanceof Error ? reason.stack : undefined,
@@ -140,12 +157,12 @@ abstract class BaseNodeRuntime {
     }
 
     private async runStart(): Promise<void> {
-        const { logger } = logManager.withScope(
-            applyScopePatch(this.startupScope, { labels: { nodeId: this.getLogNodeId() } })
-        );
+        const logger = createLogger({
+            scope: patchScope({ scope: this.startupScope, patch: { labels: { nodeId: this.getLogNodeId() } } }),
+        });
 
-        logger.info("節點進程啟動中", {
-            topic: "node",
+        logger.debug("節點進程啟動中", {
+            topic: LOG_TOPIC_NODE,
             data: {
                 pid: process.pid,
                 env: process.env.NODE_ENV ?? "development",
@@ -158,14 +175,14 @@ abstract class BaseNodeRuntime {
             await this.onBeforeRegisterNode(logger);
         } catch (error) {
             logger.error("節點啟動前置步驟失敗", {
-                topic: "node",
+                topic: LOG_TOPIC_NODE,
                 data: { error: getErrorMessage(error) },
             });
             this.requestShutdown("bootstrap:pre-register");
             return;
         }
 
-        logger.info("開始向 Supabase 註冊節點", { topic: "node" });
+        logger.debug("開始向 Supabase 註冊節點", { topic: LOG_TOPIC_NODE });
         try {
             const { data, error } = await postRegisterNode({ traceId: this.startupTraceId });
             if (data == null || error) {
@@ -174,7 +191,7 @@ abstract class BaseNodeRuntime {
             this.localNodeId = data.id;
             logger.resetScope({ labels: { nodeId: data.id } });
             logger.success("節點註冊成功", {
-                topic: "node",
+                topic: LOG_TOPIC_NODE,
                 data: {
                     nodeId: data.id,
                     details: data.details,
@@ -182,7 +199,7 @@ abstract class BaseNodeRuntime {
             });
         } catch (error) {
             logger.error("節點註冊失敗", {
-                topic: "node",
+                topic: LOG_TOPIC_NODE,
                 data: { error: getErrorMessage(error) },
             });
             this.requestShutdown("bootstrap:register-node");
@@ -190,7 +207,7 @@ abstract class BaseNodeRuntime {
         }
 
         const nodeId = this.localNodeId!;
-        logger.info("節點準備進入主循環", { topic: "node" });
+        logger.debug("節點準備進入主循環", { topic: LOG_TOPIC_NODE });
         const { error: enterBusyError } = await patchChangeNodeStatus({
             nodeId,
             status: NodeStatus.BUSY,
@@ -199,54 +216,62 @@ abstract class BaseNodeRuntime {
         });
         if (enterBusyError) {
             logger.error("節點進入主循環失敗，無法更新節點狀態為 BUSY", {
-                topic: "node",
+                topic: LOG_TOPIC_NODE,
                 data: { error: enterBusyError.message },
             });
             this.requestShutdown("bootstrap:enter-busy");
             return;
         }
-        logger.info("節點狀態已設為 BUSY，進入主循環", { topic: "node", data: { nodeId } });
+        logger.debug("節點狀態已設為 BUSY 進入主循環", { topic: LOG_TOPIC_NODE, data: { nodeId } });
+        await this.runLoop(nodeId);
+    }
+
+    private async runLoop(nodeId: string): Promise<void> {
+        this.isRunning = true;
 
         while (this.isRunning) {
             this.loopCount++;
             const loopTraceId = logManager.generateTraceId();
-            const loopScope = createChildScope({
+            const loopScope = createScope({
                 module: `${this.runtimeModule}-loop-iteration`,
-                parent: applyScopePatch(this.startupScope, { labels: { nodeId } }),
                 traceId: loopTraceId,
+                labels: { nodeId },
             });
             const loopCtx: NodeLoopContext = { loopTraceId, nodeId };
-            const { logger: iterLogger } = logManager.withScope(loopScope);
+            const iterLogger = createLogger({
+                scope: loopScope,
+                minLevel: this.loopLoggerMinLevel(),
+            });
 
-            iterLogger.info(`主循環第 ${this.loopCount} 輪開始`, {
-                topic: "node",
+            iterLogger.debug(`主循環第 ${this.loopCount} 輪開始`, {
+                topic: LOG_TOPIC_NODE,
                 data: { nodeId, loopCount: this.loopCount },
             });
             try {
                 await this.batchCommand(loopCtx);
                 if (this.isShuttingDown()) {
-                    iterLogger.info("節點關閉中，跳過本輪剩餘步驟", { topic: "node" });
+                    iterLogger.debug("節點關閉中，跳過本輪剩餘步驟", { topic: LOG_TOPIC_NODE });
                     break;
                 }
                 const heartbeatOk = await this.heartbeat(loopCtx);
                 if (this.isShuttingDown()) {
-                    iterLogger.info("節點關閉中，跳過本輪剩餘步驟", { topic: "node" });
+                    iterLogger.debug("節點關閉中，跳過本輪剩餘步驟", { topic: LOG_TOPIC_NODE });
                     break;
                 }
                 await this.runLoopSteps(loopCtx, heartbeatOk);
             } catch (error) {
                 iterLogger.critical(`主循環第 ${this.loopCount} 輪遇到未知錯誤`, {
-                    topic: "node",
+                    topic: LOG_TOPIC_NODE,
                     data: { error: getErrorMessage(error) },
                 });
             }
             if (this.isShuttingDown()) {
-                iterLogger.debug("節點關閉中，跳過等待間隔", { topic: "node" });
+                iterLogger.debug("節點關閉中，跳過等待間隔", { topic: LOG_TOPIC_NODE });
                 break;
             }
             const interval = getRandomInterval();
             iterLogger.debug(`主循環第 ${this.loopCount} 輪完成，等待下一輪`, {
-                topic: "node",
+                topic: LOG_TOPIC_NODE,
                 data: { intervalMs: interval },
             });
             await new Promise((resolve) => setTimeout(resolve, interval));
@@ -255,11 +280,11 @@ abstract class BaseNodeRuntime {
 
     async shutdown(options?: { trigger?: string }): Promise<void> {
         if (this.shutdownPromise != null) {
-            const { logger } = logManager.withScope(
-                applyScopePatch(this.startupScope, { labels: { nodeId: this.getLogNodeId() } })
-            );
+            const logger = createLogger({
+                scope: patchScope({ scope: this.startupScope, patch: { labels: { nodeId: this.getLogNodeId() } } }),
+            });
             logger.debug("shutdown 已在進行，跳過重複調用", {
-                topic: "node",
+                topic: LOG_TOPIC_NODE,
                 data: { trigger: options?.trigger ?? "unknown" },
             });
             return this.shutdownPromise;
@@ -267,11 +292,11 @@ abstract class BaseNodeRuntime {
 
         this.isRunning = false;
         this.shutdownPromise = this.runShutdown(options?.trigger).catch((error) => {
-            const { logger } = logManager.withScope(
-                applyScopePatch(this.startupScope, { labels: { nodeId: this.getLogNodeId() } })
-            );
+            const logger = createLogger({
+                scope: patchScope({ scope: this.startupScope, patch: { labels: { nodeId: this.getLogNodeId() } } }),
+            });
             logger.error("shutdown 流程異常", {
-                topic: "node",
+                topic: LOG_TOPIC_NODE,
                 data: {
                     trigger: options?.trigger ?? "explicit",
                     error: getErrorMessage(error),
@@ -283,22 +308,22 @@ abstract class BaseNodeRuntime {
     }
 
     private async runShutdown(trigger?: string): Promise<void> {
-        const { logger } = logManager.withScope(
-            applyScopePatch(this.startupScope, { labels: { nodeId: this.getLogNodeId() } })
-        );
+        const logger = createLogger({
+            scope: patchScope({ scope: this.startupScope, patch: { labels: { nodeId: this.getLogNodeId() } } }),
+        });
 
-        logger.info("正在關閉節點進程", {
-            topic: "node",
+        logger.debug("正在關閉節點進程", {
+            topic: LOG_TOPIC_NODE,
             data: { trigger: trigger ?? "explicit" },
         });
 
         if (this.localNodeId == null) {
-            logger.info("本地節點未註冊，直接退出", { topic: "node" });
+            logger.warn("本地節點未註冊，進程退出", { topic: LOG_TOPIC_NODE });
             process.exit(0);
             return;
         }
 
-        logger.info("正在登出節點", { topic: "node", data: { nodeId: this.localNodeId } });
+        logger.debug("正在登出節點", { topic: LOG_TOPIC_NODE, data: { nodeId: this.localNodeId } });
         try {
             const { error } = await patchStopNode({
                 nodeId: this.localNodeId,
@@ -307,30 +332,29 @@ abstract class BaseNodeRuntime {
             if (error) {
                 throw new Error(`patchStopNode 失敗: ${error.message}`);
             }
-            logger.success("節點已登出", { topic: "node" });
+            logger.success("節點正常關閉，進程退出", { topic: LOG_TOPIC_NODE });
         } catch (error) {
-            logger.critical("登出節點失敗", {
-                topic: "node",
+            logger.critical("登出節點失敗，進程退出", {
+                topic: LOG_TOPIC_NODE,
                 data: { error: getErrorMessage(error) },
             });
         } finally {
-            logger.info("節點進程退出", { topic: "node" });
             process.exit(0);
         }
     }
 
     async heartbeat(ctx: NodeLoopContext): Promise<boolean> {
         const { loopTraceId, nodeId } = ctx;
-        const { logger } = logManager.withScope(
-            scopeForNodeLoop({
+        const logger = createLogger({
+            scope: createScope({
                 module: "heartbeat",
                 traceId: loopTraceId,
-                nodeId,
-                traceParentId: this.startupTraceId,
-            })
-        );
+                labels: { nodeId },
+            }),
+            minLevel: this.loopLoggerMinLevel(),
+        });
 
-        logger.info("開始發送心跳", { topic: "node" });
+        logger.debug("開始發送心跳", { topic: LOG_TOPIC_NODE });
         let error: { message: string } | undefined;
         let lastHeartBeat: number | null | undefined;
         try {
@@ -351,19 +375,19 @@ abstract class BaseNodeRuntime {
             };
             if (failureCount >= BaseNodeRuntime.HEARTBEAT_FAILURE_THRESHOLD) {
                 logger.critical("連續心跳失敗達上限，準備關閉節點", {
-                    topic: "node",
+                    topic: LOG_TOPIC_NODE,
                     data: logData,
                 });
                 this.requestShutdown("heartbeat:consecutive-failures");
             } else {
-                logger.warn("心跳更新失敗", { topic: "node", data: logData });
+                logger.warn("心跳更新失敗", { topic: LOG_TOPIC_NODE, data: logData });
             }
             return false;
         }
 
         this.consecutiveHeartbeatFailures = 0;
         logger.success("心跳更新成功", {
-            topic: "node",
+            topic: LOG_TOPIC_NODE,
             data: { lastHeartBeat: formatHeartbeat(lastHeartBeat) },
         });
         return true;
@@ -371,54 +395,52 @@ abstract class BaseNodeRuntime {
 
     async batchCommand(ctx: NodeLoopContext): Promise<void> {
         const { loopTraceId, nodeId } = ctx;
-        const { logger } = logManager.withScope(
-            scopeForNodeLoop({
+        const cmdLogger = createLogger({
+            scope: createScope({
                 module: "batchCommand",
                 traceId: loopTraceId,
-                nodeId,
-                traceParentId: this.startupTraceId,
-            })
-        );
+                labels: { nodeId },
+            }),
+            minLevel: this.loopLoggerMinLevel(),
+        });
 
-        logger.debug("開始檢查控制指令", { topic: "node" });
-
+        cmdLogger.debug("開始檢查控制指令", { topic: LOG_TOPIC_COMMAND });
         const { data: commandList = [], error: pollError } = await getPollCommandList({
             nodeId,
             traceId: loopTraceId,
             size: MAX_POLL_TARGET_LIST_SIZE,
         });
         if (pollError) {
-            logger.warn("獲取指令失敗", {
-                topic: "node",
+            cmdLogger.warn("獲取指令失敗", {
+                topic: LOG_TOPIC_COMMAND,
                 data: { error: pollError.message },
             });
             return;
         }
         if (commandList.length === 0) {
-            logger.info("獲取指令數量為 0", { topic: "node" });
+            cmdLogger.debug("獲取指令數量為0 無需執行", { topic: LOG_TOPIC_COMMAND });
             return;
         }
-
-        logger.info("獲取到控制指令", {
-            topic: "node",
-            data: { count: commandList.length },
+        cmdLogger.debug(`獲取到控制指令數量為${commandList.length}`, {
+            topic: LOG_TOPIC_COMMAND,
+            data: { count: commandList.length, commandList: commandList.map((command) => command.name) },
         });
 
         for (const command of commandList) {
             const cmd = command.name;
-            logger.info("執行控制指令", {
-                topic: "node",
+            cmdLogger.info("執行控制指令", {
+                topic: LOG_TOPIC_COMMAND,
                 data: { commandId: command.id, cmd },
             });
             try {
-                await this.executeCommand(cmd);
-                logger.success("控制指令執行成功", {
-                    topic: "node",
+                await this.executeCommand(cmd, ctx);
+                cmdLogger.success("控制指令執行成功", {
+                    topic: LOG_TOPIC_COMMAND,
                     data: { commandId: command.id, cmd },
                 });
             } catch (error) {
-                logger.warn("控制指令執行失敗", {
-                    topic: "node",
+                cmdLogger.warn("控制指令執行失敗", {
+                    topic: LOG_TOPIC_COMMAND,
                     data: {
                         commandId: command.id,
                         cmd,
@@ -428,22 +450,26 @@ abstract class BaseNodeRuntime {
             }
         }
 
-        logger.info("控制指令批次處理完成", {
-            topic: "node",
-            data: { totalDequeued: commandList.length },
+        cmdLogger.debug("控制指令批次處理完成", {
+            topic: LOG_TOPIC_COMMAND,
         });
     }
 
-    async executeCommand(cmd: CommandType): Promise<void> {
-        switch (cmd) {
-            case CommandType.STOP_NODE:
-                this.requestShutdown("cmd:STOP_NODE");
-                return;
-            default: {
-                const unknownCmd: never = cmd;
-                throw new Error(`無法解析的cmd: ${unknownCmd}`);
-            }
+    /** Shared commands, then {@link resolveNodeCommand} for subclass-specific handling. */
+    protected async executeCommand(cmd: CommandType, ctx: NodeLoopContext): Promise<void> {
+        if (cmd === CommandType.STOP_NODE) {
+            this.requestShutdown("cmd:STOP_NODE");
+            return;
         }
+        await this.resolveNodeCommand(cmd, ctx);
+    }
+
+    /**
+     * Hook: handle node-type-specific {@link CommandType} values.
+     * Default rejects anything not handled in {@link executeCommand}.
+     */
+    protected async resolveNodeCommand(cmd: CommandType, _ctx: NodeLoopContext): Promise<void> {
+        throw new Error(`無法解析的 cmd: ${cmd}`);
     }
 }
 

@@ -142,7 +142,7 @@ Track when improving packaging CI. Check off in PRs that implement each item.
 
 ### P4 — Nice to have
 
-- [ ] **Shared log on browser entry** — only if extension consumers need public `createApiLogger` (today internal-only via `task.api`).
+- [ ] **Shared log on browser entry** — only if extension consumers need public `createLogger` (today internal-only via `task.api`).
 - [ ] **verify-graph unit test** — small fixture `dist/` tree in `scripts/__fixtures__/` for regression on `../` + `index.js` resolution.
 - [ ] **Deep-import guard** — document or lint against `target-supabase-sdk/src/task/index` (package `files` includes `src/`).
 

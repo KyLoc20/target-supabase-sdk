@@ -31,14 +31,15 @@ Apply if **either** condition holds:
 // OK — two params, different types, order obvious
 function withModule(scope: LogScope, module: string): LogScope;
 
-function applyScopePatch(scope: LogScope, patch: LogScopePatch): LogScope;
+// Prefer object param for scope updates
+patchScope({ scope, patch: { labels: { nodeId } } });
 ```
 
 ### Convert to object
 
 ```typescript
 // ❌ Positional — three strings / four params
-function scopeForNodeLoop(
+function createScope(
   module: string,
   traceId: string,
   nodeId: string,
@@ -46,16 +47,25 @@ function scopeForNodeLoop(
 ): LogScope;
 
 // ✅ Options object + named type
-export type ScopeForNodeLoopInput = {
+export type CreateScopeInput = {
   module: string;
   traceId: string;
-  nodeId: string;
+  labels?: Record<string, string>;
   traceParentId?: string | null;
+  parent?: LogScope;
 };
 
-export function scopeForNodeLoop(input: ScopeForNodeLoopInput): LogScope {
-  const { module, traceId, nodeId, traceParentId = null } = input;
-  return createRootScope({ module, traceId, labels: { nodeId }, traceParentId });
+export function createScope(input: CreateScopeInput): LogScope {
+  const { module, parent, traceId, traceParentId, labels } = input;
+  return normalizeScope(
+    {
+      module,
+      traceId,
+      traceParentId: traceParentId ?? (parent != null ? parent.traceId : null),
+      labels: parent != null ? mergeLabels(parent.labels, labels) : mergeLabels(undefined, labels),
+    },
+    { generateTraceId: true }
+  );
 }
 ```
 
@@ -65,9 +75,9 @@ export function scopeForNodeLoop(input: ScopeForNodeLoopInput): LogScope {
 
 | Piece | Pattern | Example |
 |-------|---------|---------|
-| Input type | `{Verb}{Noun}Input` or `{Feature}Input` | `CreateRootScopeInput`, `ScopeForNodeLoopInput` |
-| Parameter name | `input` or `options` | `createRootScope(input)` |
-| Export | Export input type when public / cross-module | `export type CreateChildScopeInput` |
+| Input type | `{Verb}{Noun}Input` or `{Feature}Input` | `CreateScopeInput`, `PatchScopeInput` |
+| Parameter name | `input` or `options` | `createScope(input)` |
+| Export | Export input type when public / cross-module | `export type CreateScopeInput` |
 
 Required fields in the type; optional fields use `?` with defaults inside the function body.
 
@@ -77,9 +87,9 @@ Required fields in the type; optional fields use `?` with defaults inside the fu
 
 | Function | File | Notes |
 |----------|------|-------|
-| `createRootScope` | `src/shared/log/log-scope.ts` | `CreateRootScopeInput` |
-| `createChildScope` | `src/shared/log/log-scope.ts` | `CreateChildScopeInput` — `parent` + string fields |
-| `scopeForNodeLoop` | `src/node/node-log-scope.ts` | Node-domain helper; multiple strings |
+| `createScope` | `src/shared/log/log-scope.ts` | `CreateScopeInput` — optional `parent` links trace + merges labels |
+| `createLogger` | `src/shared/log/create-logger.ts` | `{ module, … }` or `{ scope, minLevel? }` |
+| `patchScope` | `src/shared/log/log-scope.ts` | `PatchScopeInput` — `{ scope, patch }`; trace fields ignored unless `allowTraceMutation: true` |
 | `normalizeScope` | `src/shared/log/log-scope.ts` | Already object + second `options` bag |
 
 ---
@@ -88,17 +98,23 @@ Required fields in the type; optional fields use `?` with defaults inside the fu
 
 ```typescript
 // Named fields at call site — order free, self-documenting
-createChildScope({
+createScope({
   module: `${runtimeModule}-loop-iteration`,
-  parent: startupScope,
   traceId: loopTraceId,
+  labels: { nodeId },
 });
 
-scopeForNodeLoop({
+createScope({
   module: "prepareTask",
-  traceId: taskTraceId,
-  nodeId,
-  traceParentId: loopTraceId,
+  traceId: loopTraceId,
+  labels: { nodeId },
+  traceParentId: task.details.traceId ?? null,
+});
+
+createScope({
+  module: "executeTask",
+  traceId: taskScope.traceId,
+  parent: taskScope,
 });
 ```
 
@@ -133,5 +149,5 @@ scopeForNodeLoop({
 
 | File | Role |
 |------|------|
-| `src/shared/log/log-scope.ts` | `CreateRootScopeInput`, `CreateChildScopeInput` |
-| `src/node/node-log-scope.ts` | `ScopeForNodeLoopInput` |
+| `src/shared/log/log-scope.ts` | `CreateScopeInput`, `PatchScopeInput` |
+| `src/node/node-runtime.base.ts` | Loop scopes via `createScope({ labels: { nodeId } })` |

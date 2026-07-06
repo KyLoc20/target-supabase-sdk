@@ -21,12 +21,19 @@ description: >-
 |------------|----------|
 | Structured log entry | `src/shared/log/log-manager.ts` — `topic`, `module`, `traceId`, `nodeId`, `context`, `extra` |
 | Loop correlation | `BaseNodeRuntime` → `loopTraceId` → claim / prepare / execute / finalize |
-| API traceId | Optional on `task.api`, `node.api`, `command.api`, `trigger.api` via `createApiLogger` |
+| API traceId | Optional on `task.api`, `node.api`, `command.api`, `trigger.api` via `createLogger` |
 | In-memory ring buffer | `LogManager.getHistory()` (default 4096) |
 | Export hook (unused by default) | `LogManager` options `onLog?: (entry) => void` |
 | Task failure context | `TaskNode.finalizeTaskRun` logs `extra`; persisted on task row |
 
 **Gaps:** no centralized log sink, no metrics, worker ↔ sidecar ↔ extension logs not unified, `Task.details.extra` mostly unstructured string.
+
+### LogScope / trace chain
+
+- **`createScope`**: optional `parent` defaults `traceParentId` to `parent.traceId` and merges labels; otherwise pass `traceParentId` explicitly (e.g. task worker: `traceParentId: task.details.traceId ?? null`).
+- **`topic`**: **required** on every `logger.*(message, { topic, … })` call — enforced by types and runtime; no global or logger-level default.
+- **`patchScope`**: default updates `labels` / `module` only; `patch.traceId` and `patch.traceParentId` are **ignored** unless `allowTraceMutation: true`.
+- **`logger.resetScope`**: `LoggerResetScopePatch` only (`module` / `labels`); trace fields cannot change — uses `patchScope` with `allowTraceMutation: false`.
 
 ---
 
@@ -116,7 +123,7 @@ Track status in this section. Mark done when shipped; do not remove items — st
 
 - [singleton-pitfalls](../singleton-pitfalls/SKILL.md) — `LogManager.getInstance({ onLog })`
 - [task-state-machine](../task-state-machine/SKILL.md) — `traceId` on task APIs
-- [sdk-error-handling](../sdk-error-handling/SKILL.md) — `createApiLogger` in APIs
+- [sdk-error-handling](../sdk-error-handling/SKILL.md) — `createLogger` in APIs
 - [auto-chrome-task](../auto-chrome-task/SKILL.md) — cross-process flow (supabase-sdk)
 - `chrome-extension-starter` `.cursor/skills/sdk-bridge-offscreen/SKILL.md` — bridge logs
 
@@ -125,8 +132,9 @@ Track status in this section. Mark done when shipped; do not remove items — st
 | File | Role |
 |------|------|
 | `src/shared/log/log-manager.ts` | LogEntry, onLog, getHistory |
-| `src/shared/log/create-api-logger.ts` | API-scoped loggers |
-| `src/node/task-node.ts` | loopTraceId, finalizeTaskRun extra |
+| `src/shared/log/log-scope.ts` | `createScope`, `patchScope`, `withModule` |
+| `src/shared/log/create-logger.ts` | API-scoped loggers |
+| `src/node/task-node.ts` | loopTraceId, task traceParentId, finalizeTaskRun extra |
 | `src/node/node-runtime.base.ts` | startupTraceId, heartbeat |
 | `scripts/chrome-sidecar-hub.ts` | Hub RPC (needs audit TODO) |
 | `scripts/run-node-worker.ts` | Worker entry (wire onLog here) |
