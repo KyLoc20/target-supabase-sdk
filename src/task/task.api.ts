@@ -1,8 +1,18 @@
-import { getPossibleTarget, QueryFilter, updateTargetDetails, validateWithSchema, isOptimisticLockError, OPTIMISTIC_LOCK_FAILED_MESSAGE } from "../core.api";
+import {
+    getTargetList,
+    isOptimisticLockError,
+    OPTIMISTIC_LOCK_ERROR_CODE,
+    OPTIMISTIC_LOCK_FAILED_MESSAGE,
+    QueryFilter,
+    updateTargetDetails,
+    validateWithSchema,
+} from "../core.api";
 import { generateResponse, type SupabaseResponse } from "../core.interface";
 import { createLogger, type LoggerWithScope } from "../shared/log";
 import { z } from "zod";
 import { CategoryTask, ResultCode, Task, TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
+import { LOG_TOPIC_TASK } from "./task.constants";
+import { getErrorMessage } from "../shared/utils/error.utils";
 
 const TASK_STATUS_FIELD = "details->>status" as const;
 const TASK_NODE_ID_FIELD = "details->>nodeId" as const;
@@ -165,8 +175,8 @@ function logTaskTransition(
     task: Task,
     data?: Record<string, unknown>
 ): void {
-    logger.info("任务状态迁移成功", {
-        topic: "task",
+    logger.debug("任務狀態遷移成功", {
+        topic: LOG_TOPIC_TASK,
         data: {
             action,
             taskId: task.id,
@@ -328,11 +338,11 @@ export const patchTaskProgress = validateWithSchema(
 /**
  * Discover and claim one TODO task for this node.
  *
- * Flow: filter by `availableTaskList` → {@link claimTaskById} (same as `action: CLAIM`).
+ * Flow: oldest TODO in `availableTaskList` (FIFO by `created_at`) → {@link claimTaskById}.
  * Equivalent to `patchChangeTaskStatus({ id, action: CLAIM, nodeId })` when `id` is already known.
  *
  * Returns `data: null` when no TODO task matches.
- * Optimistic lock conflicts return `{ error }` with `code: "OPTIMISTIC_LOCK"` (not thrown).
+ * Optimistic lock conflicts return `{ error, code: OPTIMISTIC_LOCK_ERROR_CODE }` (not thrown).
  */
 export const patchClaimTask = validateWithSchema(
     patchClaimTaskSchema,
@@ -340,30 +350,56 @@ export const patchClaimTask = validateWithSchema(
 )(async ({ nodeId, availableTaskList, traceId }): Promise<SupabaseResponse<Task | null>> => {
     const logger = createLogger({ module: "patchClaimTask", traceId, labels: { nodeId } });
 
+    let todoTask: Task;
     try {
-        const { data: possibleTask } = await getPossibleTarget({
+        const { data: taskCandidates } = await getTargetList<Task>({
+            category: CategoryTask.TASK,
             filterList: [
-                { field: "category", operator: "eq", value: CategoryTask.TASK },
                 { field: TASK_STATUS_FIELD, operator: "eq", value: TaskStatus.TODO },
                 { field: "value", operator: "in", value: availableTaskList },
             ],
+            limit: 1,
+            orderBy: { field: "created_at", ascending: true },
         });
-
+        const possibleTask = taskCandidates?.[0] ?? null;
         if (possibleTask == null) {
             return generateResponse.success(null);
         }
+        todoTask = possibleTask;
+    } catch (error) {
+        const message = getErrorMessage(error);
+        logger.error("獲取 TODO 任務失敗", { topic: LOG_TOPIC_TASK, data: { error: message, availableTaskList } });
+        return generateResponse.error(message) as SupabaseResponse<Task | null>;
+    }
 
-        const todoTask = possibleTask as Task;
+    const taskLogger = createLogger({
+        module: "patchClaimTask",
+        traceId,
+        traceParentId: todoTask.details.traceId,
+        labels: { nodeId },
+    });
+
+    try {
         const data = await claimTaskById({ taskId: todoTask.id, nodeId });
-        logTaskTransition(logger, "patchClaimTask", data);
+        logTaskTransition(taskLogger, "patchClaimTask", data);
         return generateResponse.success(data);
     } catch (error) {
         if (isOptimisticLockError(error)) {
-            logger.debug("認領競爭失敗，本輪無可認領任務", { topic: "task" });
-            return generateResponse.error(OPTIMISTIC_LOCK_FAILED_MESSAGE, undefined, "OPTIMISTIC_LOCK") as SupabaseResponse<Task | null>;
+            taskLogger.debug("認領競爭失敗，任務已被其他節點認領", {
+                topic: LOG_TOPIC_TASK,
+                data: { taskId: todoTask.id, taskTypeKey: todoTask.value },
+            });
+            return generateResponse.error(
+                OPTIMISTIC_LOCK_FAILED_MESSAGE,
+                undefined,
+                OPTIMISTIC_LOCK_ERROR_CODE
+            ) as SupabaseResponse<Task | null>;
         }
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error("認領任務失敗", { topic: "task", data: { error: message } });
+        const message = getErrorMessage(error);
+        taskLogger.error("認領任務失敗", {
+            topic: LOG_TOPIC_TASK,
+            data: { error: message, taskId: todoTask.id, taskTypeKey: todoTask.value },
+        });
         return generateResponse.error(message) as SupabaseResponse<Task | null>;
     }
 });

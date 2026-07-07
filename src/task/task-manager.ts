@@ -32,9 +32,7 @@ import {
 } from "./local-task-registry";
 import type { BootstrapLocalTasksResult } from "./task-repo-context";
 import { TaskRepoValidation, type TaskRepoValidationFailureReason } from "./task-repo-validation";
-
-/** @deprecated use {@link TaskRepoValidationFailureReason} */
-export type PrepareTaskFailureReason = TaskRepoValidationFailureReason;
+import { LOG_TOPIC_TASK } from "./task.constants";
 
 export type {
     TaskRepoValidationFailureReason,
@@ -48,7 +46,7 @@ export interface PrepareTaskResponse {
     taskFn: ExecutableTaskFn | null;
     code?: ResultCode;
     message?: string;
-    reason?: PrepareTaskFailureReason;
+    reason?: TaskRepoValidationFailureReason;
     /** Pipeline step for log aggregation */
     step?: string;
 }
@@ -82,25 +80,25 @@ function logLocalBootstrap(logger: LoggerWithScope, bootstrap: BootstrapLocalTas
     switch (bootstrap.status) {
         case "not_configured":
             logger.info("未找到本地任務配置，跳過本地註冊", {
-                topic: "task",
+                topic: LOG_TOPIC_TASK,
                 data: { message: bootstrap.message },
             });
             break;
         case "failed":
             logger.warn("本地任務註冊失敗", {
-                topic: "task",
+                topic: LOG_TOPIC_TASK,
                 data: { message: bootstrap.message, errors: bootstrap.errors },
             });
             break;
         case "empty":
             logger.info("本地任務掃描完成，無已註冊任務", {
-                topic: "task",
+                topic: LOG_TOPIC_TASK,
                 data: { message: bootstrap.message, skipped: bootstrap.skipped },
             });
             break;
         case "loaded":
             logger.info("本地任務註冊完成", {
-                topic: "task",
+                topic: LOG_TOPIC_TASK,
                 data: {
                     registered: bootstrap.registered,
                     skipped: bootstrap.skipped,
@@ -125,15 +123,15 @@ async function registerTasks({
     local: localOptions,
     includeRemote = true,
 }: RegisterTasksOptions): Promise<RegisterTasksResult> {
-    logger.info("開始註冊任務（本地 + 遠程）", { topic: "task" });
+    logger.debug("開始註冊任務（本地 + 遠程）", { topic: LOG_TOPIC_TASK });
 
     const local = await bootstrapLocalTasks(localOptions ?? {});
     logLocalBootstrap(logger, local);
 
     let remoteValues: string[] = [];
     if (includeRemote) {
-        logger.info("查詢遠程 Repo 列表", {
-            topic: "task",
+        logger.debug("查詢遠程 Repo 列表", {
+            topic: LOG_TOPIC_TASK,
             data: { usage: TASK_REPO_USAGE },
         });
         const { data, error: remoteError } = await getScanRemoteRepoValues({ usage: TASK_REPO_USAGE });
@@ -141,19 +139,19 @@ async function registerTasks({
             throw new Error(remoteError.message);
         }
         remoteValues = data ?? [];
-        logger.info("遠程 Repo 查詢完成", {
-            topic: "task",
+        logger.debug("遠程 Repo 查詢完成", {
+            topic: LOG_TOPIC_TASK,
             data: { count: remoteValues.length, values: remoteValues },
         });
     }
 
     const availableTaskList = [...new Set([...local.registered, ...remoteValues])];
     if (availableTaskList.length === 0) {
-        throw new Error("[registerTasks] 任務註冊失敗：本地與遠程均無可用任務類型");
+        throw new Error("任務註冊失敗：本地與遠程均無可用任務類型");
     }
 
     logger.success("任務註冊完成", {
-        topic: "task",
+        topic: LOG_TOPIC_TASK,
         data: {
             availableTaskList,
             localRegistered: local.registered,
@@ -196,13 +194,13 @@ const prepareTask = async ({
     bootstrapLocalOptions,
 }: PrepareTaskParams): Promise<PrepareTaskResponse> => {
     const fail = (params: {
-        reason: PrepareTaskFailureReason;
+        reason: TaskRepoValidationFailureReason;
         code: ResultCode;
         message: string;
         step: string;
     }): PrepareTaskResponse => {
         logger.warn(params.message, {
-            topic: "task",
+            topic: LOG_TOPIC_TASK,
             data: {
                 taskId: task.id,
                 taskTypeKey: task.value,
@@ -221,8 +219,8 @@ const prepareTask = async ({
     };
 
     const { id: taskId, name: taskName, value: taskTypeKey, details } = task;
-    logger.info(`開始準備任務 ${taskName}-${taskTypeKey}`, {
-        topic: "task",
+    logger.debug(`開始準備任務 ${taskName}-${taskTypeKey}`, {
+        topic: LOG_TOPIC_TASK,
         data: { taskId, taskName, taskTypeKey },
     });
 
@@ -234,7 +232,7 @@ const prepareTask = async ({
             forTaskTypeKey: taskTypeKey,
         });
         logger.debug("本地 registry 未命中，補掃本地任務", {
-            topic: "task",
+            topic: LOG_TOPIC_TASK,
             data: {
                 taskId,
                 taskTypeKey,
@@ -264,8 +262,8 @@ const prepareTask = async ({
 
     const { repoContext } = validation;
 
-    logger.info("Repo 上下文加載成功", {
-        topic: "task",
+    logger.debug("Repo 上下文加載成功", {
+        topic: LOG_TOPIC_TASK,
         data: {
             taskTypeKey,
             taskFnDisplayName: repoContext.taskFn.displayName,
@@ -274,8 +272,8 @@ const prepareTask = async ({
     });
 
     const boundTaskFn = bindTaskFn(repoContext.taskFn, taskParams);
-    logger.success("任務準備完成", {
-        topic: "task",
+    logger.debug("任務準備完成", {
+        topic: LOG_TOPIC_TASK,
         data: {
             taskId,
             taskTypeKey,

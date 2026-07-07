@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { TriggerNode } from "../src/node/trigger-node.js";
+import { TriggerNode } from "../src/trigger/trigger-node.js";
 import { initSupabaseFromEnv } from "./init-supabase.js";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));

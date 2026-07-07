@@ -21,7 +21,7 @@ export interface NodeLoopContext {
     nodeId: string;
 }
 
-const LOG_TOPIC_NODE = "node";
+export const LOG_TOPIC_NODE = "node";
 const LOG_TOPIC_COMMAND = "command";
 const LOG_TOPIC_PROCESS = "process";
 

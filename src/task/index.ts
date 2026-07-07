@@ -32,7 +32,6 @@ export type { PostTaskPayload } from "./task-post.api";
 // task-manager
 export { TaskManager } from "./task-manager";
 export type {
-	PrepareTaskFailureReason,
 	PrepareTaskParams,
 	PrepareTaskResponse,
 	RegisterTasksOptions,

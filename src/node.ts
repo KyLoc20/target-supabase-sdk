@@ -8,7 +8,6 @@ export * from "./browser";
 
 export { TaskManager } from "./task/task-manager";
 export type {
-	PrepareTaskFailureReason,
 	PrepareTaskParams,
 	PrepareTaskResponse,
 	RegisterTasksOptions,
@@ -51,8 +50,8 @@ export type {
 
 export { RepoManager } from "./repo/repo-manager";
 
-export { TaskNode } from "./node/task-node";
-export { TriggerNode } from "./node/trigger-node";
+export { TaskNode } from "./task/task-node";
+export { TriggerNode } from "./trigger/trigger-node";
 export { BaseNodeRuntime } from "./node/node-runtime.base";
 
 export * from "./command/command.interface";

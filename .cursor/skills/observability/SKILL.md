@@ -134,7 +134,7 @@ Track status in this section. Mark done when shipped; do not remove items — st
 | `src/shared/log/log-manager.ts` | LogEntry, onLog, getHistory |
 | `src/shared/log/log-scope.ts` | `createScope`, `patchScope`, `withModule` |
 | `src/shared/log/create-logger.ts` | API-scoped loggers |
-| `src/node/task-node.ts` | loopTraceId, task traceParentId, finalizeTaskRun extra |
+| `src/task/task-node.ts` | loopTraceId, task traceParentId, finalizeTaskRun extra |
 | `src/node/node-runtime.base.ts` | startupTraceId, heartbeat |
 | `scripts/chrome-sidecar-hub.ts` | Hub RPC (needs audit TODO) |
 | `scripts/run-node-worker.ts` | Worker entry (wire onLog here) |

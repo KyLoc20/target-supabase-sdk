@@ -153,7 +153,7 @@ Node entry re-exports:
 export { postTask, postTaskSchema } from "./task/task-post.api";
 ```
 
-Internal Node callers (`trigger-node.ts`, `scripts/post-task.ts`) import from `../task/task-post.api`.
+Internal Node callers import from `../task/task-post.api` (e.g. `trigger/trigger-node.ts`, `scripts/post-task.ts`).
 
 ---
 

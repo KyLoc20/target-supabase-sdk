@@ -546,6 +546,16 @@ export const updateTargetDetails = async <T, D>({
 export const OPTIMISTIC_LOCK_FAILED_MESSAGE =
   "[updateTargetDetails] Optimistic lock failed: target no longer matches expected state.";
 
+export const OPTIMISTIC_LOCK_ERROR_CODE = "OPTIMISTIC_LOCK" as const;
+
+export function isOptimisticLockError(error: unknown): boolean {
+  return error instanceof Error && error.message === OPTIMISTIC_LOCK_FAILED_MESSAGE;
+}
+
+export function isOptimisticLockResponse(error: { code?: string } | null | undefined): boolean {
+  return error?.code === OPTIMISTIC_LOCK_ERROR_CODE;
+}
+
 export const CREATE_TARGET_ALREADY_EXISTS_MESSAGE = "[createTarget] Target already exists";
 
 const CREATE_TARGET_REDUNDANCY_MISMATCH_MESSAGE =
@@ -553,10 +563,6 @@ const CREATE_TARGET_REDUNDANCY_MISMATCH_MESSAGE =
 
 /** Max rows to fetch during post-verify — only need to detect one other match. */
 const REDUNDANCY_VERIFY_ROW_LIMIT = 2;
-
-export function isOptimisticLockError(error: unknown): boolean {
-  return error instanceof Error && error.message === OPTIMISTIC_LOCK_FAILED_MESSAGE;
-}
 
 export function isCreateTargetAlreadyExistsError(error: unknown): boolean {
   return error instanceof Error && error.message === CREATE_TARGET_ALREADY_EXISTS_MESSAGE;

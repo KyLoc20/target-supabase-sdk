@@ -1,11 +1,10 @@
-import { createLogger, createScope, logManager, LogLevel, type LoggerWithScope } from "../shared/log";
+import { createLogger, createScope, LogLevel, type LoggerWithScope } from "../shared/log";
+import { BaseNodeRuntime, type NodeLoopContext } from "../node/node-runtime.base";
 import { postTask } from "../task/task-post.api";
 import { TaskStatus } from "../task/task.interface";
-import { patchTriggerFired, scanEnabledTriggers } from "../trigger/trigger.api";
-import type { Trigger, TriggerPostTaskAction } from "../trigger/trigger.interface";
-import { buildFireKey, isTriggerDue } from "../trigger/trigger.utils";
-import { NodeLoopContext } from "./node-runtime.base";
-import { BaseNodeRuntime } from "./node-runtime.base";
+import { patchTriggerFired, scanEnabledTriggers } from "./trigger.api";
+import type { Trigger, TriggerPostTaskAction } from "./trigger.interface";
+import { buildFireKey, isTriggerDue } from "./trigger.utils";
 
 const LOG_TOPIC_TRIGGER = "trigger";
 
