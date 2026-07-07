@@ -5,8 +5,7 @@ import { TaskStatus } from "../task/task.interface";
 import { patchTriggerFired, scanEnabledTriggers } from "./trigger.api";
 import type { Trigger, TriggerPostTaskAction } from "./trigger.interface";
 import { buildFireKey, isTriggerDue } from "./trigger.utils";
-
-const LOG_TOPIC_TRIGGER = "trigger";
+import { LOG_TOPIC_TRIGGER } from "./trigger.constant";
 
 /**
  * Dedicated trigger scheduler node.
@@ -20,7 +19,7 @@ class TriggerNode extends BaseNodeRuntime {
     }
 
     protected async onBeforeRegisterNode(logger: LoggerWithScope): Promise<void> {
-        logger.info("Trigger 節點啟動，跳過任務註冊", { topic: LOG_TOPIC_TRIGGER });
+        logger.success("Trigger 節點啟動", { topic: LOG_TOPIC_TRIGGER });
     }
 
     protected loopLoggerMinLevel(): LogLevel {
@@ -28,14 +27,15 @@ class TriggerNode extends BaseNodeRuntime {
     }
 
     protected async runLoopSteps(ctx: NodeLoopContext, heartbeatOk: boolean): Promise<void> {
-        const loopScope = createScope({
-            module: `${this.runtimeModule}-loop-iteration`,
-            traceId: ctx.loopTraceId,
-            labels: { nodeId: ctx.nodeId },
-        });
         if (!heartbeatOk) {
-            const logger = createLogger({ scope: loopScope });
-            logger.warn("心跳失敗，本輪跳過 Trigger 評估", { topic: LOG_TOPIC_TRIGGER });
+            const logger = createLogger({
+                scope: createScope({
+                    module: `${this.runtimeModule}-runLoopSteps`,
+                    traceId: ctx.loopTraceId,
+                    labels: { nodeId: ctx.nodeId },
+                })
+            });
+            logger.warn("心跳失敗，本輪跳過", { topic: LOG_TOPIC_TRIGGER });
             return;
         }
         await this.evaluateTriggers(ctx);
@@ -50,7 +50,7 @@ class TriggerNode extends BaseNodeRuntime {
 
         const { data: triggerList = [], error } = await scanEnabledTriggers({ traceId: loopTraceId });
         if (error) {
-            logger.warn("掃描 Trigger 失敗", {
+            logger.error("掃描 Trigger 失敗", {
                 topic: LOG_TOPIC_TRIGGER,
                 data: { error: error.message },
             });
@@ -149,7 +149,7 @@ class TriggerNode extends BaseNodeRuntime {
         });
 
         if (patchError) {
-            logger.warn("Trigger 已 postTask 但更新 lastFireKey 失敗", {
+            logger.error("Trigger 已 postTask 但更新 lastFireKey 失敗", {
                 topic: LOG_TOPIC_TRIGGER,
                 data: {
                     triggerId: trigger.id,

@@ -32,7 +32,7 @@ import {
 } from "./local-task-registry";
 import type { BootstrapLocalTasksResult } from "./task-repo-context";
 import { TaskRepoValidation, type TaskRepoValidationFailureReason } from "./task-repo-validation";
-import { LOG_TOPIC_TASK } from "./task.constants";
+import { LOG_TOPIC_TASK } from "./task.constant";
 
 export type {
     TaskRepoValidationFailureReason,

@@ -11,7 +11,7 @@ import { TaskManager, type TaskRunResult } from "./task-manager";
 import { patchChangeTaskStatus, patchClaimTask } from "./task.api";
 import { TaskStatusAction } from "./task.interface";
 
-import { CRITICAL_UNKNOWN_TASK_TRACE_ID, LOG_TOPIC_TASK } from "./task.constants";
+import { CRITICAL_UNKNOWN_TASK_TRACE_ID, LOG_TOPIC_TASK } from "./task.constant";
 
 /**
  * Task worker node: commands → heartbeat → claim & execute tasks.

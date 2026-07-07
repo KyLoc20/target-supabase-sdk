@@ -11,7 +11,7 @@ import { generateResponse, type SupabaseResponse } from "../core.interface";
 import { createLogger, type LoggerWithScope } from "../shared/log";
 import { z } from "zod";
 import { CategoryTask, ResultCode, Task, TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
-import { LOG_TOPIC_TASK } from "./task.constants";
+import { LOG_TOPIC_TASK } from "./task.constant";
 import { getErrorMessage } from "../shared/utils/error.utils";
 
 const TASK_STATUS_FIELD = "details->>status" as const;
