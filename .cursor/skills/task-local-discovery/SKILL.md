@@ -71,7 +71,7 @@ Legacy fallback: `./task.config.js` at project root → `{ taskDir: "./tasks" }`
 ## End-to-end flow
 
 ```text
-Host: SupabaseInitializer.initialize()   ← required before remote bootstrap
+Host: supabase.initialize()   ← required before remote bootstrap
 
 Worker start (NodeManager.runStart)
   → TaskManager.registerTasks({ logger })
@@ -278,5 +278,5 @@ Caches: bootstrap fingerprint; module import cache; remote context cache by `tas
 - [target-list-query](../target-list-query/SKILL.md) — `scanTargetList` / `getTargetList` layering
 - [sdk-error-handling](../sdk-error-handling/SKILL.md) — throw vs envelope at boundaries
 - [task-state-machine](../task-state-machine/SKILL.md) — `patchClaimTask`, claim flow
-- [singleton-pitfalls](../singleton-pitfalls/SKILL.md) — `SupabaseInitializer` before remote bootstrap
+- [singleton-pitfalls](../singleton-pitfalls/SKILL.md) — `supabase.initialize()` before remote bootstrap
 - [single-flight](../single-flight/SKILL.md) — `bootstrapLocalTasks` concurrent dedupe pattern

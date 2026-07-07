@@ -80,7 +80,9 @@ Any import of `{ logManager }` **creates the singleton** before app entry can pa
 - Document: “Call `setOptions()` in app entry before other modules log”
 - Or defer default export until after explicit `initLogManager(options)` (breaking change)
 
-Same class of issue: `src/index.ts` exports `supabase = SupabaseInitializer.getInstance()` — client is cheap until `initialize()`, but the holder exists immediately.
+Same class of issue: `src/supabase.ts` exports `supabase = SupabaseInitializer.getInstance()` — holder exists on first import of `./supabase`; clients are cheap until `initialize()`.
+
+See [supabase-holder](../supabase-holder/SKILL.md) — do not duplicate `getInstance()` in feature modules.
 
 ---
 
@@ -146,7 +148,7 @@ Singletons resist isolated tests:
 
 ### Mitigations
 
-- Export class (`LogManager`, `SupabaseInitializer`) for tests + document `reset()` / `clearHistory()`
+- Export class (`LogManager`) or holder (`supabase`) for tests + document `reset()` / `clearHistory()`
 - Prefer `createX(options)` factory when testability matters more than global convenience
 - In tests: call `reset()` / `clearHistory()` / `setOptions(defaults)` in `beforeEach`
 
@@ -177,7 +179,9 @@ Debugging “why is my config wrong?” often traces to **who imported first**, 
 | Class | File | Config entry | Post-create update | Reset |
 |-------|------|--------------|--------------------|-------|
 | `LogManager` | `src/log/log-manager.ts` | 1st `getInstance(partial?)` | `setOptions(partial)` | `clearHistory()` |
-| `SupabaseInitializer` | `src/supabase.ts` | `initialize(params)` | ❌ (re-init ignored) | `reset()` |
+| `supabase` holder | `src/supabase.ts` | `initialize(params)` | ❌ (re-init ignored) | `reset()` on holder |
+
+`SupabaseInitializer` class is module-private — see [supabase-holder](../supabase-holder/SKILL.md).
 
 ---
 
@@ -226,4 +230,4 @@ Use singleton default export only at app boundary, not inside library modules th
 
 - Fixed example: `src/log/log-manager.ts` — warn + `setOptions` + `mergeLogOptions`
 - Init-once example: `src/supabase.ts` — `initialize()` guard + `reset()`
-- Eager export: `src/index.ts` — `supabase` singleton
+- Eager export: `src/supabase.ts` — `export const supabase`; `src/browser.ts` re-exports

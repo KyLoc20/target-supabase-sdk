@@ -19,7 +19,7 @@ export interface SupabaseInitializerParams {
   supabaseNeedAuthAnonKey?: string;
 }
 
-export class SupabaseInitializer {
+class SupabaseInitializer {
   private static instance: SupabaseInitializer;
   private isInitialized = false;
   private _mainClient: SupabaseClient | null = null;
@@ -141,3 +141,9 @@ export class SupabaseInitializer {
     this._authClient = null;
   }
 }
+
+/** Process-wide holder — import this; class is module-private. */
+export const supabase = SupabaseInitializer.getInstance();
+
+/** Public type for the `supabase` holder instance. */
+export type SupabaseHolder = typeof supabase;

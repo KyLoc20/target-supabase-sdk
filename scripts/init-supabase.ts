@@ -1,4 +1,4 @@
-import { SupabaseInitializer } from "../src/supabase.js";
+import { supabase } from "../src/supabase.js";
 import { loadEnvFiles } from "./load-env.js";
 
 export function requireEnv(name: string): string {
@@ -13,7 +13,7 @@ export function requireEnv(name: string): string {
 export async function initSupabaseFromEnv(projectRoot: string): Promise<void> {
     loadEnvFiles(projectRoot);
 
-    await SupabaseInitializer.getInstance().initialize({
+    await supabase.initialize({
         supabaseUrl: requireEnv("SUPABASE_URL"),
         supabaseAnonKey: requireEnv("SUPABASE_ANON_KEY"),
         supabaseNeedAuthUrl: process.env.SUPABASE_NEED_AUTH_URL,

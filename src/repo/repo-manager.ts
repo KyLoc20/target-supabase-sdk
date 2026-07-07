@@ -1,5 +1,5 @@
 ﻿import { getPossibleTarget } from "../core.api";
-import { SupabaseInitializer } from "../supabase";
+import { supabase } from "../supabase";
 import { LoggerWithScope } from "../shared/log";
 import type { TaskRepoContext, TaskRepoScriptRecord } from "../task/task-repo-context";
 import { TASK_REPO_SCRIPT_CATEGORY } from "../task/task-repo-context";
@@ -14,8 +14,6 @@ import {
     loadRepoContextFromScript,
     loadRepoContextFromUrl,
 } from "./repo.script-loader";
-
-const supabase = SupabaseInitializer.getInstance();
 
 type LocalRepoEntry =
     | { kind: "context"; context: TaskRepoContext }

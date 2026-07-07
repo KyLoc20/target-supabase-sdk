@@ -205,7 +205,7 @@ See [browser-node-exports](../browser-node-exports/SKILL.md) for what belongs in
 | `*.interface.ts` | ✅ explicit | `Task`, `TaskStatus` |
 | `*.api.ts` | ✅ explicit | `patchClaimTask`, schemas |
 | `*-manager.ts` | ✅ curated | `TaskManager` + option/result types |
-| Infra | root `index.ts` | `SupabaseInitializer`, `supabase` |
+| Infra | root `index.ts` | `supabase`, `SupabaseHolder`, `SupabaseInitializerParams` |
 | `*.script-loader.ts`, `*-registry.ts`, `*.utils.ts` | ❌ | unless deliberate extension point |
 
 ---

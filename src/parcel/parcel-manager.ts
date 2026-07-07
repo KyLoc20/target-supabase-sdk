@@ -1,4 +1,5 @@
 import { type TargetDraft } from "../core.interface";
+import { sha256Hex } from "../shared/utils/sha256.js";
 import { CategoryParcel, type Chunk, type Parcel, type ParcelCrypto, type ParcelDetails } from "./parcel.interface";
 
 const MANIFEST_VERSION = 1;
@@ -78,14 +79,6 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 function base64ToBytes(base64: string): Uint8Array {
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-}
-
-async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
-  const crypto = getCrypto();
-  const hash = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 async function encrypt(data: ArrayBuffer, key: CryptoKey, iv: Uint8Array): Promise<ArrayBuffer> {

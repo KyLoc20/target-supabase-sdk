@@ -54,14 +54,14 @@ Default for this repo's `scripts/`: **tsx**.
 ```text
 scripts/
   load-env.ts           ← read .env.local / .env (no override of existing process.env)
-  run-node-worker.ts    ← SupabaseInitializer.initialize() → new NodeManager().start()
+  run-node-worker.ts    ← supabase.initialize() → new NodeManager().start()
 tsconfig.scripts.json   ← extends root tsconfig; include scripts only
 ```
 
 **`run-node-worker.ts` responsibilities:**
 
 1. `loadEnvFiles(projectRoot)` — `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optional `SUPABASE_NEED_AUTH_*`
-2. `SupabaseInitializer.getInstance().initialize({ ... })`
+2. `supabase.initialize({ ... })` via `scripts/init-supabase.ts` (see [supabase-holder](../supabase-holder/SKILL.md))
 3. `await new NodeManager().start()` — blocks on main loop; exit via `shutdown` / signals
 
 Local tasks: `config/task.config.js` → `taskDir` (see [task-local-discovery](../task-local-discovery/SKILL.md)).

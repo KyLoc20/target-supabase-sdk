@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { readAndVerifySourceFile } from "../src/node/fs/read-source-file.js";
 import { publishParcel } from "../src/parcel/parcel.service.js";
 import { initSupabaseFromEnv } from "./init-supabase.js";
 import {
@@ -54,14 +54,11 @@ async function main(): Promise<void> {
         throw new Error("--passphrase must not be empty");
     }
 
-    const fileBuffer = await readFile(sourcePath);
-    const file = fileBuffer.buffer.slice(
-        fileBuffer.byteOffset,
-        fileBuffer.byteOffset + fileBuffer.byteLength
-    );
+    const source = await readAndVerifySourceFile(sourcePath);
+    const file = source.buffer;
 
-    const name = basename(sourcePath);
-    const adapter = createLocalDirStorageAdapter(sourcePath);
+    const name = basename(source.absolutePath);
+    const adapter = createLocalDirStorageAdapter(source.absolutePath);
     const { parcel, key } = await publishParcel({
         file,
         adapters: [adapter],
@@ -77,7 +74,8 @@ async function main(): Promise<void> {
     }
 
     console.log("[parcel:split] done", {
-        source: sourcePath,
+        source: source.absolutePath,
+        sourceSha256: source.sha256,
         parcelId: parcel.id,
         chunks: parcel.details.chunkList.length,
         size: parcel.details.size,

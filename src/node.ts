@@ -54,6 +54,80 @@ export { TaskNode } from "./task/task-node";
 export { TriggerNode } from "./trigger/trigger-node";
 export { BaseNodeRuntime } from "./node/node-runtime.base";
 
+export {
+	buildNodeImportArgs,
+	spawnTsxChild,
+	isChildProcessRunning,
+	ManagedChildProcesses,
+} from "./node/process";
+export type {
+	BuildNodeImportArgsInput,
+	SpawnTsxChildOptions,
+	ManagedChildProcessesOptions,
+	SpawnChildResult,
+	StopAllChildrenOptions,
+} from "./node/process";
+
+export {
+	runReadinessChecks,
+	createRequiredEnvCheck,
+	createPathsExistCheck,
+	createSupabaseReachableCheck,
+	pollUntil,
+	waitForServiceReady,
+} from "./node/readiness";
+export type {
+	ReadinessCheck,
+	ReadinessCheckResult,
+	ReadinessReport,
+	RequiredEnvCheckOptions,
+	PathsExistCheckOptions,
+	SupabaseReachableCheckOptions,
+	PollUntilOptions,
+	ServiceReadyGate,
+	ServiceReadySnapshot,
+	WaitForServiceReadyOptions,
+} from "./node/readiness";
+
+export {
+	loadEnvFiles,
+	parseEnvLine,
+	parseEnvFile,
+	readEnv,
+	requireEnv,
+	envInt,
+	envMs,
+	envPort,
+	envNumber,
+	envBool,
+	resolveProjectRootFromModule,
+	publicBaseUrlFromEnv,
+	initSupabaseFromStandardEnv,
+} from "./node/env";
+export type {
+	LoadEnvFilesOptions,
+	EnvIntOptions,
+	EnvNumberOptions,
+	PublicBaseUrlFromEnvOptions,
+	InitSupabaseFromStandardEnvOptions,
+} from "./node/env";
+
+export {
+	readAndVerifySourceFile,
+	nodeBufferToArrayBuffer,
+} from "./node/fs/read-source-file";
+export type {
+	ReadAndVerifySourceFileOptions,
+	SourceFilePayload,
+} from "./node/fs/read-source-file";
+
+export { createJsonFileStateStore } from "./node/fs/json-state-store";
+export type {
+	CreateJsonFileStateStoreOptions,
+	JsonFileStateStore,
+	JsonStatePatch,
+} from "./node/fs/json-state-store";
+
 export * from "./command/command.interface";
 export * from "./command/command.api";
 

@@ -33,7 +33,7 @@ size: z.number().int().min(1).max(MAX_POLL_TARGET_LIST_SIZE).optional(),
 
 `ReferenceError: Cannot access 'MAX_POLL_TARGET_LIST_SIZE' before initialization`
 
-**Fix:** `core.api.ts` uses `SupabaseInitializer` from `./supabase`, not the barrel.
+**Fix:** `core.api.ts` uses `import { supabase } from "./supabase"`, not the barrel.
 
 ---
 
@@ -45,7 +45,7 @@ size: z.number().int().min(1).max(MAX_POLL_TARGET_LIST_SIZE).optional(),
 | `auth/auth.api.ts` | was `import { supabase } from ".."` | ✅ fixed → `../supabase` |
 | `command/command.api.ts` | module-level Zod + `MAX_POLL_TARGET_LIST_SIZE` from `core.api` | ✅ safe after core fix |
 | Other `*.api.ts` | `from "../core.api"` (functions only) | ✅ OK — bindings read at call time |
-| `repo-manager.ts` | `SupabaseInitializer` from `../supabase` | ✅ reference pattern |
+| `repo-manager.ts` | `import { supabase } from "../supabase"` | ✅ reference pattern |
 
 **Only `command.api.ts`** uses a `core.api` **const** at module top level in Zod. Others import functions/types used inside async handlers or `validateWithSchema` wrappers.
 
@@ -78,18 +78,16 @@ import { supabase, TaskManager } from "target-supabase-sdk";
 
 ## Supabase access pattern
 
-Match `core.api.ts` / `repo-manager.ts`:
+Single holder in `src/supabase.ts`:
 
 ```typescript
-import { SupabaseInitializer } from "../supabase";
-
-const supabase = SupabaseInitializer.getInstance();
-// supabase.client / supabase.authClient
+import { supabase } from "../supabase";
+// supabase.client / supabase.authClient — after initialize()
 ```
 
-Do **not** re-export `supabase` from a feature module via barrel round-trip.
+Do **not** import module-private `SupabaseInitializer`. Do **not** re-export `supabase` from a feature module via barrel round-trip.
 
-See also [singleton-pitfalls](../singleton-pitfalls/SKILL.md) — `getInstance()` is first-wins.
+See [supabase-holder](../supabase-holder/SKILL.md).
 
 ---
 
@@ -136,7 +134,7 @@ Runtime: `ReferenceError: Cannot access 'X' before initialization` at a `const` 
 ## Related skills
 
 - [library-exports](../library-exports/SKILL.md) — `index.ts` is public aggregate only
-- [singleton-pitfalls](../singleton-pitfalls/SKILL.md) — `SupabaseInitializer.getInstance()`
+- [supabase-holder](../supabase-holder/SKILL.md) — `import { supabase } from "./supabase"`
 - [sdk-error-handling](../sdk-error-handling/SKILL.md) — `*.api.ts` layer boundaries
 
 ## Reference files
@@ -144,6 +142,6 @@ Runtime: `ReferenceError: Cannot access 'X' before initialization` at a `const` 
 | File | Role |
 |------|------|
 | `src/index.ts` | Root barrel — do not import from inside `src/` |
-| `src/core.api.ts` | `MAX_POLL_TARGET_LIST_SIZE`, `supabase` via `SupabaseInitializer` |
+| `src/core.api.ts` | `MAX_POLL_TARGET_LIST_SIZE`, `import { supabase } from "./supabase"` |
 | `src/command/command.api.ts` | Module-level Zod using core constant |
 | `src/auth/auth.api.ts` | Auth + supabase (fixed barrel import) |
