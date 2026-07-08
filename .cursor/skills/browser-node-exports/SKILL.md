@@ -48,8 +48,8 @@ src/index.ts     — export * from "./browser"
 
 - `TaskManager`, `RepoManager`
 - `postTask`, `TaskRepoValidation`
-- `TaskNode`, `TriggerNode`, `BaseNodeRuntime`
-- `command.*`, `trigger.*`
+- `TaskNode`, `TriggerNode`, `TriggerManager`, `BaseNodeRuntime`
+- `command.*`, `trigger.*` (API); runner scheduling → [trigger-local-runners](../trigger-local-runners/SKILL.md)
 
 ---
 

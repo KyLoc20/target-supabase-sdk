@@ -1,195 +1,80 @@
-import { createLogger, createScope, LogLevel, type LoggerWithScope } from "../shared/log";
-import { BaseNodeRuntime, type NodeLoopContext } from "../node/node-runtime.base";
-import { postTask } from "../task/task-post.api";
-import { TaskStatus } from "../task/task.interface";
-import { patchTriggerFired, scanEnabledTriggers } from "./trigger.api";
-import type { Trigger, TriggerPostTaskAction } from "./trigger.interface";
-import { buildFireKey, isTriggerDue } from "./trigger.utils";
-import { LOG_TOPIC_TRIGGER } from "./trigger.constant";
-
-/**
- * Dedicated trigger scheduler node.
- * Main loop: commands → heartbeat → evaluate due triggers → postTask.
- *
- * Phase 1: run a **single** TriggerNode process per deployment to avoid duplicate fires.
- */
-class TriggerNode extends BaseNodeRuntime {
-    constructor() {
-        super("triggerNode");
-    }
-
-    protected async onBeforeRegisterNode(logger: LoggerWithScope): Promise<void> {
-        logger.success("Trigger 節點啟動", { topic: LOG_TOPIC_TRIGGER });
-    }
-
-    protected loopLoggerMinLevel(): LogLevel {
-        return LogLevel.WARN;
-    }
-
-    protected async runLoopSteps(ctx: NodeLoopContext, heartbeatOk: boolean): Promise<void> {
-        if (!heartbeatOk) {
-            const logger = createLogger({
-                scope: createScope({
-                    module: `${this.runtimeModule}-runLoopSteps`,
-                    traceId: ctx.loopTraceId,
-                    labels: { nodeId: ctx.nodeId },
-                })
-            });
-            logger.warn("心跳失敗，本輪跳過", { topic: LOG_TOPIC_TRIGGER });
-            return;
-        }
-        await this.evaluateTriggers(ctx);
-    }
-
-    async evaluateTriggers(ctx: NodeLoopContext): Promise<void> {
-        const { loopTraceId, nodeId } = ctx;
-        const loopScope = createScope({ module: "evaluateTriggers", traceId: loopTraceId, labels: { nodeId } });
-        const logger = createLogger({ scope: loopScope });
-
-        logger.debug("開始評估 Trigger", { topic: LOG_TOPIC_TRIGGER });
-
-        const { data: triggerList = [], error } = await scanEnabledTriggers({ traceId: loopTraceId });
-        if (error) {
-            logger.error("掃描 Trigger 失敗", {
-                topic: LOG_TOPIC_TRIGGER,
-                data: { error: error.message },
-            });
-            return;
-        }
-        if (triggerList.length === 0) {
-            logger.debug("無 ENABLED Trigger", { topic: LOG_TOPIC_TRIGGER });
-            return;
-        }
-
-        const now = new Date();
-        let dueCount = 0;
-        let firedCount = 0;
-
-        for (const trigger of triggerList) {
-            if (!isTriggerDue(trigger, now)) {
-                continue;
-            }
-            dueCount++;
-            const fired = await this.fireTrigger(ctx, trigger, now);
-            if (fired) {
-                firedCount++;
-            }
-        }
-
-        if (firedCount === 0) {
-            logger.debug("Trigger 評估完成", {
-                topic: LOG_TOPIC_TRIGGER,
-                data: {
-                    scanned: triggerList.length,
-                    due: dueCount,
-                    fired: firedCount,
-                },
-            });
-        } else {
-            logger.info("Trigger 評估完成", {
-                topic: LOG_TOPIC_TRIGGER,
-                data: {
-                    scanned: triggerList.length,
-                    due: dueCount,
-                    fired: firedCount,
-                },
-            });
-        }
-    }
-
-    private async fireTrigger(ctx: NodeLoopContext, trigger: Trigger, now: Date): Promise<boolean> {
-        const { loopTraceId, nodeId } = ctx;
-        const logger = createLogger({
-            scope: createScope({ module: "fireTrigger", traceId: loopTraceId, labels: { nodeId } }),
-        });
-
-        const fireKey = buildFireKey(trigger, now);
-        const action = trigger.details.action;
-
-        if (action.kind !== "post_task") {
-            logger.warn("不支援的 Trigger action", {
-                topic: LOG_TOPIC_TRIGGER,
-                data: { triggerId: trigger.id, kind: action.kind },
-            });
-            return false;
-        }
-
-        logger.info("Trigger 到期，準備 postTask", {
-            topic: LOG_TOPIC_TRIGGER,
-            data: {
-                triggerId: trigger.id,
-                triggerKey: trigger.value,
-                fireKey,
-                taskTypeKey: action.taskTypeKey,
-            },
-        });
-
-        const taskExtra = `trigger:${trigger.id}:${fireKey}`;
-        const { data: task, error: postError } = await postTask(
-            buildPostTaskPayload(trigger, action, taskExtra, loopTraceId)
-        );
-
-        if (postError) {
-            logger.error("Trigger postTask 失敗", {
-                topic: LOG_TOPIC_TRIGGER,
-                data: {
-                    triggerId: trigger.id,
-                    fireKey,
-                    error: postError.message,
-                },
-            });
-            return false;
-        }
-
-        const { error: patchError } = await patchTriggerFired({
-            triggerId: trigger.id,
-            fireKey,
-            expectedLastFireKey: trigger.details.lastFireKey ?? null,
-            traceId: loopTraceId,
-        });
-
-        if (patchError) {
-            logger.error("Trigger 已 postTask 但更新 lastFireKey 失敗", {
-                topic: LOG_TOPIC_TRIGGER,
-                data: {
-                    triggerId: trigger.id,
-                    taskId: task?.id,
-                    fireKey,
-                    error: patchError.message,
-                },
-            });
-            return false;
-        }
-
-        logger.success("Trigger 觸發成功", {
-            topic: LOG_TOPIC_TRIGGER,
-            data: {
-                triggerId: trigger.id,
-                triggerKey: trigger.value,
-                fireKey,
-                taskId: task?.id,
-                taskTraceId: task?.details.traceId,
-            },
-        });
-        return true;
-    }
-}
-
-function buildPostTaskPayload(
-    trigger: Trigger,
-    action: TriggerPostTaskAction,
-    extra: string,
-    loopTraceId: string
-) {
-    return {
-        name: action.taskName ?? trigger.name,
-        value: action.taskTypeKey,
-        params: action.taskParams,
-        taskStatus: action.taskStatus ?? TaskStatus.TODO,
-        tagList: trigger.tagList ?? [],
-        extra,
-        traceParentId: loopTraceId,
-    };
-}
-
-export { TriggerNode };
+import { createLogger, createScope, LogLevel, type LoggerWithScope } from "../shared/log";
+import { BaseNodeRuntime, LOG_TOPIC_NODE, type NodeLoopContext } from "../node/node-runtime.base";
+import { TriggerManager } from "./trigger-manager";
+import { LOG_TOPIC_TRIGGER, TRIGGER_LOOP_INTERVAL_MS } from "./trigger.constant";
+import type { TriggerNodeOptions } from "./trigger.interface";
+
+/**
+ * Local interval scheduler node.
+ * Main loop: commands → heartbeat → {@link TriggerManager.tick}.
+ *
+ * Register runners via {@link TriggerManager.registerRunner} before {@link start}.
+ * Does not scan Supabase trigger rows — see `trigger.api.ts` for remote admin APIs.
+ *
+ * Deploy **one** TriggerNode per logical scheduler — multiple processes duplicate runner work.
+ */
+class TriggerNode extends BaseNodeRuntime {
+    private readonly requireRunners: boolean;
+
+    constructor(options?: TriggerNodeOptions) {
+        super("triggerNode");
+        this.requireRunners = options?.requireRunners ?? false;
+    }
+
+    protected getLoopIntervalMs(): number {
+        return TRIGGER_LOOP_INTERVAL_MS;
+    }
+
+    protected loopLoggerMinLevel(): LogLevel {
+        return LogLevel.WARN;
+    }
+
+    protected async onBeforeRegisterNode(logger: LoggerWithScope): Promise<void> {
+        TriggerManager.closeRegistration();
+
+        const runnerKeys = TriggerManager.getRunnerKeys();
+        if (runnerKeys.length === 0) {
+            if (this.requireRunners) {
+                throw new Error("[TriggerNode] requireRunners is true but no runners are registered");
+            }
+            logger.warn("未注册任何 Trigger runner，主循環將空轉", {
+                topic: LOG_TOPIC_TRIGGER,
+            });
+            return;
+        }
+
+        for (const { key, intervalMs } of TriggerManager.getRunnersBelowLoopInterval()) {
+            logger.warn("Runner interval 小於主循環 tick 間隔，實際觸發精度受限", {
+                topic: LOG_TOPIC_TRIGGER,
+                data: {
+                    runnerKey: key,
+                    intervalMs,
+                    loopIntervalMs: TRIGGER_LOOP_INTERVAL_MS,
+                },
+            });
+        }
+
+        logger.success("Trigger 節點啟動", {
+            topic: LOG_TOPIC_TRIGGER,
+            data: { runnerKeys },
+        });
+    }
+
+    protected async runLoopSteps(ctx: NodeLoopContext, heartbeatOk: boolean): Promise<void> {
+        if (!heartbeatOk) {
+            const logger = createLogger({
+                scope: createScope({
+                    module: `${this.runtimeModule}-runLoopSteps`,
+                    traceId: ctx.loopTraceId,
+                    labels: { nodeId: ctx.nodeId },
+                }),
+            });
+            logger.warn("心跳失敗，本輪跳過 runner", { topic: LOG_TOPIC_NODE });
+            return;
+        }
+        await TriggerManager.tick(ctx);
+    }
+}
+
+export { TriggerNode };
+export type { TriggerNodeOptions } from "./trigger.interface";

@@ -55,8 +55,15 @@ Default for this repo's `scripts/`: **tsx**.
 scripts/
   load-env.ts           ← read .env.local / .env (no override of existing process.env)
   run-node-worker.ts    ← supabase.initialize() → new NodeManager().start()
+  run-trigger-node.ts   ← register TriggerManager runners → new TriggerNode().start()
 tsconfig.scripts.json   ← extends root tsconfig; include scripts only
 ```
+
+**`run-trigger-node.ts` responsibilities:**
+
+1. `initSupabaseFromEnv(projectRoot)` — same env as task worker
+2. `TriggerManager.registerRunner({ key, intervalMs, fn })` — code-only registration (see [trigger-local-runners](../trigger-local-runners/SKILL.md))
+3. `await new TriggerNode().start()` — 60s loop, parallel due runners
 
 **`run-node-worker.ts` responsibilities:**
 

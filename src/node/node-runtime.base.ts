@@ -82,6 +82,11 @@ abstract class BaseNodeRuntime {
         return LogLevel.INFO;
     }
 
+    /** Hook: ms to wait between loop iterations. Default: random 15–60s. */
+    protected getLoopIntervalMs(): number {
+        return getRandomInterval();
+    }
+
     private getLogNodeId(): string {
         return this.localNodeId ?? BaseNodeRuntime.NODE_ID_PENDING_ASSIGNMENT;
     }
@@ -269,7 +274,7 @@ abstract class BaseNodeRuntime {
                 iterLogger.debug("節點關閉中，跳過等待間隔", { topic: LOG_TOPIC_NODE });
                 break;
             }
-            const interval = getRandomInterval();
+            const interval = this.getLoopIntervalMs();
             iterLogger.debug(`主循環第 ${this.loopCount} 輪完成，等待下一輪`, {
                 topic: LOG_TOPIC_NODE,
                 data: { intervalMs: interval },

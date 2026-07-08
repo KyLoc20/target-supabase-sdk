@@ -154,6 +154,54 @@ Types: `Service`, `Api`, `ApiDetails` (`method`, `path`, `endpoint`, `request`, 
 
 **Example consumer:** [`../storage-service`](../storage-service) — Express server that bootstraps catalog rows on startup and serves chunk upload/download.
 
+### TriggerNode (local interval runners)
+
+`TriggerNode` registers with Supabase (heartbeat, commands) and runs **in-process interval runners**. It does **not** read ENABLED trigger rows from the database (`trigger.api.ts` remains for admin/CLI).
+
+Register runners in code **before** `start()` (registration closes on bootstrap):
+
+```typescript
+import {
+  TriggerManager,
+  TriggerNode,
+  LOG_TOPIC_TRIGGER,
+  postTask,
+} from "target-supabase-sdk/node";
+
+await supabase.initialize({ supabaseUrl, supabaseAnonKey });
+
+TriggerManager.registerRunner({
+  key: "daily-weather",
+  intervalMs: 24 * 60 * 60 * 1000,
+  retryCount: 3,
+  retryDelayMs: 5_000,
+  timeoutMs: 120_000,
+  fn: async (ctx) => {
+    const { error } = await postTask({ name: "weather", value: "weather", params: { city: "Tokyo" } });
+    if (error) throw new Error(error.message);
+    ctx.logger.success("task posted", { topic: LOG_TOPIC_TRIGGER });
+  },
+});
+
+await new TriggerNode({ requireRunners: true }).start();
+```
+
+| Concept | Behavior |
+|---------|----------|
+| Main loop | Fixed **60s** (`TRIGGER_LOOP_INTERVAL_MS`) |
+| `intervalMs` | Per-runner spacing; values `< 60s` are warned — effective precision is loop-bound |
+| Registration | `registerRunner` before `start()`; `hasRunner` / `unregisterRunner` for lifecycle |
+| Retries | `1 + retryCount` per tick; optional `retryDelayMs` between attempts |
+| `timeoutMs` | Optional per-attempt limit; does not cancel in-flight work |
+| Overlap | Running `fn` when due → skip tick (no backlog) |
+| Parallel | Due runners in one round → `Promise.all` |
+| Zero runners | Warn by default; `requireRunners: true` aborts bootstrap |
+| Multi-instance | Run **one** TriggerNode per scheduler — duplicates fire the same runners |
+
+CLI: `pnpm worker:trigger` (`scripts/run-trigger-node.ts` — log + `postTask` examples).
+
+See `.cursor/skills/trigger-local-runners/SKILL.md`.
+
 ## Adding new modules (contributors)
 
 When adding a domain, API, or Manager, **classify browser vs Node before** registering exports. The default entry must stay bundler-safe (Chrome extensions, Webpack, Vite).
@@ -178,7 +226,7 @@ Node entry (`/node`) is validated by `tsc` compile only — no separate verify s
 
 | Safe on default entry `.` | Node entry `/node` only |
 |---------------------------|-------------------------|
-| `*.interface.ts`, Supabase RPC `*.api.ts` | `TaskManager`, `RepoManager`, `TaskNode` |
+| `*.interface.ts`, Supabase RPC `*.api.ts` | `TaskManager`, `RepoManager`, `TaskNode`, `TriggerNode`, `TriggerManager` |
 | `createTarget`, `postLinkCreate`, task `patch*` APIs | `postTask`, `TaskRepoValidation` |
 | `repo.api` (remote) | `local-task-registry`, `repo.script-loader` |
 

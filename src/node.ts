@@ -52,6 +52,19 @@ export { RepoManager } from "./repo/repo-manager";
 
 export { TaskNode } from "./task/task-node";
 export { TriggerNode } from "./trigger/trigger-node";
+export type { TriggerNodeOptions } from "./trigger/trigger.interface";
+export { TriggerManager } from "./trigger/trigger-manager";
+export type {
+	RegisterTriggerRunnerOptions,
+	TriggerRunnerContext,
+	TriggerRunnerFn,
+} from "./trigger/trigger.interface";
+export {
+	LOG_TOPIC_TRIGGER,
+	TRIGGER_LOOP_INTERVAL_MS,
+	TRIGGER_RUNNER_DEFAULT_RETRY_COUNT,
+	TRIGGER_RUNNER_DEFAULT_RETRY_DELAY_MS,
+} from "./trigger/trigger.constant";
 export { BaseNodeRuntime } from "./node/node-runtime.base";
 
 export {
