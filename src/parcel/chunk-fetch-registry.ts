@@ -1,5 +1,5 @@
-import { isHttpUrl, resolveFetchUrl } from "../shared/utils/fetch-url.js";
-import { isLocalFilesystemPath, parseProviderPrefixedUrl } from "./chunk-url.utils.js";
+import { isHttpUrl, resolveFetchUrl } from "../shared/utils/fetch-url";
+import { isLocalFilesystemPath, parseProviderPrefixedUrl } from "./chunk-url.utils";
 
 interface ChunkResolver {
     provider: string;

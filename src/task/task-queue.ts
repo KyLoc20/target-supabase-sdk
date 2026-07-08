@@ -1,4 +1,4 @@
-import { type Task, TaskStatus } from "./task.interface.js";
+import { type Task, TaskStatus } from "./task.interface";
 
 export type TaskStatusCount = Partial<Record<TaskStatus, number>>;
 

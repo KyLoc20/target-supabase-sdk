@@ -1,5 +1,5 @@
-import type { LoggerWithScope } from "../log/index.js";
-import { classifyNetworkError, formatNetworkError } from "../utils/network-error.js";
+import type { LoggerWithScope } from "../log/index";
+import { classifyNetworkError, formatNetworkError } from "../utils/network-error";
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));

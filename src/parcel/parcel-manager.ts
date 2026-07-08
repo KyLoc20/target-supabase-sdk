@@ -1,9 +1,9 @@
 import { type TargetDraft } from "../core.interface";
-import { sha256Hex } from "../shared/utils/sha256.js";
+import { sha256Hex } from "../shared/utils/sha256";
 import { CategoryParcel, type Chunk, type Parcel, type ParcelCrypto, type ParcelDetails } from "./parcel.interface";
 
 const MANIFEST_VERSION = 1;
-const DEFAULT_CHUNK_SIZE = 2 * 1024 * 1024; // 2MB — fallback for empty input only
+const DEFAULT_CHUNK_SIZE = 2 * 1024 * 1024; // 2MB - fallback for empty input only
 const MB = 1024 * 1024;
 /** Source files at or below this size use at most 2 chunks */
 const SMALL_FILE_MAX_BYTES = 50 * MB;
@@ -19,7 +19,7 @@ const AES_GCM_TAG_LENGTH = 128;
 /** Auth tag bytes Web Crypto appends to AES-GCM ciphertext */
 const AES_GCM_AUTH_TAG_BYTES = AES_GCM_TAG_LENGTH / 8;
 
-/** @deprecated Legacy IV in Target.extra — read only for old parcels */
+/** @deprecated Legacy IV in Target.extra - read only for old parcels */
 const LEGACY_EXTRA_IV_KEY = "iv";
 
 /** Pluggable storage backend; chunks are round-robin distributed across adapters */
@@ -211,7 +211,7 @@ async function buildChunkList(
  *
  * | Payload size | Policy |
  * |--------------|--------|
- * | ≤ 50 MB | At most **2** chunks (`ceil(size / 2)` per chunk) |
+ * | ≤50 MB | At most **2** chunks (`ceil(size / 2)` per chunk) |
  * | > 50 MB | Target ~16 MB per chunk; chunk count capped at **64** |
  *
  * For encrypted parcels, pass plaintext size + {@link AES_GCM_AUTH_TAG_BYTES}
@@ -309,7 +309,7 @@ async function create(file: ArrayBuffer, options: CreateOptions = {}): Promise<C
   }
 
   if (options.passphrase != null && options.key != null) {
-    throw new Error("ParcelManager.create: passphrase 與 key 不能同時指定");
+    throw new Error("ParcelManager.create: passphrase 与 key 不能同時指定");
   }
 
   const cryptoApi = getCrypto();
@@ -413,7 +413,7 @@ async function downloadAndVerifyChunks(chunkList: Chunk[]): Promise<ArrayBuffer[
     const chunkBuffer = await res.arrayBuffer();
     const chunkChecksum = await sha256Hex(chunkBuffer);
     if (chunkChecksum !== chunkMeta.checksum) {
-      throw new Error(`ParcelManager.reassemble: chunk ${chunkMeta.index} 校验失败 (checksum 不一致)`);
+      throw new Error(`ParcelManager.reassemble: chunk ${chunkMeta.index} 校验失败 (checksum 不一致`);
     }
     buffers.push(chunkBuffer);
   }
@@ -424,7 +424,7 @@ async function downloadAndVerifyChunks(chunkList: Chunk[]): Promise<ArrayBuffer[
 function verifyPlaintextSize(buffer: ArrayBuffer, details: ParcelDetails): void {
   if (buffer.byteLength !== details.size) {
     throw new Error(
-      `ParcelManager.reassemble: 重组后大小与 details.size 不一致 (${buffer.byteLength} !== ${details.size})`
+      `ParcelManager.reassemble: 重组后大小与 details.size 不一致(${buffer.byteLength} !== ${details.size})`
     );
   }
 }

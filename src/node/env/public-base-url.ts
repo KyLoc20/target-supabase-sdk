@@ -1,4 +1,4 @@
-import { readEnv } from "./require-env.js";
+import { readEnv } from "./require-env";
 
 export interface PublicBaseUrlFromEnvOptions {
     /** Env var for public URL override (e.g. `STORAGE_PUBLIC_URL`). */

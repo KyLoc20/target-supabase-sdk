@@ -1,4 +1,4 @@
-import { isHttpUrl } from "../shared/utils/fetch-url.js";
+import { isHttpUrl } from "../shared/utils/fetch-url";
 
 export function isLocalFilesystemPath(url: string): boolean {
     if (url.startsWith("file://")) {
@@ -7,7 +7,7 @@ export function isLocalFilesystemPath(url: string): boolean {
     return /^[a-zA-Z]:[\\/]/.test(url) || url.startsWith("\\\\") || url.startsWith("/");
 }
 
-/** Opaque chunk locator — not HTTP and not a local path (e.g. Telegram file_id). */
+/** Opaque chunk locator - not HTTP and not a local path (e.g. Telegram file_id). */
 export function isOpaqueChunkUrl(url: string): boolean {
     return !isHttpUrl(url) && !isLocalFilesystemPath(url);
 }

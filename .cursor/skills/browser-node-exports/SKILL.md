@@ -93,18 +93,18 @@ Domain barrel (`src/<domain>/index.ts`): list public symbols explicitly. Browser
 ### Step 3 — Build and verify
 
 ```bash
-pnpm build   # tsc + verify-browser-entry.mjs
+pnpm build   # rollup (browser.js + node.js) + tsc emitDeclarationOnly + verify-browser-entry.mjs
 ```
 
 On success:
 
 ```text
-[verify:browser] OK — N module(s) in browser graph, no node: imports.
+[verify:browser] OK — dist/browser.js bundle has no node: imports.
 ```
 
-On failure, the script prints which `dist/*.js` files contain `from "node:…"`. Fix the static import chain or move the symbol to `node.ts` / a Node-only leaf.
+On failure, the script prints `from "node:…"` matches inside the **browser bundle**. Fix the static import chain or move the symbol to `node.ts` / a Node-only leaf.
 
-Node entry relies on `tsc` only — register Node-only symbols in `src/node.ts`; no maintainable verify list required.
+Node entry is a Rollup bundle (`dist/node.js`) with peers and `node:*` external — pure `node` can `import "target-supabase-sdk/node"`.
 
 ### Common pitfalls
 
@@ -159,12 +159,17 @@ Internal Node callers import from `../task/task-post.api` (e.g. `trigger/trigger
 
 ## Consumer examples
 
+**Same Node process may import both entries** (e.g. preload initializes via `/node`, app code uses `.`). That requires the SDK Rollup build to emit **shared chunks** so `supabase` is one module instance — see [rollup-library-build](../rollup-library-build/SKILL.md#dual-entry-singleton-shared-chunk).
+
 ```typescript
 // Chrome extension popup / background
 import { supabase, createTarget, postLinkCreate } from "target-supabase-sdk";
 
-// Node worker
-import { TaskManager, TaskNode } from "target-supabase-sdk/node";
+// Node worker / preload — init env + Supabase here
+import { TaskManager, TaskNode, initSupabaseFromStandardEnv } from "target-supabase-sdk/node";
+
+// Same process can also use browser entry after init
+import { getApi } from "target-supabase-sdk";
 
 // CLI post-task script (internal — prefer ../src/ paths in scripts/)
 import { postTask } from "target-supabase-sdk/node";
@@ -174,13 +179,14 @@ import { postTask } from "target-supabase-sdk/node";
 
 ## CI verification
 
-`pnpm build` runs `scripts/verify-browser-entry.mjs` (graph walker: `scripts/verify-graph.mjs`):
+`pnpm build` runs `scripts/verify-browser-entry.mjs`:
 
-- Static import graph from `dist/browser.js`
-- Follows relative `./` and `../` imports (bounded to `dist/`)
-- Fails if any reachable module contains `from "node:fs"` etc.
+- Scans the **bundled** `dist/browser.js` for static `from "node:…"` imports
+- Fails if browser artifact pulls Node built-ins
 
-Node entry is not separately verified — `tsc` compile is sufficient.
+Optional: `scripts/verify-graph.mjs` for multi-file `dist/` layouts (legacy / tooling); **CI gate** is bundle scan only.
+
+Node entry is not separately verified — Rollup + shared-chunk smoke in consumer is the practical check for `/node` + `.` singleton behavior.
 
 ---
 
@@ -199,7 +205,8 @@ Node entry is not separately verified — `tsc` compile is sufficient.
 
 ## Related
 
-- [browser-bundle-verification](../browser-bundle-verification/SKILL.md) — verify-graph, external tools, layered CI, **Future TODO**
+- [rollup-library-build](../rollup-library-build/SKILL.md) — Rollup dual entry, **shared chunks / singleton**
+- [singleton-pitfalls](../singleton-pitfalls/SKILL.md) — dual-bundle duplicate singleton
 - [library-exports](../library-exports/SKILL.md) — domain barrel rules
 - [task-local-discovery](../task-local-discovery/SKILL.md) — why local-task-registry stays private
 - chrome-extension-starter: `.cursor/skills/target-supabase-sdk-browser-bundle/` — consumer notes (shim optional after SDK 0.2.0)

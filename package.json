@@ -42,7 +42,7 @@
   ],
   "scripts": {
     "clean": "node --input-type=module -e \"import fs from 'node:fs'; fs.rmSync('dist', { recursive: true, force: true })\"",
-    "build": "pnpm clean && tsc -p tsconfig.build.json && node scripts/verify-browser-entry.mjs",
+    "build": "pnpm clean && rollup -c && tsc -p tsconfig.dts.json && node scripts/verify-browser-entry.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:scripts": "tsc -p tsconfig.scripts.json",
     "worker": "tsx scripts/run-node-worker.ts",
@@ -53,7 +53,7 @@
     "post-trigger": "tsx scripts/post-trigger.ts",
     "parcel:split": "tsx scripts/parcel-split-local.ts",
     "parcel:restore": "tsx scripts/parcel-restore-local.ts",
-    "dev": "tsc -p tsconfig.build.json --watch",
+    "dev": "rollup -c --watch",
     "pack:check": "npm pack --dry-run",
     "prepack": "pnpm build"
   },
@@ -64,12 +64,16 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-typescript": "^12.1.4",
     "@supabase/postgrest-js": "1.19.4",
     "@supabase/supabase-js": "2.50.3",
     "@types/lodash-es": "^4.17.12",
     "@types/ws": "^8.18.1",
     "@types/wicg-file-system-access": "^2023.10.7",
     "lodash-es": "^4.17.21",
+    "rollup": "^4.40.2",
+    "tslib": "^2.8.1",
     "typescript": "~5.7.2",
     "tsx": "^4.19.4",
     "ws": "^8.18.0",

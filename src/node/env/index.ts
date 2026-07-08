@@ -1,15 +1,15 @@
-export { loadEnvFiles, parseEnvLine, parseEnvFile, parseEnvFileContent } from "./load-env.js";
-export type { LoadEnvFilesOptions } from "./load-env.js";
+export { loadEnvFiles, parseEnvLine, parseEnvFile, parseEnvFileContent } from "./load-env";
+export type { LoadEnvFilesOptions } from "./load-env";
 
-export { readEnv, requireEnv } from "./require-env.js";
+export { readEnv, requireEnv } from "./require-env";
 
-export { envInt, envMs, envPort, envNumber, envBool } from "./env-parsers.js";
-export type { EnvIntOptions, EnvNumberOptions } from "./env-parsers.js";
+export { envInt, envMs, envPort, envNumber, envBool } from "./env-parsers";
+export type { EnvIntOptions, EnvNumberOptions } from "./env-parsers";
 
-export { resolveProjectRootFromModule } from "./project-root.js";
+export { resolveProjectRootFromModule, resolveProjectRootByPackageName } from "./project-root";
 
-export { publicBaseUrlFromEnv } from "./public-base-url.js";
-export type { PublicBaseUrlFromEnvOptions } from "./public-base-url.js";
+export { publicBaseUrlFromEnv } from "./public-base-url";
+export type { PublicBaseUrlFromEnvOptions } from "./public-base-url";
 
-export { initSupabaseFromStandardEnv } from "./init-supabase-from-env.js";
-export type { InitSupabaseFromStandardEnvOptions } from "./init-supabase-from-env.js";
+export { initSupabaseFromStandardEnv } from "./init-supabase-from-env";
+export type { InitSupabaseFromStandardEnvOptions } from "./init-supabase-from-env";

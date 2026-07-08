@@ -1,5 +1,5 @@
-import { registerProviderChunkResolver } from "./chunk-fetch-registry.js";
-import type { ProviderProbeResult, StorageProviderModule } from "./storage-provider.types.js";
+import { registerProviderChunkResolver } from "./chunk-fetch-registry";
+import type { ProviderProbeResult, StorageProviderModule } from "./storage-provider.types";
 
 export type ProviderProbeMap = Record<string, ProviderProbeResult | { ok: true; detail: { skipped: true } }>;
 

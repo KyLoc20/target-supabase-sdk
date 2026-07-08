@@ -35,5 +35,8 @@ jobs:
       - name: Typecheck scripts
         run: pnpm typecheck:scripts
 
+      - name: Build library
+        run: pnpm build
+
       - name: Verify publishable tarball
-        run: npm pack --dry-run
+        run: npm pack --dry-run --ignore-scripts

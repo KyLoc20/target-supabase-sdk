@@ -1,7 +1,7 @@
 import { access, readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { sha256Hex } from "../../shared/utils/sha256.js";
+import { sha256Hex } from "../../shared/utils/sha256";
 
 export interface SourceFilePayload {
     absolutePath: string;

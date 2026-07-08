@@ -22,6 +22,7 @@ import {
   envNumber,
   envBool,
   resolveProjectRootFromModule,
+  resolveProjectRootByPackageName,
   publicBaseUrlFromEnv,
   initSupabaseFromStandardEnv,
 } from "target-supabase-sdk/node";
@@ -32,7 +33,12 @@ Location: `src/node/env/`
 ## Phase 1 — load + parse
 
 ```typescript
+// esbuild bundles: walk up to package.json by name (dist/ is not repo root)
+const projectRoot = resolveProjectRootByPackageName(import.meta.url, "storage-service");
+
+// tsx / fixed depth (e.g. scripts/preload-env.mjs one level below root)
 const projectRoot = resolveProjectRootFromModule(import.meta.url, "..");
+```
 
 loadEnvFiles(projectRoot, {
   afterLoad: () => { /* legacy alias hooks */ },

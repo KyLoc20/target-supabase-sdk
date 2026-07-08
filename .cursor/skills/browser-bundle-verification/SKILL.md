@@ -33,21 +33,25 @@ Complements [browser-node-exports](../browser-node-exports/SKILL.md) (what goes 
 
 ```text
 pnpm build
-  → tsc → dist/browser.js + dist/node.js
+  → rollup → dist/browser.js + dist/node.js (bundles)
+  → tsc -p tsconfig.dts.json → dist/**/*.d.ts
   → scripts/verify-browser-entry.mjs
-       → scripts/verify-graph.mjs (walk from dist/browser.js)
-       → fail if any reachable file matches node: built-in import
+       → scan dist/browser.js for from "node:…" (single-file bundle)
 ```
 
-### `verify-graph.mjs` behavior
+See [rollup-library-build](../rollup-library-build/SKILL.md) for build rationale and consumer impact.
+
+### `verify-browser-entry.mjs` behavior (Rollup era)
 
 | Feature | Detail |
 |---------|--------|
-| Entry | `dist/browser.js` only (Node entry not separately verified) |
-| Import patterns | `from "./…"`, `from "../…"`, side-effect `import "./…"` |
-| Path resolution | `foo.js` then `foo/index.js` (barrel dirs like `shared/log`) |
-| Boundary | `distRoot` — ignore imports resolving outside `dist/` |
-| Detection | Regex `from "node:(fs|crypto|os|path|url)"` in file contents |
+| Entry | `dist/browser.js` bundle only |
+| Detection | Regex `from "node:…"` in bundle text |
+| Node entry | Rollup `dist/node.js`; peers + `node:*` external — not separately scanned |
+
+### Legacy: `verify-graph.mjs`
+
+Graph walker for **multi-file** `tsc` `dist/` — optional for tooling; **not** used by CI after Rollup migration. Keep for fixtures or dependency-cruiser comparison.
 
 ### What verify does **not** cover
 
@@ -162,7 +166,9 @@ When user asks about browser bundling, webpack `node:fs` errors, or packaging to
 
 ## Related
 
-- [browser-node-exports](../browser-node-exports/SKILL.md) — dual entry, postTask split, export checklist
+- [browser-node-exports](../browser-node-exports/SKILL.md) — dual entry, postTask split
+- [rollup-library-build](../rollup-library-build/SKILL.md) — SDK Rollup bundles
+- watch-service app build: `watch-service/.cursor/skills/node-service-build/SKILL.md` (esbuild — not Rollup)
 - [library-exports](../library-exports/SKILL.md) — barrel rules
 - [barrel-import-cycles](../barrel-import-cycles/SKILL.md) — leaf imports inside domains
 
@@ -170,6 +176,7 @@ When user asks about browser bundling, webpack `node:fs` errors, or packaging to
 
 | File | Role |
 |------|------|
-| `scripts/verify-graph.mjs` | Graph walker (`./`, `../`, `index.js`, dist boundary) |
-| `scripts/verify-browser-entry.mjs` | CI gate on browser entry |
+| `rollup.config.js` | Dual entry Rollup config |
+| `scripts/verify-graph.mjs` | Legacy graph walker (optional; CI uses bundle scan) |
+| `scripts/verify-browser-entry.mjs` | CI gate on browser bundle |
 | `package.json` `exports` | `"."` → browser, `"./node"` → node |

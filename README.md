@@ -213,14 +213,14 @@ When adding a domain, API, or Manager, **classify browser vs Node before** regis
    - No `node:*` in the chain → add to `src/browser.ts` (and domain `index.ts`)
    - Uses Node built-ins → add **only** to `src/node.ts` (consumers use `target-supabase-sdk/node`)
    - Same file mixes both → **split** into separate leaf modules (example: `task.api.ts` vs `task-post.api.ts`)
-3. **Build** — `pnpm build` runs TypeScript compile plus `scripts/verify-browser-entry.mjs`, which walks the static import graph from `dist/browser.js` and fails if any module references `node:*`.
+3. **Build** — `pnpm build` runs Rollup (dual entry `browser.js` + `node.js`, shared chunks), `tsc --emitDeclarationOnly` for types, then `scripts/verify-browser-entry.mjs`, which scans the bundled `dist/browser.js` and fails if it contains `from "node:…"` imports.
 
 ```bash
 pnpm build
-# [verify:browser] OK — N module(s) in browser graph, no node: imports.
+# [verify:browser] OK — dist/browser.js bundle has no node: imports.
 ```
 
-Node entry (`/node`) is validated by `tsc` compile only — no separate verify script.
+Node entry (`/node`) is bundled by the same Rollup build (peers and `node:*` stay external); there is no separate verify script for it.
 
 ### Rules of thumb
 
@@ -245,11 +245,13 @@ pnpm build
 pnpm dev
 ```
 
-Verify the publishable tarball locally:
+Verify the publishable tarball locally (runs `prepack` → full build):
 
 ```bash
 pnpm pack:check
 ```
+
+CI runs `pnpm build` then `npm pack --dry-run --ignore-scripts` so the tarball check does not rebuild.
 
 ## Release
 

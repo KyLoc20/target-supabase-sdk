@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
-import { scanTargetList } from "../../core.api.js";
-import { requireEnv } from "../env/require-env.js";
-import type { ReadinessCheck, ReadinessCheckResult } from "./readiness.types.js";
+import { scanTargetList } from "../../core.api";
+import { requireEnv } from "../env/require-env";
+import type { ReadinessCheck, ReadinessCheckResult } from "./readiness.types";
 
 export interface RequiredEnvCheckOptions {
     env?: NodeJS.ProcessEnv;

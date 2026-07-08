@@ -1,4 +1,4 @@
-import type { ReadinessCheck, ReadinessReport } from "./readiness.types.js";
+import type { ReadinessCheck, ReadinessReport } from "./readiness.types";
 
 function formatFailureMessage(
     checks: ReadinessReport["checks"]

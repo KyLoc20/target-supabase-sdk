@@ -194,6 +194,8 @@ Optional subpaths (since 0.2.0):
 
 See [browser-node-exports](../browser-node-exports/SKILL.md) for what belongs in each entry.
 
+Build: Rollup bundles + `tsc --emitDeclarationOnly` — [rollup-library-build](../rollup-library-build/SKILL.md).
+
 `scripts/` **never** in any barrel.
 
 ---

@@ -2,8 +2,9 @@
 name: singleton-pitfalls
 description: >-
   Pitfalls and safe patterns for singleton getInstance() in target-supabase-sdk
-  (LogManager, SupabaseInitializer). Use when implementing or reviewing singletons,
-  constructor/options on getInstance, module-level eager init, setOptions, or tests.
+  (LogManager, SupabaseInitializer), including dual-entry Rollup duplicate bundles.
+  Use when implementing or reviewing singletons, constructor/options on getInstance,
+  module-level eager init, setOptions, build config, or tests.
 ---
 
 # Singleton pitfalls (target-supabase-sdk)
@@ -136,7 +137,34 @@ Reference: `src/supabase.ts`.
 
 ---
 
-## Problem 5: Testing and mocking
+## Problem 5: Dual-entry Rollup bundles duplicate module singletons (build)
+
+**Runtime symptom:** `Supabase not initialized. Call initialize() first.` after `initSupabaseFromStandardEnv()` from `target-supabase-sdk/node` succeeded.
+
+**Cause:** Not `initialize()` logic — **two physical copies** of `src/supabase.ts` in `dist/` when browser and node were built as **separate** Rollup bundles (`output.file` per entry). Node loads both URLs in one process:
+
+```text
+preload / worker  →  target-supabase-sdk/node  →  supabase copy B  →  initialize() ✅
+main / API        →  target-supabase-sdk       →  supabase copy A  →  still uninitialized ❌
+```
+
+`export const supabase = SupabaseInitializer.getInstance()` is a **per-module** singleton. Duplicate bundles = duplicate modules = duplicate holders.
+
+### Fix (library build)
+
+One Rollup build, `input: { browser, node }`, `output.dir` + `chunkFileNames`. Shared graph (including `supabase.ts`) lands in `dist/chunks/*.js`; both entries import the same chunk → Node ESM cache = one instance.
+
+### Review checklist
+
+- [ ] Rollup config is **one** object, not `[ browserConfig, nodeConfig ]` with separate `output.file`
+- [ ] Smoke: same process imports `/node` (init) then `.` (API) — no throw
+- [ ] npm package ships `dist/chunks/`
+
+Full detail: [rollup-library-build — Dual-entry singleton](../rollup-library-build/SKILL.md#dual-entry-singleton-shared-chunk).
+
+---
+
+## Problem 6: Testing and mocking
 
 Singletons resist isolated tests:
 
@@ -154,7 +182,7 @@ Singletons resist isolated tests:
 
 ---
 
-## Problem 6: Hidden coupling via import order
+## Problem 7: Hidden coupling via import order
 
 ```text
 index.ts imports supabase singleton
@@ -171,6 +199,7 @@ Debugging “why is my config wrong?” often traces to **who imported first**, 
 - [ ] Are defaults copied (`{ ...DEFAULT }`), not referenced?
 - [ ] Is there eager `const x = getInstance()` at module bottom?
 - [ ] Can tests reset state?
+- [ ] Dual browser + node entry in one consumer process → Rollup **shared chunks**, not two standalone bundles? ([Problem 5](#problem-5-dual-entry-rollup-bundles-duplicate-module-singletons-build))
 
 ---
 

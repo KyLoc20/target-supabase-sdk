@@ -1,12 +1,12 @@
 import type { ChildProcess } from "node:child_process";
 import { resolve } from "node:path";
 import type { LoggerWithScope } from "../../shared/log";
-import { isChildProcessRunning, spawnTsxChild } from "./process-spawn.js";
+import { isChildProcessRunning, spawnTsxChild } from "./process-spawn";
 
 export interface ManagedChildProcessesOptions {
     projectRoot: string;
     preloadModules?: readonly string[];
-    /** SIGTERM → wait → SIGKILL delay (default 5000 ms). */
+    /** SIGTERM -> wait -> SIGKILL delay (default 5000 ms). */
     graceMs?: number;
     logger?: Pick<LoggerWithScope, "info" | "warn" | "error">;
 }
@@ -23,8 +23,8 @@ export interface StopAllChildrenOptions {
 }
 
 /**
- * Process-local registry for tsx child processes (supervisor, worker, …).
- * Each OS process has its own instance — do not expect cross-process PID tracking.
+ * Process-local registry for tsx child processes (supervisor, worker, etc.).
+ * Each OS process has its own instance - do not expect cross-process PID tracking.
  */
 export class ManagedChildProcesses {
     private readonly projectRoot: string;

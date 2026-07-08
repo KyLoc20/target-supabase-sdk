@@ -1,9 +1,9 @@
-export { buildNodeImportArgs, spawnTsxChild, isChildProcessRunning } from "./process-spawn.js";
-export type { BuildNodeImportArgsInput, SpawnTsxChildOptions } from "./process-spawn.js";
+export { buildNodeImportArgs, spawnTsxChild, isChildProcessRunning } from "./process-spawn";
+export type { BuildNodeImportArgsInput, SpawnTsxChildOptions } from "./process-spawn";
 
-export { ManagedChildProcesses } from "./managed-child-processes.js";
+export { ManagedChildProcesses } from "./managed-child-processes";
 export type {
     ManagedChildProcessesOptions,
     SpawnChildResult,
     StopAllChildrenOptions,
-} from "./managed-child-processes.js";
+} from "./managed-child-processes";

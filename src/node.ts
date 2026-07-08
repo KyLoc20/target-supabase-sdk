@@ -114,6 +114,7 @@ export {
 	envNumber,
 	envBool,
 	resolveProjectRootFromModule,
+	resolveProjectRootByPackageName,
 	publicBaseUrlFromEnv,
 	initSupabaseFromStandardEnv,
 } from "./node/env";

@@ -1,6 +1,6 @@
-import { supabase } from "../../supabase.js";
-import { loadEnvFiles } from "./load-env.js";
-import { readEnv, requireEnv } from "./require-env.js";
+import { supabase } from "../../supabase";
+import { loadEnvFiles } from "./load-env";
+import { readEnv, requireEnv } from "./require-env";
 
 export interface InitSupabaseFromStandardEnvOptions {
     /** Project root for `.env` files (required when `loadEnv` is true). */

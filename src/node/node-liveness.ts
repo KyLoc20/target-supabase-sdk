@@ -1,4 +1,4 @@
-import { type Node, NodeStatus } from "./node.interface.js";
+import { type Node, NodeStatus } from "./node.interface";
 
 export interface TaskNodeLivenessFreshest {
     nodeId: string;

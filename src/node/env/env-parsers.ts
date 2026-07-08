@@ -1,4 +1,4 @@
-import { readEnv } from "./require-env.js";
+import { readEnv } from "./require-env";
 
 export interface EnvIntOptions {
     env?: NodeJS.ProcessEnv;
