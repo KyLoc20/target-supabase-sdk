@@ -1,5 +1,5 @@
-import { createTarget, deleteTarget, getTarget, validateWithSchema } from "../core.api";
 import { z } from "zod";
+import { createTarget, deleteTarget, getTarget, validateWithSchema } from "../core.api";
 import { CategoryParcel, type Parcel, type ParcelDetails } from "./parcel.interface";
 
 const parcelIdSchema = z.string().trim().min(1);
@@ -61,7 +61,7 @@ const parcelCategoryFilter = {
 /** Persist a Parcel row (`category=parcel`) after chunks are uploaded via {@link ParcelManager.save}. */
 export const postParcel = validateWithSchema(
     postParcelSchema,
-    "postParcelSchema"
+    "postParcelSchema",
 )(async ({ name, value, details, tagList, extra }) => {
     return createTarget<Parcel, PostParcelPayload>({
         payload: { name, value, details, tagList, extra },
@@ -79,7 +79,7 @@ export const postParcel = validateWithSchema(
 /** Fetch a Parcel by id (`category=parcel`). */
 export const getParcel = validateWithSchema(
     getParcelSchema,
-    "getParcelSchema"
+    "getParcelSchema",
 )(async ({ id }) => {
     const result = await getTarget({
         id,
@@ -94,7 +94,7 @@ export const getParcel = validateWithSchema(
 /** Delete a Parcel row by id (`category=parcel`). Does not remove chunk blobs from storage providers. */
 export const deleteParcel = validateWithSchema(
     deleteParcelSchema,
-    "deleteParcelSchema"
+    "deleteParcelSchema",
 )(async ({ id }) => {
     return deleteTarget({
         id,

@@ -1,10 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { postTrigger, type PostTriggerPayload } from "../src/trigger/trigger.api.js";
-import { TriggerStatus } from "../src/trigger/trigger.interface.js";
 import { TaskStatus } from "../src/task/task.interface.js";
+import { type PostTriggerPayload, postTrigger } from "../src/trigger/trigger.api.js";
+import { TriggerStatus } from "../src/trigger/trigger.interface.js";
 import { initSupabaseFromEnv } from "./init-supabase.js";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -28,7 +27,7 @@ function parseArgs(argv: string[]): Record<string, string> {
     return out;
 }
 
-function requireArg(args: Record<string, string>, key: string): string {
+function _requireArg(args: Record<string, string>, key: string): string {
     const value = args[key]?.trim();
     if (value == null || value === "") {
         throw new Error(`Missing required flag: --${key}`);

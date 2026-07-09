@@ -1,12 +1,7 @@
 import type { SupabaseResponse } from "../core.interface";
 import { getParcel, postParcel } from "./parcel.api";
 import type { Parcel } from "./parcel.interface";
-import {
-    ParcelManager,
-    type CreateOptions,
-    type ReassembleOptions,
-    type StorageAdapter,
-} from "./parcel-manager";
+import { type CreateOptions, ParcelManager, type ReassembleOptions, type StorageAdapter } from "./parcel-manager";
 
 export interface PublishParcelInput {
     file: ArrayBuffer;
@@ -69,19 +64,14 @@ export async function publishParcel(input: PublishParcelInput): Promise<PublishP
 /**
  * Reassemble file bytes from a {@link Parcel} (chunk URLs in details).
  */
-export async function restoreParcel(
-    parcel: Parcel,
-    reassembleOptions?: ReassembleOptions
-): Promise<ArrayBuffer> {
+export async function restoreParcel(parcel: Parcel, reassembleOptions?: ReassembleOptions): Promise<ArrayBuffer> {
     return ParcelManager.reassemble(parcel, reassembleOptions ?? {});
 }
 
 /**
  * Fetch Parcel by id, then reassemble. Orchestrates {@link getParcel} + {@link restoreParcel}.
  */
-export async function restoreParcelById(
-    input: RestoreParcelByIdInput
-): Promise<RestoreParcelByIdResult> {
+export async function restoreParcelById(input: RestoreParcelByIdInput): Promise<RestoreParcelByIdResult> {
     const response = await getParcel({ id: input.id });
     const parcel = requireResponseData(response, "getParcel");
     const file = await restoreParcel(parcel, input.reassembleOptions);

@@ -1,18 +1,18 @@
+import { z } from "zod";
 import {
     getTargetList,
     isOptimisticLockError,
     OPTIMISTIC_LOCK_ERROR_CODE,
     OPTIMISTIC_LOCK_FAILED_MESSAGE,
-    QueryFilter,
+    type QueryFilter,
     updateTargetDetails,
     validateWithSchema,
 } from "../core.api";
 import { generateResponse, type SupabaseResponse } from "../core.interface";
 import { createLogger, type LoggerWithScope } from "../shared/log";
-import { z } from "zod";
-import { CategoryTask, ResultCode, Task, TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
-import { LOG_TOPIC_TASK } from "./task.constant";
 import { getErrorMessage } from "../shared/utils/error.utils";
+import { LOG_TOPIC_TASK } from "./task.constant";
+import { CategoryTask, ResultCode, type Task, type TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
 
 const TASK_STATUS_FIELD = "details->>status" as const;
 const TASK_NODE_ID_FIELD = "details->>nodeId" as const;
@@ -56,7 +56,7 @@ const taskIdSchema = z.string().trim().min(1);
 const nodeIdSchema = z.string().trim().min(1);
 /** Optional — orchestrator (e.g. TaskNode loop) passes its trace to correlate logs. */
 const traceIdSchema = z.string().trim().min(1).optional();
-const traceParentIdSchema = z.string().trim().min(1).nullable().optional();
+const _traceParentIdSchema = z.string().trim().min(1).nullable().optional();
 
 const patchChangeTaskStatusBaseSchema = {
     id: taskIdSchema,
@@ -173,7 +173,7 @@ function logTaskTransition(
     logger: LoggerWithScope,
     action: TaskStatusAction | "patchTaskProgress" | "patchClaimTask",
     task: Task,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
 ): void {
     logger.debug("任務狀態遷移成功", {
         topic: LOG_TOPIC_TASK,
@@ -214,7 +214,7 @@ async function claimTaskById({
 
 export const patchChangeTaskStatus = validateWithSchema(
     patchChangeTaskStatusSchema,
-    "patchChangeTaskStatusSchema"
+    "patchChangeTaskStatusSchema",
 )(async (params) => {
     const logger = createLogger({ module: "patchChangeTaskStatus", traceId: params.traceId });
     const { id, action, extra } = params;
@@ -318,7 +318,7 @@ export const patchChangeTaskStatus = validateWithSchema(
 /** Update progress on a DOING task; only the owning node may write (see `lockOnDoingOwner`). */
 export const patchTaskProgress = validateWithSchema(
     patchTaskProgressSchema,
-    "patchTaskProgressSchema"
+    "patchTaskProgressSchema",
 )(async ({ id, progress, nodeId, traceId }) => {
     const logger = createLogger({ module: "patchTaskProgress", traceId, labels: { nodeId } });
     const data = await transitionTask({
@@ -346,7 +346,7 @@ export const patchTaskProgress = validateWithSchema(
  */
 export const patchClaimTask = validateWithSchema(
     patchClaimTaskSchema,
-    "patchClaimTaskSchema"
+    "patchClaimTaskSchema",
 )(async ({ nodeId, availableTaskList, traceId }): Promise<SupabaseResponse<Task | null>> => {
     const logger = createLogger({ module: "patchClaimTask", traceId, labels: { nodeId } });
 
@@ -392,7 +392,7 @@ export const patchClaimTask = validateWithSchema(
             return generateResponse.error(
                 OPTIMISTIC_LOCK_FAILED_MESSAGE,
                 undefined,
-                OPTIMISTIC_LOCK_ERROR_CODE
+                OPTIMISTIC_LOCK_ERROR_CODE,
             ) as SupabaseResponse<Task | null>;
         }
         const message = getErrorMessage(error);

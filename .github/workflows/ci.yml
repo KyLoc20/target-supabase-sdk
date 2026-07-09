@@ -35,6 +35,9 @@ jobs:
       - name: Typecheck scripts
         run: pnpm typecheck:scripts
 
+      - name: Biome check
+        run: pnpm format:check
+
       - name: Build library
         run: pnpm build
 

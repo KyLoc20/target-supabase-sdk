@@ -84,9 +84,7 @@ wss.on("connection", (ws) => {
         if (message.type === "request" && message.id != null) {
             void (async () => {
                 if (!isBridgeOpen()) {
-                    console.log(
-                        `[chrome-hub] waiting up to ${BRIDGE_WAIT_MS}ms for Chrome bridge…`,
-                    );
+                    console.log(`[chrome-hub] waiting up to ${BRIDGE_WAIT_MS}ms for Chrome bridge…`);
                     const ready = await waitForBridge();
                     if (!ready) {
                         rejectRequest(
@@ -98,7 +96,7 @@ wss.on("connection", (ws) => {
                     }
                 }
                 pendingRoutes.set(message.id!, ws);
-                bridge!.send(String(raw));
+                bridge?.send(String(raw));
             })();
             return;
         }

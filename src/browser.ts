@@ -5,173 +5,159 @@
  * For TaskManager, RepoManager, TaskNode, use `target-supabase-sdk/node`.
  */
 
-export { supabase } from "./supabase";
-export type { SupabaseHolder, SupabaseInitializerParams } from "./supabase";
 export type { SupabaseClient } from "@supabase/supabase-js";
-
 export * from "./core.api";
 export * from "./core.interface";
 export * from "./core.utils";
 export * from "./idea/idea.interface";
-
+export * from "./link/link.api";
+export * from "./link/link.interface";
+export * from "./list/list.api";
+export * from "./list/list.interface";
+export * from "./node/node.api";
+export * from "./node/node.interface";
+export type {
+    EvaluateBusyNodeLivenessOptions,
+    TaskNodeLivenessFreshest,
+    TaskNodeLivenessReport,
+} from "./node/node-liveness";
+export { evaluateBusyNodeLiveness } from "./node/node-liveness";
+export type { ChunkResolveProvider } from "./parcel/chunk-fetch-registry";
+export {
+    installChunkFetchRegistry,
+    registerProviderChunkResolver,
+} from "./parcel/chunk-fetch-registry";
+export {
+    isLocalFilesystemPath,
+    isOpaqueChunkUrl,
+    parseProviderPrefixedUrl,
+} from "./parcel/chunk-url.utils";
+export type { DeleteParcelPayload, GetParcelPayload, PostParcelPayload } from "./parcel/parcel.api";
+export {
+    deleteParcel,
+    deleteParcelSchema,
+    getParcel,
+    getParcelSchema,
+    parcelDetailsSchema,
+    postParcel,
+    postParcelSchema,
+} from "./parcel/parcel.api";
+export type {
+    Chunk,
+    Lifecycle as ParcelLifecycle,
+    LifecycleStatus as ParcelLifecycleStatus,
+    Parcel,
+    ParcelCrypto,
+    ParcelDetails,
+} from "./parcel/parcel.interface";
 export { CategoryParcel } from "./parcel/parcel.interface";
 export type {
-	Parcel,
-	ParcelDetails,
-	ParcelCrypto,
-	Chunk,
-	LifecycleStatus as ParcelLifecycleStatus,
-	Lifecycle as ParcelLifecycle,
-} from "./parcel/parcel.interface";
+    PublishParcelInput,
+    PublishParcelResult,
+    RestoreParcelByIdInput,
+    RestoreParcelByIdResult,
+} from "./parcel/parcel.service";
+export {
+    publishParcel,
+    restoreParcel,
+    restoreParcelById,
+} from "./parcel/parcel.service";
+export type {
+    CreateOptions,
+    CreateResult,
+    ParcelSaveInput,
+    ReassembleOptions,
+    StorageAdapter,
+} from "./parcel/parcel-manager";
 export { ParcelManager } from "./parcel/parcel-manager";
-export type { StorageAdapter, ParcelSaveInput, CreateOptions, CreateResult, ReassembleOptions } from "./parcel/parcel-manager";
-export {
-	postParcel,
-	postParcelSchema,
-	getParcel,
-	getParcelSchema,
-	deleteParcel,
-	deleteParcelSchema,
-	parcelDetailsSchema,
-} from "./parcel/parcel.api";
-export type { PostParcelPayload, GetParcelPayload, DeleteParcelPayload } from "./parcel/parcel.api";
-export {
-	publishParcel,
-	restoreParcel,
-	restoreParcelById,
-} from "./parcel/parcel.service";
 export type {
-	PublishParcelInput,
-	PublishParcelResult,
-	RestoreParcelByIdInput,
-	RestoreParcelByIdResult,
-} from "./parcel/parcel.service";
-
-export {
-	postApi,
-	postApiSchema,
-	getApi,
-	getApiSchema,
-	postService,
-	postServiceSchema,
-	getService,
-	getServiceSchema,
-	apiDetailsSchema,
-	serviceDetailsSchema,
-	serviceLifecycleSchema,
-	fieldDefinitionSchema,
-	schemaDefinitionSchema,
-	discoverService,
-	CategoryService,
-	ApiMethod,
-	ServiceLifecycleStatus,
-} from "./service/index";
+    CreateUploadAdapterOptions,
+    ProviderProbeFail,
+    ProviderProbeOk,
+    ProviderProbeResult,
+    StorageProviderModule,
+    UploadTracker,
+} from "./parcel/storage-provider.types";
+export { createUploadTracker } from "./parcel/storage-provider.types";
+export type { ProviderProbeMap, StorageProviderRegistry } from "./parcel/storage-provider-registry";
+export { createStorageProviderRegistry } from "./parcel/storage-provider-registry";
+export * from "./repo/repo.api";
+export * from "./repo/repo.interface";
 export type {
-	PostApiPayload,
-	GetApiPayload,
-	PostServicePayload,
-	GetServicePayload,
-	DiscoverServiceInput,
-	Api,
-	ApiDetails,
-	Service,
-	ServiceDetails,
+    Api,
+    ApiDetails,
+    DiscoverServiceInput,
+    GetApiPayload,
+    GetServicePayload,
+    PostApiPayload,
+    PostServicePayload,
+    Service,
+    ServiceDetails,
 } from "./service/index";
-
-export * from "./link/link.interface";
-export * from "./link/link.api";
-
-export * from "./list/list.interface";
-export * from "./list/list.api";
-
-export * from "./word/word.interface";
-
+export {
+    ApiMethod,
+    apiDetailsSchema,
+    CategoryService,
+    discoverService,
+    fieldDefinitionSchema,
+    getApi,
+    getApiSchema,
+    getService,
+    getServiceSchema,
+    postApi,
+    postApiSchema,
+    postService,
+    postServiceSchema,
+    ServiceLifecycleStatus,
+    schemaDefinitionSchema,
+    serviceDetailsSchema,
+    serviceLifecycleSchema,
+} from "./service/index";
+export type { FetchInitFactory, FetchRetryOptions } from "./shared/http/fetch-retry";
+export {
+    fetchBinaryWithRetry,
+    fetchWithRetry,
+    isRetryableHttpStatus,
+    requestHasBody,
+} from "./shared/http/fetch-retry";
+export type { CreateLoggerInput, LoggerWithScope, LogScope, LogScopePatch } from "./shared/log";
+export { createLogger, LogLevel, logManager } from "./shared/log";
+export { isHttpUrl, resolveFetchUrl } from "./shared/utils/fetch-url";
+export type {
+    ClassifiedNetworkError,
+    FormatNetworkErrorOptions,
+    NetworkErrorKind,
+} from "./shared/utils/network-error";
+export {
+    classifyNetworkError,
+    formatNetworkError,
+} from "./shared/utils/network-error";
+export type { SanitizeFileNameOptions } from "./shared/utils/safe-file-name";
+export { sanitizeFileName, sanitizeParcelFileName } from "./shared/utils/safe-file-name";
+export { sha256Hex } from "./shared/utils/sha256";
+export type { SupabaseHolder, SupabaseInitializerParams } from "./supabase";
+export { supabase } from "./supabase";
+export type {
+    PatchChangeTaskStatusPayload,
+    PatchClaimTaskPayload,
+    PatchTaskProgressPayload,
+} from "./task/task.api";
+export {
+    patchChangeTaskStatus,
+    patchChangeTaskStatusSchema,
+    patchClaimTask,
+    patchClaimTaskSchema,
+    patchTaskProgress,
+    patchTaskProgressSchema,
+} from "./task/task.api";
+export type { Task, TaskDetails, TaskFlow } from "./task/task.interface";
 // task — api + validation only (TaskManager is Node-only → node entry)
 export {
-	CategoryTask,
-	ResultCode,
-	TaskStatus,
-	TaskStatusAction,
+    CategoryTask,
+    ResultCode,
+    TaskStatus,
+    TaskStatusAction,
 } from "./task/task.interface";
-export type { Task, TaskDetails, TaskFlow } from "./task/task.interface";
-export {
-	patchChangeTaskStatus,
-	patchChangeTaskStatusSchema,
-	patchClaimTask,
-	patchClaimTaskSchema,
-	patchTaskProgress,
-	patchTaskProgressSchema,
-} from "./task/task.api";
-export type {
-	PatchChangeTaskStatusPayload,
-	PatchClaimTaskPayload,
-	PatchTaskProgressPayload,
-} from "./task/task.api";
-export { countTasksByType, summarizeTaskQueue } from "./task/task-queue";
 export type { TaskStatusCount } from "./task/task-queue";
-
-export * from "./node/node.interface";
-export * from "./node/node.api";
-export { evaluateBusyNodeLiveness } from "./node/node-liveness";
-export type {
-	EvaluateBusyNodeLivenessOptions,
-	TaskNodeLivenessFreshest,
-	TaskNodeLivenessReport,
-} from "./node/node-liveness";
-
-export * from "./repo/repo.interface";
-export * from "./repo/repo.api";
-
-export { createLogger, logManager, LogLevel } from "./shared/log";
-export type { CreateLoggerInput, LoggerWithScope, LogScope, LogScopePatch } from "./shared/log";
-
-export {
-	classifyNetworkError,
-	formatNetworkError,
-} from "./shared/utils/network-error";
-export type {
-	ClassifiedNetworkError,
-	FormatNetworkErrorOptions,
-	NetworkErrorKind,
-} from "./shared/utils/network-error";
-
-export {
-	fetchWithRetry,
-	fetchBinaryWithRetry,
-	isRetryableHttpStatus,
-	requestHasBody,
-} from "./shared/http/fetch-retry";
-export type { FetchInitFactory, FetchRetryOptions } from "./shared/http/fetch-retry";
-
-export { sha256Hex } from "./shared/utils/sha256";
-
-export { resolveFetchUrl, isHttpUrl } from "./shared/utils/fetch-url";
-
-export {
-	isLocalFilesystemPath,
-	isOpaqueChunkUrl,
-	parseProviderPrefixedUrl,
-} from "./parcel/chunk-url.utils";
-
-export { sanitizeFileName, sanitizeParcelFileName } from "./shared/utils/safe-file-name";
-export type { SanitizeFileNameOptions } from "./shared/utils/safe-file-name";
-
-export {
-	installChunkFetchRegistry,
-	registerProviderChunkResolver,
-} from "./parcel/chunk-fetch-registry";
-export type { ChunkResolveProvider } from "./parcel/chunk-fetch-registry";
-
-export { createStorageProviderRegistry } from "./parcel/storage-provider-registry";
-export type { ProviderProbeMap, StorageProviderRegistry } from "./parcel/storage-provider-registry";
-export {
-	createUploadTracker,
-} from "./parcel/storage-provider.types";
-export type {
-	CreateUploadAdapterOptions,
-	ProviderProbeFail,
-	ProviderProbeOk,
-	ProviderProbeResult,
-	StorageProviderModule,
-	UploadTracker,
-} from "./parcel/storage-provider.types";
+export { countTasksByType, summarizeTaskQueue } from "./task/task-queue";
+export * from "./word/word.interface";

@@ -1,17 +1,11 @@
-import {
-    createLogger,
-    createScope,
-    withModule,
-    type LoggerWithScope,
-} from "../shared/log";
-import { getErrorMessage, toError } from "../shared/utils/error.utils";
 import { isOptimisticLockResponse } from "../core.api";
 import { BaseNodeRuntime, LOG_TOPIC_NODE, type NodeLoopContext } from "../node/node-runtime.base";
-import { TaskManager, type TaskRunResult } from "./task-manager";
+import { createLogger, createScope, type LoggerWithScope, withModule } from "../shared/log";
+import { getErrorMessage, toError } from "../shared/utils/error.utils";
 import { patchChangeTaskStatus, patchClaimTask } from "./task.api";
-import { TaskStatusAction } from "./task.interface";
-
 import { CRITICAL_UNKNOWN_TASK_TRACE_ID, LOG_TOPIC_TASK } from "./task.constant";
+import { TaskStatusAction } from "./task.interface";
+import { TaskManager, type TaskRunResult } from "./task-manager";
 
 /**
  * Task worker node: commands → heartbeat → claim & execute tasks.
@@ -42,7 +36,7 @@ class TaskNode extends BaseNodeRuntime {
                     module: `${this.runtimeModule}-runLoopSteps`,
                     traceId: ctx.loopTraceId,
                     labels: { nodeId: ctx.nodeId },
-                })
+                }),
             });
             logger.warn("心跳失敗，本輪跳過任務認領", { topic: LOG_TOPIC_NODE });
             return;
@@ -96,7 +90,7 @@ class TaskNode extends BaseNodeRuntime {
             return;
         }
 
-        const taskTraceId = task.details.traceId ?? CRITICAL_UNKNOWN_TASK_TRACE_ID
+        const taskTraceId = task.details.traceId ?? CRITICAL_UNKNOWN_TASK_TRACE_ID;
         const taskScope = createScope({
             module: "runAsWorker",
             traceId: loopTraceId,
@@ -213,7 +207,13 @@ class TaskNode extends BaseNodeRuntime {
         const duration = Date.now() - startTime;
         executeLogger.info("業務邏輯執行結束", {
             topic: LOG_TOPIC_TASK,
-            data: { taskId: task.id, taskName: task.name, taskTypeKey: task.value, displayName: taskFn.displayName, durationMs: duration },
+            data: {
+                taskId: task.id,
+                taskName: task.name,
+                taskTypeKey: task.value,
+                displayName: taskFn.displayName,
+                durationMs: duration,
+            },
         });
     }
 
@@ -254,7 +254,7 @@ class TaskNode extends BaseNodeRuntime {
             cost: TaskRunResult["cost"];
             extra: TaskRunResult["extra"];
             traceId: string;
-        }
+        },
     ): Promise<void> {
         const { logger, taskId, nodeId, taskTypeKey, cost, extra, traceId } = params;
         const outcomePrefix = outcome === "success" ? "任務成功" : "任務失敗";
@@ -269,20 +269,20 @@ class TaskNode extends BaseNodeRuntime {
         const { error: changeTaskStatusError } =
             outcome === "success"
                 ? await patchChangeTaskStatus({
-                    id: taskId,
-                    action: TaskStatusAction.FINISH,
-                    nodeId,
-                    cost,
-                    extra: extraValue,
-                    traceId,
-                })
+                      id: taskId,
+                      action: TaskStatusAction.FINISH,
+                      nodeId,
+                      cost,
+                      extra: extraValue,
+                      traceId,
+                  })
                 : await patchChangeTaskStatus({
-                    id: taskId,
-                    action: TaskStatusAction.RESET,
-                    nodeId,
-                    extra: extraValue,
-                    traceId,
-                });
+                      id: taskId,
+                      action: TaskStatusAction.RESET,
+                      nodeId,
+                      extra: extraValue,
+                      traceId,
+                  });
 
         if (changeTaskStatusError) {
             const upperMessage = `${outcomePrefix}但是更新 TaskStatus 失敗，產生孤兒 Task，請儘快排查問題`;

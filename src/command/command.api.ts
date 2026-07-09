@@ -1,13 +1,8 @@
-import {
-    createTarget,
-    MAX_POLL_TARGET_LIST_SIZE,
-    pollTargetList,
-    validateWithSchema,
-} from "../core.api";
+import { z } from "zod";
+import { createTarget, MAX_POLL_TARGET_LIST_SIZE, pollTargetList, validateWithSchema } from "../core.api";
 import { generateResponse } from "../core.interface";
 import { createLogger } from "../shared/log";
-import { z } from "zod";
-import { CategoryCommand, Command, CommandType } from "./command.interface";
+import { CategoryCommand, type Command, CommandType } from "./command.interface";
 
 const nodeIdSchema = z.string().trim().min(1);
 const traceIdSchema = z.string().trim().min(1).optional();
@@ -41,7 +36,7 @@ function commandNodeFilter(nodeId: string) {
 /** Enqueue a control command for `nodeId` (scheduler / admin). */
 export const postCommand = validateWithSchema(
     postCommandSchema,
-    "postCommandSchema"
+    "postCommandSchema",
 )(async ({ nodeId, command, traceId }) => {
     const logger = createLogger({ module: "postCommand", traceId, labels: { nodeId } });
 
@@ -68,7 +63,7 @@ export const postCommand = validateWithSchema(
 /** Dequeue control commands for `nodeId` (oldest first). */
 export const getPollCommandList = validateWithSchema(
     getPollCommandListSchema,
-    "getPollCommandListSchema"
+    "getPollCommandListSchema",
 )(async ({ nodeId, size, traceId }) => {
     const logger = createLogger({ module: "getPollCommandList", traceId, labels: { nodeId } });
 

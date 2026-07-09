@@ -6,10 +6,7 @@ import { fileURLToPath } from "node:url";
  * Resolve project root from a module URL (typically `import.meta.url`).
  * @param relativePath Path relative to the module file (default `".."` = parent directory).
  */
-export function resolveProjectRootFromModule(
-    importMetaUrl: string,
-    relativePath = ".."
-): string {
+export function resolveProjectRootFromModule(importMetaUrl: string, relativePath = ".."): string {
     return resolve(fileURLToPath(new URL(relativePath, importMetaUrl)));
 }
 
@@ -17,10 +14,7 @@ export function resolveProjectRootFromModule(
  * Walk upward from `importMetaUrl` until a `package.json` with matching `name` is found.
  * Use for esbuild bundles under `dist/` where a single `..` hop lands in `dist/`, not repo root.
  */
-export function resolveProjectRootByPackageName(
-    importMetaUrl: string,
-    packageName: string
-): string {
+export function resolveProjectRootByPackageName(importMetaUrl: string, packageName: string): string {
     let dir = dirname(fileURLToPath(importMetaUrl));
     for (;;) {
         const packageJsonPath = resolve(dir, "package.json");

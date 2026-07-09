@@ -1,19 +1,11 @@
 ﻿import { getPossibleTarget } from "../core.api";
+import type { LoggerWithScope } from "../shared/log";
 import { supabase } from "../supabase";
-import { LoggerWithScope } from "../shared/log";
 import type { TaskRepoContext, TaskRepoScriptRecord } from "../task/task-repo-context";
 import { TASK_REPO_SCRIPT_CATEGORY } from "../task/task-repo-context";
-import {
-    assertScriptLoadable,
-    isTaskRepoContext,
-    pickEntryScript,
-} from "./repo-context.utils";
-import { CategoryRepo, Repo } from "./repo.interface";
-import {
-    clearRepoScriptModuleCache,
-    loadRepoContextFromScript,
-    loadRepoContextFromUrl,
-} from "./repo.script-loader";
+import { CategoryRepo, type Repo } from "./repo.interface";
+import { clearRepoScriptModuleCache, loadRepoContextFromScript, loadRepoContextFromUrl } from "./repo.script-loader";
+import { assertScriptLoadable, isTaskRepoContext, pickEntryScript } from "./repo-context.utils";
 
 type LocalRepoEntry =
     | { kind: "context"; context: TaskRepoContext }
@@ -80,7 +72,7 @@ async function fetchRemoteScripts(taskTypeKey: string): Promise<TaskRepoScriptRe
 async function loadLocalEntry(
     logger: LoggerWithScope,
     entry: LocalRepoEntry,
-    taskTypeKey: string
+    taskTypeKey: string,
 ): Promise<TaskRepoContext | null> {
     if (entry.kind === "context") {
         return entry.context;
@@ -103,10 +95,7 @@ async function loadLocalEntry(
     return loaded?.context ?? null;
 }
 
-async function loadRemoteRepoContext(
-    logger: LoggerWithScope,
-    taskTypeKey: string
-): Promise<GetRepoContextResult> {
+async function loadRemoteRepoContext(logger: LoggerWithScope, taskTypeKey: string): Promise<GetRepoContextResult> {
     logger.info("從 Supabase 加載 Repo", { topic: "repo", data: { taskTypeKey } });
 
     const remoteRepo = await fetchRemoteRepo(taskTypeKey);

@@ -1,6 +1,6 @@
+import type { ChunkResolveProvider } from "./chunk-fetch-registry";
 import type { Parcel } from "./parcel.interface";
 import type { StorageAdapter } from "./parcel-manager";
-import type { ChunkResolveProvider } from "./chunk-fetch-registry";
 
 export interface ProviderProbeOk {
     ok: true;

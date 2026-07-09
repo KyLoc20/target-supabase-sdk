@@ -1,4 +1,4 @@
-import { logManager, type LoggerWithScope, type LogLevel } from "./log-manager";
+import { type LoggerWithScope, type LogLevel, logManager } from "./log-manager";
 import { createScope, type LogScope, type LogScopePatch } from "./log-scope";
 
 type CreateLoggerLevelOption = {

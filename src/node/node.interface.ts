@@ -1,4 +1,4 @@
-import { Target } from "../core.interface";
+import type { Target } from "../core.interface";
 
 export enum NodeStatus {
     /** Registered, not yet in worker loop. */
@@ -30,5 +30,4 @@ export interface NodeDetails {
     manifestVersion: number;
     status: NodeStatus;
     lastHeartBeat: number;
-};
-
+}

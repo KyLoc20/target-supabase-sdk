@@ -1,17 +1,13 @@
+import type { NodeLoopContext } from "../node/node-runtime.base";
+import { createLogger, createScope, withModule } from "../shared/log";
+import { getErrorMessage } from "../shared/utils/error.utils";
 import {
+    LOG_TOPIC_TRIGGER,
     TRIGGER_LOOP_INTERVAL_MS,
     TRIGGER_RUNNER_DEFAULT_RETRY_COUNT,
     TRIGGER_RUNNER_DEFAULT_RETRY_DELAY_MS,
 } from "./trigger.constant";
-import type { NodeLoopContext } from "../node/node-runtime.base";
-import { createLogger, createScope, withModule } from "../shared/log";
-import { getErrorMessage } from "../shared/utils/error.utils";
-import type {
-    RegisterTriggerRunnerOptions,
-    TriggerRunnerContext,
-    TriggerRunnerFn,
-} from "./trigger.interface";
-import { LOG_TOPIC_TRIGGER } from "./trigger.constant";
+import type { RegisterTriggerRunnerOptions, TriggerRunnerContext, TriggerRunnerFn } from "./trigger.interface";
 
 export type { RegisterTriggerRunnerOptions, TriggerRunnerContext, TriggerRunnerFn } from "./trigger.interface";
 
@@ -72,7 +68,7 @@ function delay(ms: number): Promise<void> {
 async function invokeRunnerFn(
     fn: TriggerRunnerFn,
     ctx: TriggerRunnerContext,
-    timeoutMs: number | undefined
+    timeoutMs: number | undefined,
 ): Promise<void> {
     if (timeoutMs == null) {
         await fn(ctx);
@@ -232,7 +228,7 @@ async function runRunner(ctx: NodeLoopContext, runner: TriggerRunnerState): Prom
     const runnerLogger = createLogger({
         scope: withModule(
             createScope({ module: "runRunner", traceId: loopTraceId, labels: { nodeId, runnerKey: runner.key } }),
-            runner.key
+            runner.key,
         ),
     });
 
@@ -256,7 +252,7 @@ async function runRunner(ctx: NodeLoopContext, runner: TriggerRunnerState): Prom
                         attempt,
                         maxAttempts,
                     },
-                    runner.timeoutMs
+                    runner.timeoutMs,
                 );
                 runnerLogger.success("Runner 完成", {
                     topic: LOG_TOPIC_TRIGGER,

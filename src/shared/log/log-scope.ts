@@ -39,7 +39,7 @@ export type PatchScopeInput = {
 
 function mergeLabels(
     base?: Readonly<Record<string, string>>,
-    patch?: Record<string, string>
+    patch?: Record<string, string>,
 ): Record<string, string> | undefined {
     const merged: Record<string, string> = { ...base, ...patch };
     return Object.keys(merged).length > 0 ? merged : undefined;
@@ -85,10 +85,7 @@ export function createScope(input: CreateScopeInput): LogScope {
 /** Merge patch into scope (labels deep-merge). Returns a new scope. */
 export function patchScope(input: PatchScopeInput): LogScope {
     const { scope, patch, allowTraceMutation = false } = input;
-    const traceId =
-        allowTraceMutation && patch.traceId != null && patch.traceId !== ""
-            ? patch.traceId
-            : scope.traceId;
+    const traceId = allowTraceMutation && patch.traceId != null && patch.traceId !== "" ? patch.traceId : scope.traceId;
     const traceParentId =
         allowTraceMutation && patch.traceParentId !== undefined ? patch.traceParentId : scope.traceParentId;
 

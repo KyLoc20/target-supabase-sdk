@@ -1,13 +1,12 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { initSupabaseFromEnv } from "./init-supabase.js";
+import { getErrorMessage } from "../src/shared/utils/error.utils.js";
+import { TaskStatus } from "../src/task/task.interface.js";
+import { postTask } from "../src/task/task-post.api.js";
 import { LOG_TOPIC_TRIGGER } from "../src/trigger/trigger.constant.js";
 import { TriggerManager } from "../src/trigger/trigger-manager.js";
 import { TriggerNode } from "../src/trigger/trigger-node.js";
-import { postTask } from "../src/task/task-post.api.js";
-import { TaskStatus } from "../src/task/task.interface.js";
-import { getErrorMessage } from "../src/shared/utils/error.utils.js";
+import { initSupabaseFromEnv } from "./init-supabase.js";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 

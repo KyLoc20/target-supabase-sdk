@@ -96,7 +96,8 @@ export const TASK_RUNNER_CONFIG_DIR = "config" as const;
 export const TASK_RUNNER_ROOT_CONFIG_FILENAME = "task.config.js" as const;
 
 /** Default root config path: `config/task.config.js` */
-export const TASK_RUNNER_ROOT_CONFIG_RELATIVE_PATH = `${TASK_RUNNER_CONFIG_DIR}/${TASK_RUNNER_ROOT_CONFIG_FILENAME}` as const;
+export const TASK_RUNNER_ROOT_CONFIG_RELATIVE_PATH =
+    `${TASK_RUNNER_CONFIG_DIR}/${TASK_RUNNER_ROOT_CONFIG_FILENAME}` as const;
 
 /** Legacy fallback at project root */
 export const TASK_RUNNER_ROOT_CONFIG_LEGACY_RELATIVE_PATH = TASK_RUNNER_ROOT_CONFIG_FILENAME;

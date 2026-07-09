@@ -69,7 +69,7 @@ export interface ResolveFirstExistingPathOptions {
  */
 export async function resolveFirstExistingPath(
     cwd: string,
-    options: ResolveFirstExistingPathOptions
+    options: ResolveFirstExistingPathOptions,
 ): Promise<string | null> {
     const { explicitPath, candidatePaths } = options;
 

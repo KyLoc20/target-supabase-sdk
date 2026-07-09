@@ -30,12 +30,7 @@ export interface FetchRetryOptions {
     hint?: string;
 }
 
-function backoffMs(
-    retryBaseMs: number,
-    attempt: number,
-    response?: Response,
-    maxBackoffMs?: number
-): number {
+function backoffMs(retryBaseMs: number, attempt: number, response?: Response, maxBackoffMs?: number): number {
     const retryAfter = response?.headers.get("Retry-After");
     if (retryAfter != null) {
         const seconds = Number(retryAfter);
@@ -52,12 +47,7 @@ function backoffMs(
     return delayMs;
 }
 
-async function fetchOnce(
-    url: string,
-    init: RequestInit,
-    timeoutMs: number,
-    dispatcher?: unknown
-): Promise<Response> {
+async function fetchOnce(url: string, init: RequestInit, timeoutMs: number, dispatcher?: unknown): Promise<Response> {
     const options: RequestInit & { dispatcher?: unknown } = {
         ...init,
         signal: AbortSignal.timeout(timeoutMs),
@@ -71,30 +61,22 @@ async function fetchOnce(
 export async function fetchWithRetry(
     url: string,
     initOrFactory: RequestInit | FetchInitFactory,
-    options: FetchRetryOptions
+    options: FetchRetryOptions,
 ): Promise<Response> {
     const maxAttempts = options.maxAttempts ?? 1;
     const retryBaseMs = options.retryBaseMs ?? 2_000;
     const isRetryableStatus = options.isRetryableStatus ?? isRetryableHttpStatus;
-    const buildInit =
-        typeof initOrFactory === "function" ? initOrFactory : () => initOrFactory;
+    const buildInit = typeof initOrFactory === "function" ? initOrFactory : () => initOrFactory;
 
     if (maxAttempts > 1 && typeof initOrFactory !== "function" && requestHasBody(initOrFactory)) {
-        throw new Error(
-            `${options.label}: retry requires an init factory when request body may be consumed`
-        );
+        throw new Error(`${options.label}: retry requires an init factory when request body may be consumed`);
     }
 
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-            const response = await fetchOnce(
-                url,
-                buildInit(),
-                options.timeoutMs,
-                options.dispatcher
-            );
+            const response = await fetchOnce(url, buildInit(), options.timeoutMs, options.dispatcher);
 
             if (!response.ok && isRetryableStatus(response.status) && attempt < maxAttempts) {
                 const delayMs = backoffMs(retryBaseMs, attempt, response, options.maxBackoffMs);
@@ -123,9 +105,7 @@ export async function fetchWithRetry(
             return response;
         } catch (error) {
             const classified = classifyNetworkError(error);
-            lastError = new Error(
-                formatNetworkError(error, options.label, { hint: options.hint })
-            );
+            lastError = new Error(formatNetworkError(error, options.label, { hint: options.hint }));
 
             if (classified.retryable && attempt < maxAttempts) {
                 const delayMs = backoffMs(retryBaseMs, attempt, undefined, options.maxBackoffMs);
@@ -155,7 +135,7 @@ export async function fetchWithRetry(
 export async function fetchBinaryWithRetry(
     url: string,
     init: RequestInit,
-    options: FetchRetryOptions
+    options: FetchRetryOptions,
 ): Promise<ArrayBuffer> {
     const response = await fetchWithRetry(url, init, options);
     if (!response.ok) {

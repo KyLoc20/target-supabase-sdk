@@ -1,7 +1,7 @@
-import { scanTargetList, validateWithSchema } from "../core.api";
-import { generateResponse, SupabaseResponse } from "../core.interface";
 import { z } from "zod";
-import { CategoryRepo, Repo } from "./repo.interface";
+import { scanTargetList, validateWithSchema } from "../core.api";
+import { generateResponse, type SupabaseResponse } from "../core.interface";
+import { CategoryRepo, type Repo } from "./repo.interface";
 
 const REPO_USAGE_FIELD = "details->>usage" as const;
 
@@ -16,7 +16,7 @@ export type GetScanRemoteRepoValuesPayload = z.infer<typeof getScanRemoteRepoVal
  * Returns `{ data: string[] }` on success; validation and DB failures use `{ error }` (never throws).
  */
 export const getScanRemoteRepoValues = async (
-    payload: GetScanRemoteRepoValuesPayload
+    payload: GetScanRemoteRepoValuesPayload,
 ): Promise<SupabaseResponse<string[]>> => {
     try {
         return await getScanRemoteRepoValuesValidated(payload);
@@ -28,7 +28,7 @@ export const getScanRemoteRepoValues = async (
 
 const getScanRemoteRepoValuesValidated = validateWithSchema(
     getScanRemoteRepoValuesSchema,
-    "getScanRemoteRepoValuesSchema"
+    "getScanRemoteRepoValuesSchema",
 )(async ({ usage }): Promise<SupabaseResponse<string[]>> => {
     try {
         const { data } = await scanTargetList<Repo>({

@@ -60,11 +60,7 @@ export function classifyNetworkError(error: unknown): ClassifiedNetworkError {
         };
     }
 
-    if (
-        code === "UND_ERR_CONNECT_TIMEOUT" ||
-        error.name === "TimeoutError" ||
-        error.name === "AbortError"
-    ) {
+    if (code === "UND_ERR_CONNECT_TIMEOUT" || error.name === "TimeoutError" || error.name === "AbortError") {
         return {
             kind: error.name === "AbortError" ? "timeout" : "connect_timeout",
             retryable: true,
@@ -128,11 +124,7 @@ export interface FormatNetworkErrorOptions {
     hint?: string;
 }
 
-export function formatNetworkError(
-    error: unknown,
-    label: string,
-    options: FormatNetworkErrorOptions = {}
-): string {
+export function formatNetworkError(error: unknown, label: string, options: FormatNetworkErrorOptions = {}): string {
     const classified = classifyNetworkError(error);
     const hint = options.hint ?? "";
 
@@ -140,10 +132,7 @@ export function formatNetworkError(
         case "connect_timeout":
             return `${label}: connect timeout${hint}`;
         case "tls_disconnect":
-            return (
-                `${label}: TLS handshake dropped${hint}. ` +
-                "Often transient through proxies — retries may succeed."
-            );
+            return `${label}: TLS handshake dropped${hint}. Often transient through proxies — retries may succeed.`;
         case "connection_refused":
             return `${label}: connection refused — ${classified.detail}${hint}`;
         case "dns_error":

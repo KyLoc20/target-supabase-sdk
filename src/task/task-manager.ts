@@ -1,38 +1,39 @@
 import { getScanRemoteRepoValues } from "../repo/repo.api";
 import { TASK_REPO_USAGE } from "../repo/repo.interface";
-import { LoggerWithScope } from "../shared/log";
-import { ResultCode, Task } from "./task.interface";
-import { TaskFn, TaskRunResult, ExecutableTaskFn } from "./task-repo-context";
+import type { LoggerWithScope } from "../shared/log";
+import type { ResultCode, Task } from "./task.interface";
+import type { ExecutableTaskFn, TaskFn } from "./task-repo-context";
 
 export type {
-    TaskFn,
-    TaskRepoContext,
-    TaskRunResult,
+    BootstrapLocalTasksResult,
+    BootstrapLocalTasksStatus,
     ExecutableTaskFn,
+    TaskFn,
+    TaskLocalPackageConfig,
+    TaskRepoContext,
     TaskRepoScriptDetails,
     TaskRepoScriptRecord,
     TaskRunnerRootConfig,
-    TaskLocalPackageConfig,
-    BootstrapLocalTasksResult,
-    BootstrapLocalTasksStatus,
+    TaskRunResult,
 } from "./task-repo-context";
 export {
+    TASK_LOCAL_PACKAGE_CONFIG_FILENAME,
     TASK_REPO_SCRIPT_CATEGORY,
     TASK_RUNNER_CONFIG_DIR,
     TASK_RUNNER_ROOT_CONFIG_FILENAME,
-    TASK_RUNNER_ROOT_CONFIG_RELATIVE_PATH,
     TASK_RUNNER_ROOT_CONFIG_LEGACY_RELATIVE_PATH,
-    TASK_LOCAL_PACKAGE_CONFIG_FILENAME,
+    TASK_RUNNER_ROOT_CONFIG_RELATIVE_PATH,
 } from "./task-repo-context";
+
 import {
+    type BootstrapLocalTasksOptions,
     bootstrapLocalTasks,
-    BootstrapLocalTasksOptions,
     clearBootstrapLocalTasksCache,
     getRegisteredLocalTaskTypeKeys,
 } from "./local-task-registry";
+import { LOG_TOPIC_TASK } from "./task.constant";
 import type { BootstrapLocalTasksResult } from "./task-repo-context";
 import { TaskRepoValidation, type TaskRepoValidationFailureReason } from "./task-repo-validation";
-import { LOG_TOPIC_TASK } from "./task.constant";
 
 export type {
     TaskRepoValidationFailureReason,

@@ -1,9 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { postTask, type PostTaskPayload } from "../src/task/task-post.api.js";
 import { TaskStatus } from "../src/task/task.interface.js";
+import { type PostTaskPayload, postTask } from "../src/task/task-post.api.js";
 import { initSupabaseFromEnv } from "./init-supabase.js";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));

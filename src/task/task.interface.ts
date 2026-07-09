@@ -1,4 +1,4 @@
-import { Target } from "../core.interface";
+import type { Target } from "../core.interface";
 
 export enum CategoryTask {
     TASK = "task",
@@ -60,11 +60,8 @@ export interface TaskDetails {
         code: ResultCode;
         errorMessage?: string;
         data?: unknown;
-    }
-};
-
-// TODO loop condition combination
-export interface TaskFlow extends Target {
-
+    };
 }
 
+// TODO loop condition combination
+export interface TaskFlow extends Target {}

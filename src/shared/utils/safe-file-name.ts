@@ -18,6 +18,7 @@ function fileBaseName(raw: string): string {
 export function sanitizeFileName(raw: string, options: SanitizeFileNameOptions = {}): string {
     const maxLength = options.maxLength ?? 200;
     const base = fileBaseName(raw);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally strip ASCII control chars (0x00–0x1f)
     const cleaned = base.replace(/[\x00-\x1f<>:"/\\|?*]+/g, "_").trim();
 
     if (cleaned === "" || cleaned === "." || cleaned === "..") {

@@ -9,10 +9,7 @@ export interface PublicBaseUrlFromEnvOptions {
 /**
  * Public base URL: `envKey` if set (trailing slash stripped), else `http://localhost:{port}`.
  */
-export function publicBaseUrlFromEnv(
-    port: number,
-    options: PublicBaseUrlFromEnvOptions
-): string {
+export function publicBaseUrlFromEnv(port: number, options: PublicBaseUrlFromEnvOptions): string {
     const configured = readEnv(options.envKey, options.env ?? process.env);
     if (configured != null) {
         return configured.replace(/\/$/, "");

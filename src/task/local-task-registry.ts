@@ -10,12 +10,12 @@ import {
     resolvePathFromConfigFile,
 } from "../shared/utils/config-path.utils";
 import {
-    BootstrapLocalTasksResult,
+    type BootstrapLocalTasksResult,
     TASK_LOCAL_PACKAGE_CONFIG_FILENAME,
     TASK_RUNNER_ROOT_CONFIG_LEGACY_RELATIVE_PATH,
     TASK_RUNNER_ROOT_CONFIG_RELATIVE_PATH,
-    TaskLocalPackageConfig,
-    TaskRunnerRootConfig,
+    type TaskLocalPackageConfig,
+    type TaskRunnerRootConfig,
 } from "./task-repo-context";
 
 export interface BootstrapLocalTasksOptions {
@@ -77,7 +77,7 @@ function parseTaskPackageConfig(raw: unknown, configPath: string): TaskLocalPack
         entry: entry.trim(),
         exportName: typeof record.exportName === "string" ? record.exportName : undefined,
         displayName: typeof record.displayName === "string" ? record.displayName : undefined,
-        enabled: record.enabled === false ? false : true,
+        enabled: record.enabled !== false,
     };
 }
 
@@ -114,7 +114,7 @@ async function computeConfigFingerprint(rootConfigPath: string, tasksRoot: strin
 
 function canUseCachedBootstrap(
     fingerprint: string,
-    forTaskTypeKey: string | undefined
+    forTaskTypeKey: string | undefined,
 ): BootstrapLocalTasksResult | null {
     if (bootstrapCache.fingerprint !== fingerprint || bootstrapCache.lastResult == null) {
         return null;
@@ -129,17 +129,12 @@ function canUseCachedBootstrap(
     return { ...bootstrapCache.lastResult, cached: true };
 }
 
-async function runBootstrapScan(
-    options: BootstrapLocalTasksOptions
-): Promise<BootstrapLocalTasksResult> {
+async function runBootstrapScan(options: BootstrapLocalTasksOptions): Promise<BootstrapLocalTasksResult> {
     const cwd = options.cwd ?? process.cwd();
 
     const rootConfigPath = await resolveFirstExistingPath(cwd, {
         explicitPath: options.rootConfigPath,
-        candidatePaths: [
-            TASK_RUNNER_ROOT_CONFIG_RELATIVE_PATH,
-            TASK_RUNNER_ROOT_CONFIG_LEGACY_RELATIVE_PATH,
-        ],
+        candidatePaths: [TASK_RUNNER_ROOT_CONFIG_RELATIVE_PATH, TASK_RUNNER_ROOT_CONFIG_LEGACY_RELATIVE_PATH],
     });
     if (rootConfigPath == null) {
         const result: BootstrapLocalTasksResult = {
@@ -218,10 +213,7 @@ async function runBootstrapScan(
         const status = finalizeStatus(result);
         const finalResult: BootstrapLocalTasksResult = {
             status,
-            message:
-                status === "empty"
-                    ? `Root config loaded but no tasks registered under ${tasksRoot}`
-                    : undefined,
+            message: status === "empty" ? `Root config loaded but no tasks registered under ${tasksRoot}` : undefined,
             ...result,
         };
         bootstrapCache = { fingerprint, lastResult: finalResult };
@@ -257,7 +249,7 @@ async function runBootstrapScan(
  * Legacy fallback: `./task.config.js` at project root (`taskDir: "./tasks"`).
  */
 export async function bootstrapLocalTasks(
-    options: BootstrapLocalTasksOptions = {}
+    options: BootstrapLocalTasksOptions = {},
 ): Promise<BootstrapLocalTasksResult> {
     if (bootstrapInFlight != null) {
         return bootstrapInFlight;

@@ -32,7 +32,7 @@ export interface WaitForServiceReadyOptions {
  */
 export async function waitForServiceReady(
     gate: ServiceReadyGate,
-    options: WaitForServiceReadyOptions
+    options: WaitForServiceReadyOptions,
 ): Promise<ServiceReadySnapshot> {
     const pollMs = options.pollMs ?? 500;
     const defaultFailureMessage = options.failureMessage ?? "Readiness checks failed";

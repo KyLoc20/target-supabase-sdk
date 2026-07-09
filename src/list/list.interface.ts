@@ -1,4 +1,4 @@
-import { Target, TargetDraft } from "../core.interface";
+import type { Target, TargetDraft } from "../core.interface";
 
 export enum CategoryList {
     LIST = "list",
@@ -19,6 +19,5 @@ export interface ListDetails {
     preview: string;
     /** How to render the List */
     loaderKey: string;
-    items: Array<TargetDraft<Target>>
-};
-
+    items: Array<TargetDraft<Target>>;
+}

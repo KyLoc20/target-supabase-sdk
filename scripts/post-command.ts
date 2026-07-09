@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { postCommand, type PostCommandPayload } from "../src/command/command.api.js";
+import { type PostCommandPayload, postCommand } from "../src/command/command.api.js";
 import { CommandType } from "../src/command/command.interface.js";
 import { initSupabaseFromEnv } from "./init-supabase.js";
 

@@ -33,7 +33,7 @@ Examples:
 
 async function buildReassembleOptions(
     parcel: Parcel,
-    args: Record<string, string>
+    args: Record<string, string>,
 ): Promise<{ key?: CryptoKey; passphrase?: string }> {
     const encrypted = parcel.details.crypto?.enabled === true;
     if (!encrypted) {

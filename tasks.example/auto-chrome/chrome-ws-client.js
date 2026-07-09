@@ -89,9 +89,7 @@ export class ChromeWsClient {
 
         if (message.error != null) {
             const msg =
-                typeof message.error.message === "string"
-                    ? message.error.message
-                    : JSON.stringify(message.error);
+                typeof message.error.message === "string" ? message.error.message : JSON.stringify(message.error);
             pending.reject(new Error(msg));
             return;
         }

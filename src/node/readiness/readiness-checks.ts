@@ -11,7 +11,7 @@ export interface RequiredEnvCheckOptions {
 export function createRequiredEnvCheck(
     name: string,
     keys: string[],
-    options?: RequiredEnvCheckOptions
+    options?: RequiredEnvCheckOptions,
 ): ReadinessCheck {
     return () => {
         const env = options?.env ?? process.env;
@@ -35,11 +35,7 @@ export interface PathsExistCheckOptions {
 }
 
 /** Factory: every path must exist on disk. */
-export function createPathsExistCheck(
-    name: string,
-    paths: string[],
-    options?: PathsExistCheckOptions
-): ReadinessCheck {
+export function createPathsExistCheck(name: string, paths: string[], options?: PathsExistCheckOptions): ReadinessCheck {
     return async () => {
         for (const filePath of paths) {
             try {
@@ -53,8 +49,7 @@ export function createPathsExistCheck(
             }
         }
 
-        const detail =
-            options?.successDetail ?? paths[paths.length - 1] ?? paths.join(", ");
+        const detail = options?.successDetail ?? paths[paths.length - 1] ?? paths.join(", ");
 
         return { name, ok: true, detail };
     };
@@ -67,9 +62,7 @@ export interface SupabaseReachableCheckOptions {
 }
 
 /** Factory: lightweight Supabase query via {@link scanTargetList}. */
-export function createSupabaseReachableCheck(
-    options?: SupabaseReachableCheckOptions
-): ReadinessCheck {
+export function createSupabaseReachableCheck(options?: SupabaseReachableCheckOptions): ReadinessCheck {
     const name = options?.name ?? "supabase_connectivity";
     const category = options?.category ?? "node";
     const maxRows = options?.maxRows ?? 1;

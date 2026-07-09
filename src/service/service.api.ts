@@ -1,11 +1,15 @@
-import { createTarget, getPossibleTarget, getTarget, validateWithSchema, type QueryFilter } from "../core.api";
 import { z } from "zod";
+import { createTarget, getPossibleTarget, getTarget, type QueryFilter, validateWithSchema } from "../core.api";
+import { type FieldDefinition, type SchemaDefinition, ServiceLifecycleStatus } from "./base.interface";
 import {
-    ServiceLifecycleStatus,
-    type FieldDefinition,
-    type SchemaDefinition,
-} from "./base.interface";
-import { Api, ApiDetails, ApiMethod, CategoryApi, CategoryService, Service, ServiceDetails } from "./service.interface";
+    type Api,
+    type ApiDetails,
+    ApiMethod,
+    CategoryApi,
+    CategoryService,
+    type Service,
+    type ServiceDetails,
+} from "./service.interface";
 
 const targetIdSchema = z.string().trim().min(1);
 
@@ -59,15 +63,15 @@ const schemaDefinitionSchema: z.ZodType<SchemaDefinition> = z.lazy(() =>
             max: z.number().int().nonnegative().optional(),
             default: z.unknown().optional(),
         }),
-    ])
+    ]),
 );
 
 const fieldDefinitionSchema: z.ZodType<FieldDefinition> = z.intersection(
     z.object({ fieldName: z.string().trim().min(1) }),
-    schemaDefinitionSchema
+    schemaDefinitionSchema,
 );
 
-export { schemaDefinitionSchema, fieldDefinitionSchema };
+export { fieldDefinitionSchema, schemaDefinitionSchema };
 
 export const serviceLifecycleSchema = z.object({
     status: z.nativeEnum(ServiceLifecycleStatus),
@@ -118,7 +122,7 @@ export const getApiSchema = z
             const hasValue = payload.value != null && payload.value !== "";
             return hasId !== hasValue;
         },
-        { message: "Provide exactly one of id or value" }
+        { message: "Provide exactly one of id or value" },
     );
 
 export type GetApiPayload = z.infer<typeof getApiSchema>;
@@ -136,7 +140,7 @@ export const getServiceSchema = z
             const hasValue = payload.value != null && payload.value !== "";
             return hasId !== hasValue;
         },
-        { message: "Provide exactly one of id or value" }
+        { message: "Provide exactly one of id or value" },
     );
 
 export type GetServicePayload = z.infer<typeof getServiceSchema>;
@@ -186,13 +190,10 @@ function buildServiceLookupFilters(payload: GetServicePayload): QueryFilter[] {
 }
 
 /** Register an Api contract row (`category=api`). */
-export const postApi = validateWithSchema(postApiSchema, "postApiSchema")(async ({
-    name,
-    value,
-    details,
-    tagList,
-    extra,
-}) => {
+export const postApi = validateWithSchema(
+    postApiSchema,
+    "postApiSchema",
+)(async ({ name, value, details, tagList, extra }) => {
     return createTarget<Api, PostApiPayload>({
         payload: { name, value, details, tagList, extra },
         createFn: () => ({
@@ -207,7 +208,10 @@ export const postApi = validateWithSchema(postApiSchema, "postApiSchema")(async 
 });
 
 /** Fetch an Api by id or by {@link Api.value} key (`category=api`). */
-export const getApi = validateWithSchema(getApiSchema, "getApiSchema")(async (payload) => {
+export const getApi = validateWithSchema(
+    getApiSchema,
+    "getApiSchema",
+)(async (payload) => {
     if (payload.id != null && payload.id !== "") {
         const result = await getTarget({
             id: payload.id,
@@ -220,10 +224,7 @@ export const getApi = validateWithSchema(getApiSchema, "getApiSchema")(async (pa
     }
 
     const result = await getPossibleTarget({
-        filterList: [
-            apiCategoryFilter,
-            { field: "value", operator: "eq", value: payload.value! },
-        ],
+        filterList: [apiCategoryFilter, { field: "value", operator: "eq", value: payload.value! }],
     });
 
     if (result.data == null) {
@@ -242,7 +243,7 @@ export const getApi = validateWithSchema(getApiSchema, "getApiSchema")(async (pa
 /** Fetch a Service by id or by {@link Service.value} key (`category=service`). */
 export const getService = validateWithSchema(
     getServiceSchema,
-    "getServiceSchema"
+    "getServiceSchema",
 )(async (payload) => {
     const filterList = buildServiceLookupFilters(payload);
 
@@ -277,7 +278,7 @@ export const getService = validateWithSchema(
 /** Register a Service catalog row (`category=service`). */
 export const postService = validateWithSchema(
     postServiceSchema,
-    "postServiceSchema"
+    "postServiceSchema",
 )(async ({ name, value, details, tagList, extra }) => {
     return createTarget<Service, PostServicePayload>({
         payload: { name, value, details, tagList, extra },

@@ -1,12 +1,6 @@
 import { isDevEnvironment } from "../../core.utils";
 import { generateUniqueId } from "../utils/id.utils";
-import {
-    formatScopeLabels,
-    patchScope,
-    resolveLogData,
-    type LogScope,
-    type LoggerResetScopePatch,
-} from "./log-scope";
+import { formatScopeLabels, type LoggerResetScopePatch, type LogScope, patchScope, resolveLogData } from "./log-scope";
 
 /**
  * Log severity and semantics (low → high). `minLevel` filters by {@link LOG_LEVEL_RANK}.
@@ -154,7 +148,9 @@ class LogManager {
         if (!LogManager.instance) {
             LogManager.instance = new LogManager(options);
         } else if (options != null && Object.keys(options).length > 0) {
-            console.warn("[LogManager] getInstance(options) ignored — singleton already created. Use setOptions() instead.");
+            console.warn(
+                "[LogManager] getInstance(options) ignored — singleton already created. Use setOptions() instead.",
+            );
         }
         return LogManager.instance;
     }
@@ -213,15 +209,14 @@ class LogManager {
 
         parts.push(this.formatLevelTag(entry));
         parts.push(
-            `traceId=${entry.traceId} parent=${entry.traceParentId ?? "null"} labels=${formatScopeLabels(entry.labels)} module=${entry.module} topic=${entry.topic}`
+            `traceId=${entry.traceId} parent=${entry.traceParentId ?? "null"} labels=${formatScopeLabels(entry.labels)} module=${entry.module} topic=${entry.topic}`,
         );
 
         if (this.options.formatPrefix) {
             parts.push(`prefix=${this.options.formatPrefix}`);
         }
 
-        const message =
-            entry.level === LogLevel.CRITICAL ? `>>> ${entry.message} <<<` : entry.message;
+        const message = entry.level === LogLevel.CRITICAL ? `>>> ${entry.message} <<<` : entry.message;
         parts.push(`| ${message}`);
 
         if (entry.extra) {
@@ -255,7 +250,7 @@ class LogManager {
         message: LogParams["message"],
         logScope: LogScope,
         restParams: LogRestParams,
-        scopeMinLevel?: LogLevel
+        scopeMinLevel?: LogLevel,
     ) {
         if (!this.shouldLog(level, scopeMinLevel)) {
             return;
@@ -315,10 +310,7 @@ class LogManager {
         this.log(LogLevel.CRITICAL, message, logScope, restParams);
     }
 
-    public withScope(
-        scope: LogScope,
-        options?: WithScopeOptions
-    ): { logger: LoggerWithScope; scope: LogScope } {
+    public withScope(scope: LogScope, options?: WithScopeOptions): { logger: LoggerWithScope; scope: LogScope } {
         const boundScope: LogScope = { ...scope, labels: scope.labels ? { ...scope.labels } : undefined };
         const scopeMinLevel = options?.minLevel;
 
@@ -346,9 +338,8 @@ class LogManager {
 
         return { logger, scope: boundScope };
     }
-
 }
 
 export const logManager = LogManager.getInstance();
-export { LogManager, LogLevel };
-export type { LogOptions, LogEntry, LoggerWithScope, LogRestParams, WithScopeOptions };
+export type { LogEntry, LoggerWithScope, LogOptions, LogRestParams, WithScopeOptions };
+export { LogLevel, LogManager };

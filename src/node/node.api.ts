@@ -1,8 +1,8 @@
-import { createTarget, QueryFilter, updateTargetDetails, validateWithSchema } from "../core.api";
+import { z } from "zod";
+import { createTarget, type QueryFilter, updateTargetDetails, validateWithSchema } from "../core.api";
 import { generateResponse } from "../core.interface";
 import { createLogger } from "../shared/log";
-import { z } from "zod";
-import { CategoryNode, Node, NodeDetails, NodeStatus } from "./node.interface";
+import { CategoryNode, type Node, type NodeDetails, NodeStatus } from "./node.interface";
 
 const NODE_STATUS_FIELD = "details->>status" as const;
 const LOG_TOPIC_NODE = "node";
@@ -52,7 +52,7 @@ function lockOnNodeStatus(status: NodeStatus): QueryFilter[] {
 
 export const postRegisterNode = validateWithSchema(
     postRegisterNodeSchema,
-    "postRegisterNodeSchema"
+    "postRegisterNodeSchema",
 )(async (payload) => {
     return createTarget<Node, PostRegisterNodePayload>({
         payload,
@@ -77,7 +77,7 @@ export const postRegisterNode = validateWithSchema(
 
 export const patchNodeHeartBeat = validateWithSchema(
     patchNodeHeartBeatSchema,
-    "patchNodeHeartBeatSchema"
+    "patchNodeHeartBeatSchema",
 )(async ({ nodeId }) => {
     const lastHeartBeat = Date.now();
     await updateTargetDetails<Node, NodeDetails>({
@@ -94,7 +94,7 @@ export const patchNodeHeartBeat = validateWithSchema(
 
 export const patchStopNode = validateWithSchema(
     patchStopNodeSchema,
-    "patchStopNodeSchema"
+    "patchStopNodeSchema",
 )(async ({ nodeId }) => {
     const lastHeartBeat = Date.now();
     // TODO 等待任務全部完成才下綫 應該先使用NodeStatus.DRAINING
@@ -113,7 +113,7 @@ export const patchStopNode = validateWithSchema(
 
 export const patchChangeNodeStatus = validateWithSchema(
     patchChangeNodeStatusSchema,
-    "patchChangeNodeStatusSchema"
+    "patchChangeNodeStatusSchema",
 )(async ({ nodeId, status, fromStatus, traceId }) => {
     const logger = createLogger({ module: "patchChangeNodeStatus", traceId, labels: { nodeId } });
 

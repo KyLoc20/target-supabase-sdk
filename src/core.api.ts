@@ -1,14 +1,13 @@
-import { generateResponse, Target, TargetDraft } from "./core.interface";
-import { supabase } from "./supabase";
+import type { PostgrestFilterBuilder } from "@supabase/postgrest-js";
+import type { ZodError, ZodType } from "zod";
+import { generateResponse, type Target, type TargetDraft } from "./core.interface";
 import { BaseValidator, handleSupabaseError } from "./core.utils";
-import { PostgrestFilterBuilder } from "@supabase/postgrest-js";
-import type { ZodType } from "zod";
-import { ZodError } from "zod";
+import { supabase } from "./supabase";
 
 export interface QueryFilter {
-  field: string;
-  operator: "eq" | "neq" | "in";
-  value: unknown;
+    field: string;
+    operator: "eq" | "neq" | "in";
+    value: unknown;
 }
 
 export const MAX_TARGET_LIST_PAGE_SIZE = 100;
@@ -22,41 +21,37 @@ const TARGET_LIST_ORDER_FIELDS = new Set<string>(["created_at", "name", "value",
 export type TargetFilterBuilder = PostgrestFilterBuilder<any, any, any[], "target", unknown>;
 
 function validateTargetListPagination(pageNum: number, pageSize: number): void {
-  if (!Number.isInteger(pageNum) || pageNum < 0) {
-    throw new Error(`[getTargetList] pageNum must be a non-negative integer, got ${pageNum}`);
-  }
-  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > MAX_TARGET_LIST_PAGE_SIZE) {
-    throw new Error(
-      `[getTargetList] pageSize must be an integer between 1 and ${MAX_TARGET_LIST_PAGE_SIZE}, got ${pageSize}`
-    );
-  }
+    if (!Number.isInteger(pageNum) || pageNum < 0) {
+        throw new Error(`[getTargetList] pageNum must be a non-negative integer, got ${pageNum}`);
+    }
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > MAX_TARGET_LIST_PAGE_SIZE) {
+        throw new Error(
+            `[getTargetList] pageSize must be an integer between 1 and ${MAX_TARGET_LIST_PAGE_SIZE}, got ${pageSize}`,
+        );
+    }
 }
 
-function resolveTargetListPagination(params: {
-  pageNum?: number;
-  pageSize?: number;
-  limit?: number;
-}): {
-  pageNum: number;
-  pageSize: number;
+function resolveTargetListPagination(params: { pageNum?: number; pageSize?: number; limit?: number }): {
+    pageNum: number;
+    pageSize: number;
 } {
-  if (params.limit != null) {
-    validateTargetListPagination(0, params.limit);
-    return { pageNum: 0, pageSize: params.limit };
-  }
-  if (params.pageNum === undefined || params.pageSize === undefined) {
-    throw new Error("[getTargetList] Provide pageNum and pageSize, or limit.");
-  }
-  validateTargetListPagination(params.pageNum, params.pageSize);
-  return { pageNum: params.pageNum, pageSize: params.pageSize };
+    if (params.limit != null) {
+        validateTargetListPagination(0, params.limit);
+        return { pageNum: 0, pageSize: params.limit };
+    }
+    if (params.pageNum === undefined || params.pageSize === undefined) {
+        throw new Error("[getTargetList] Provide pageNum and pageSize, or limit.");
+    }
+    validateTargetListPagination(params.pageNum, params.pageSize);
+    return { pageNum: params.pageNum, pageSize: params.pageSize };
 }
 
 function validateTargetListOrderBy(orderBy: QueryOrderBy): void {
-  if (!TARGET_LIST_ORDER_FIELDS.has(orderBy.field)) {
-    throw new Error(
-      `[getTargetList] Unsupported orderBy.field "${orderBy.field}"; allowed: ${[...TARGET_LIST_ORDER_FIELDS].join(", ")}`
-    );
-  }
+    if (!TARGET_LIST_ORDER_FIELDS.has(orderBy.field)) {
+        throw new Error(
+            `[getTargetList] Unsupported orderBy.field "${orderBy.field}"; allowed: ${[...TARGET_LIST_ORDER_FIELDS].join(", ")}`,
+        );
+    }
 }
 
 /**
@@ -68,146 +63,143 @@ function validateTargetListOrderBy(orderBy: QueryOrderBy): void {
  * 3. 统一 select 普通列表与 count head 两种查询形态，再叠加 filterList，避免三处复制分支逻辑。
  */
 function buildCategoryScopedQuery({
-  category,
-  filterList,
-  filterBuilder,
-  select,
-  selectOptions,
+    category,
+    filterList,
+    filterBuilder,
+    select,
+    selectOptions,
 }: {
-  category: Target["category"];
-  filterList: QueryFilter[];
-  filterBuilder?: TargetFilterBuilder;
-  select: string;
-  selectOptions?: { count: "exact"; head: true };
+    category: Target["category"];
+    filterList: QueryFilter[];
+    filterBuilder?: TargetFilterBuilder;
+    select: string;
+    selectOptions?: { count: "exact"; head: true };
 }) {
-  const base =
-    filterBuilder != null
-      ? filterBuilder.eq("category", category)
-      : selectOptions != null
-        ? supabase.client.from("target").select(select, selectOptions).eq("category", category)
-        : supabase.client.from("target").select(select).eq("category", category);
+    const base =
+        filterBuilder != null
+            ? filterBuilder.eq("category", category)
+            : selectOptions != null
+              ? supabase.client.from("target").select(select, selectOptions).eq("category", category)
+              : supabase.client.from("target").select(select).eq("category", category);
 
-  return applyQueryFilters(base, filterList);
+    return applyQueryFilters(base, filterList);
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
-function applyQueryFilter<Q extends PostgrestFilterBuilder<any, any, any, any, any>>(
-  query: Q,
-  filter: QueryFilter
-): Q {
-  switch (filter.operator) {
-    case "eq":
-      return query.eq(filter.field, filter.value) as Q;
-    case "neq":
-      return query.neq(filter.field, filter.value) as Q;
-    case "in":
-      return query.in(filter.field, filter.value as unknown[]) as Q;
-    default: {
-      const unsupportedOperator: never = filter.operator;
-      throw new Error(`[applyQueryFilter] Unsupported operator: ${unsupportedOperator}`);
+function applyQueryFilter<Q extends PostgrestFilterBuilder<any, any, any, any, any>>(query: Q, filter: QueryFilter): Q {
+    switch (filter.operator) {
+        case "eq":
+            return query.eq(filter.field, filter.value) as Q;
+        case "neq":
+            return query.neq(filter.field, filter.value) as Q;
+        case "in":
+            return query.in(filter.field, filter.value as unknown[]) as Q;
+        default: {
+            const unsupportedOperator: never = filter.operator;
+            throw new Error(`[applyQueryFilter] Unsupported operator: ${unsupportedOperator}`);
+        }
     }
-  }
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
 function applyQueryFilters<Q extends PostgrestFilterBuilder<any, any, any, any, any>>(
-  query: Q,
-  filterList: QueryFilter[]
+    query: Q,
+    filterList: QueryFilter[],
 ): Q {
-  return filterList.reduce((q, filter) => applyQueryFilter(q, filter), query);
+    return filterList.reduce((q, filter) => applyQueryFilter(q, filter), query);
 }
 
 export interface QueryOrderBy {
-  field: string;
-  ascending: boolean;
+    field: string;
+    ascending: boolean;
 }
 
 export interface BaseQueryParams {
-  filterList?: QueryFilter[];
-  orderBy?: QueryOrderBy;
+    filterList?: QueryFilter[];
+    orderBy?: QueryOrderBy;
 }
 
 export const getTarget = async ({ id, filterList }: { id: string; filterList?: QueryFilter[] }) => {
-  const query =
-    filterList != null && filterList.length > 0
-      ? applyQueryFilters(supabase.client.from("target").select().eq("id", id), filterList)
-      : supabase.client.from("target").select().eq("id", id);
+    const query =
+        filterList != null && filterList.length > 0
+            ? applyQueryFilters(supabase.client.from("target").select().eq("id", id), filterList)
+            : supabase.client.from("target").select().eq("id", id);
 
-  const { data, error } = await query.single();
-  if (error) {
-    handleSupabaseError("getTarget", error, "Failed to fetch target.");
-  }
-  return generateResponse.success<Target>(data as Target);
+    const { data, error } = await query.single();
+    if (error) {
+        handleSupabaseError("getTarget", error, "Failed to fetch target.");
+    }
+    return generateResponse.success<Target>(data as Target);
 };
 
 export const getPossibleTarget = async ({ filterList }: { filterList: QueryFilter[] }) => {
-  const query = applyQueryFilters(supabase.client.from("target").select(), filterList);
+    const query = applyQueryFilters(supabase.client.from("target").select(), filterList);
 
-  const { data, error } = await query.maybeSingle();
-  if (error) {
-    handleSupabaseError("getPossibleTarget", error, "Failed to fetch target.");
-  }
-  return generateResponse.success<Target | null>(data);
+    const { data, error } = await query.maybeSingle();
+    if (error) {
+        handleSupabaseError("getPossibleTarget", error, "Failed to fetch target.");
+    }
+    return generateResponse.success<Target | null>(data);
 };
 
 export interface GetTargetListParams extends BaseQueryParams {
-  category: Target["category"];
-  /** 0-based page index. Required with pageSize unless `limit` is set. */
-  pageNum?: number;
-  pageSize?: number;
-  /** Shorthand for `{ pageNum: 0, pageSize: limit }`. Max {@link MAX_TARGET_LIST_PAGE_SIZE}. */
-  limit?: number;
-  /** PostgREST select clause; defaults to `"*"`. */
-  selectFields?: string;
-  /** Custom query builder; `category` and `filterList` are still applied. */
-  filterBuilder?: TargetFilterBuilder;
+    category: Target["category"];
+    /** 0-based page index. Required with pageSize unless `limit` is set. */
+    pageNum?: number;
+    pageSize?: number;
+    /** Shorthand for `{ pageNum: 0, pageSize: limit }`. Max {@link MAX_TARGET_LIST_PAGE_SIZE}. */
+    limit?: number;
+    /** PostgREST select clause; defaults to `"*"`. */
+    selectFields?: string;
+    /** Custom query builder; `category` and `filterList` are still applied. */
+    filterBuilder?: TargetFilterBuilder;
 }
 
 /**
  * Paginated target list by category. Failures throw via `handleSupabaseError` (no `{ error }` envelope).
  */
 export const getTargetList = async <T extends Target = Target>({
-  pageNum,
-  pageSize,
-  limit,
-  category,
-  filterList = [],
-  orderBy = { field: "created_at", ascending: false },
-  selectFields = "*",
-  filterBuilder,
-}: GetTargetListParams) => {
-  const { pageNum: resolvedPageNum, pageSize: resolvedPageSize } = resolveTargetListPagination({
     pageNum,
     pageSize,
     limit,
-  });
-  validateTargetListOrderBy(orderBy);
-
-  const query = buildCategoryScopedQuery({
     category,
-    filterList,
+    filterList = [],
+    orderBy = { field: "created_at", ascending: false },
+    selectFields = "*",
     filterBuilder,
-    select: selectFields,
-  });
+}: GetTargetListParams) => {
+    const { pageNum: resolvedPageNum, pageSize: resolvedPageSize } = resolveTargetListPagination({
+        pageNum,
+        pageSize,
+        limit,
+    });
+    validateTargetListOrderBy(orderBy);
 
-  const { data, error } = await query
-    .order(orderBy.field, { ascending: orderBy.ascending })
-    .range(resolvedPageNum * resolvedPageSize, (resolvedPageNum + 1) * resolvedPageSize - 1);
+    const query = buildCategoryScopedQuery({
+        category,
+        filterList,
+        filterBuilder,
+        select: selectFields,
+    });
 
-  if (error) {
-    handleSupabaseError("getTargetList", error, "Failed to fetch target list.");
-  }
-  return generateResponse.success<T[]>((data ?? []) as T[]);
+    const { data, error } = await query
+        .order(orderBy.field, { ascending: orderBy.ascending })
+        .range(resolvedPageNum * resolvedPageSize, (resolvedPageNum + 1) * resolvedPageSize - 1);
+
+    if (error) {
+        handleSupabaseError("getTargetList", error, "Failed to fetch target list.");
+    }
+    return generateResponse.success<T[]>((data ?? []) as T[]);
 };
 
 export interface ScanTargetListParams {
-  category: Target["category"];
-  filterList?: QueryFilter[];
-  orderBy?: QueryOrderBy;
-  selectFields?: string;
-  filterBuilder?: TargetFilterBuilder;
-  /** Stop after this many rows (optional guard against runaway scans). */
-  maxRows?: number;
+    category: Target["category"];
+    filterList?: QueryFilter[];
+    orderBy?: QueryOrderBy;
+    selectFields?: string;
+    filterBuilder?: TargetFilterBuilder;
+    /** Stop after this many rows (optional guard against runaway scans). */
+    maxRows?: number;
 }
 
 /**
@@ -223,102 +215,98 @@ export interface ScanTargetListParams {
  * for large tables under concurrent writes, consider a DB RPC or keyset pagination later.
  */
 export const scanTargetList = async <T extends Target = Target>({
-  category,
-  filterList = [],
-  orderBy = { field: "created_at", ascending: false },
-  selectFields = "*",
-  filterBuilder,
-  maxRows,
+    category,
+    filterList = [],
+    orderBy = { field: "created_at", ascending: false },
+    selectFields = "*",
+    filterBuilder,
+    maxRows,
 }: ScanTargetListParams) => {
-  const batchSize = MAX_TARGET_LIST_PAGE_SIZE;
-  validateTargetListOrderBy(orderBy);
-  if (maxRows != null && (!Number.isInteger(maxRows) || maxRows < 1)) {
-    throw new Error(`[scanTargetList] maxRows must be a positive integer, got ${maxRows}`);
-  }
-
-  const rows: T[] = [];
-  let pageNum = 0;
-
-  while (true) {
-    const query = buildCategoryScopedQuery({
-      category,
-      filterList,
-      filterBuilder,
-      select: selectFields,
-    });
-
-    const { data, error } = await query
-      .order(orderBy.field, { ascending: orderBy.ascending })
-      .range(pageNum * batchSize, (pageNum + 1) * batchSize - 1);
-
-    if (error) {
-      handleSupabaseError("scanTargetList", error, "Failed to scan target list.");
+    const batchSize = MAX_TARGET_LIST_PAGE_SIZE;
+    validateTargetListOrderBy(orderBy);
+    if (maxRows != null && (!Number.isInteger(maxRows) || maxRows < 1)) {
+        throw new Error(`[scanTargetList] maxRows must be a positive integer, got ${maxRows}`);
     }
 
-    const page = (data ?? []) as T[];
-    if (page.length === 0) {
-      break;
+    const rows: T[] = [];
+    let pageNum = 0;
+
+    while (true) {
+        const query = buildCategoryScopedQuery({
+            category,
+            filterList,
+            filterBuilder,
+            select: selectFields,
+        });
+
+        const { data, error } = await query
+            .order(orderBy.field, { ascending: orderBy.ascending })
+            .range(pageNum * batchSize, (pageNum + 1) * batchSize - 1);
+
+        if (error) {
+            handleSupabaseError("scanTargetList", error, "Failed to scan target list.");
+        }
+
+        const page = (data ?? []) as T[];
+        if (page.length === 0) {
+            break;
+        }
+
+        rows.push(...page);
+
+        if (maxRows != null && rows.length >= maxRows) {
+            rows.length = maxRows;
+            break;
+        }
+
+        if (page.length < batchSize) {
+            break;
+        }
+
+        pageNum += 1;
     }
 
-    rows.push(...page);
-
-    if (maxRows != null && rows.length >= maxRows) {
-      rows.length = maxRows;
-      break;
-    }
-
-    if (page.length < batchSize) {
-      break;
-    }
-
-    pageNum += 1;
-  }
-
-  return generateResponse.success(rows);
+    return generateResponse.success(rows);
 };
 
 export interface GetTargetTotalCountParams extends BaseQueryParams {
-  category: Target["category"];
-  /** Custom query builder; `category` and `filterList` are still applied. */
-  filterBuilder?: TargetFilterBuilder;
+    category: Target["category"];
+    /** Custom query builder; `category` and `filterList` are still applied. */
+    filterBuilder?: TargetFilterBuilder;
 }
-export const getTargetTotalCount = async ({
-  category,
-  filterList = [],
-  filterBuilder,
-}: GetTargetTotalCountParams) => {
-  const query = buildCategoryScopedQuery({
-    category,
-    filterList,
-    filterBuilder,
-    select: "id",
-    selectOptions: { count: "exact", head: true },
-  });
+export const getTargetTotalCount = async ({ category, filterList = [], filterBuilder }: GetTargetTotalCountParams) => {
+    const query = buildCategoryScopedQuery({
+        category,
+        filterList,
+        filterBuilder,
+        select: "id",
+        selectOptions: { count: "exact", head: true },
+    });
 
-  const { count, error } = await query;
+    const { count, error } = await query;
 
-  if (error) {
-    handleSupabaseError("getTargetTotalCount", error, "Failed to fetch target count.");
-  }
-  return generateResponse.success<number>(count ?? 0);
+    if (error) {
+        handleSupabaseError("getTargetTotalCount", error, "Failed to fetch target count.");
+    }
+    return generateResponse.success<number>(count ?? 0);
 };
 
 function validatePollTargetListSize(size: number): void {
-  if (!Number.isInteger(size) || size < 1 || size > MAX_POLL_TARGET_LIST_SIZE) {
-    throw new Error(
-      `[pollTargetList] size must be an integer between 1 and ${MAX_POLL_TARGET_LIST_SIZE}, got ${size}`
-    );
-  }
+    if (!Number.isInteger(size) || size < 1 || size > MAX_POLL_TARGET_LIST_SIZE) {
+        throw new Error(
+            `[pollTargetList] size must be an integer between 1 and ${MAX_POLL_TARGET_LIST_SIZE}, got ${size}`,
+        );
+    }
 }
 
 export interface PollTargetListParams {
-  category: Target["category"];
-  /** Max rows to read and attempt dequeue (not offset pagination). */
-  size: number;
-  filterList?: QueryFilter[];
-  /** Order by `created_at`. Default `true` (oldest first). */
-  ascending?: boolean;
-  selectFields?: string;
+    category: Target["category"];
+    /** Max rows to read and attempt dequeue (not offset pagination). */
+    size: number;
+    filterList?: QueryFilter[];
+    /** Order by `created_at`. Default `true` (oldest first). */
+    ascending?: boolean;
+    selectFields?: string;
 }
 
 /**
@@ -338,122 +326,126 @@ export interface PollTargetListParams {
  * - 短期加固：DELETE 后校验影响行数，0 行则不 push 到 polled
  */
 export const pollTargetList = async <T extends Target = Target>({
-  category,
-  size,
-  filterList = [],
-  ascending = true,
-  selectFields = "*",
-}: PollTargetListParams) => {
-  validatePollTargetListSize(size);
-
-  const query = buildCategoryScopedQuery({
     category,
-    filterList,
-    select: selectFields,
-  });
+    size,
+    filterList = [],
+    ascending = true,
+    selectFields = "*",
+}: PollTargetListParams) => {
+    validatePollTargetListSize(size);
 
-  const { data, error } = await query.order("created_at", { ascending }).limit(size);
+    const query = buildCategoryScopedQuery({
+        category,
+        filterList,
+        select: selectFields,
+    });
 
-  if (error) {
-    handleSupabaseError("pollTargetList", error, "Failed to fetch targets for poll.");
-  }
+    const { data, error } = await query.order("created_at", { ascending }).limit(size);
 
-  const candidates = (data ?? []) as T[];
-  const polled: T[] = [];
-
-  for (const row of candidates) {
-    try {
-      await deleteTarget({ id: row.id });
-      polled.push(row);
-    } catch {
-      // Concurrent dequeue — row already removed
+    if (error) {
+        handleSupabaseError("pollTargetList", error, "Failed to fetch targets for poll.");
     }
-  }
 
-  return generateResponse.success<T[]>(polled);
+    const candidates = (data ?? []) as T[];
+    const polled: T[] = [];
+
+    for (const row of candidates) {
+        try {
+            await deleteTarget({ id: row.id });
+            polled.push(row);
+        } catch {
+            // Concurrent dequeue — row already removed
+        }
+    }
+
+    return generateResponse.success<T[]>(polled);
 };
 
 export const deleteTarget = async ({ id, filterList }: { id: string; filterList?: QueryFilter[] }) => {
-  // Check whether the target exists given filterList
-  if (filterList != null && filterList.length > 0) {
-    const query = applyQueryFilters(supabase.client.from("target").select().eq("id", id), filterList);
-    const { data: existingTarget, error: existingError } = await query.single();
-    if (existingError || existingTarget == null) {
-      const msg = `[deleteTarget] Cannot find the target ${id}`;
-      console.error(msg, { filterList }, existingError);
-      throw new Error(msg);
+    // Check whether the target exists given filterList
+    if (filterList != null && filterList.length > 0) {
+        const query = applyQueryFilters(supabase.client.from("target").select().eq("id", id), filterList);
+        const { data: existingTarget, error: existingError } = await query.single();
+        if (existingError || existingTarget == null) {
+            const msg = `[deleteTarget] Cannot find the target ${id}`;
+            console.error(msg, { filterList }, existingError);
+            throw new Error(msg);
+        }
     }
-  }
-  const { error } = await supabase.client.from("target").delete().eq("id", id);
-  if (error) {
-    handleSupabaseError("deleteTarget", error, `Failed to delete target ${id}.`);
-  }
-  return generateResponse.success();
+    const { error } = await supabase.client.from("target").delete().eq("id", id);
+    if (error) {
+        handleSupabaseError("deleteTarget", error, `Failed to delete target ${id}.`);
+    }
+    return generateResponse.success();
 };
 
 export interface PostTargetPayload {
-  name: Target["name"];
-  category: Target["category"];
-  value: Target["value"];
-  tagList: Target["tagList"];
-  extra?: Target["extra"];
-  details?: Target["details"];
+    name: Target["name"];
+    category: Target["category"];
+    value: Target["value"];
+    tagList: Target["tagList"];
+    extra?: Target["extra"];
+    details?: Target["details"];
 }
 
 class PostTargetPayloadValidator extends BaseValidator<PostTargetPayload> {
-  protected requiredFields: (keyof PostTargetPayload)[] = ["category", "name", "value", "tagList"];
-  protected optionalFields: (keyof PostTargetPayload)[] = ["extra", "details"];
+    protected requiredFields: (keyof PostTargetPayload)[] = ["category", "name", "value", "tagList"];
+    protected optionalFields: (keyof PostTargetPayload)[] = ["extra", "details"];
 
-  constructor() {
-    super();
-    // Add custom
-    this.addCustomValidator((val) => {
-      return true;
-    });
-  }
+    constructor() {
+        super();
+        // Add custom
+        this.addCustomValidator((_val) => {
+            return true;
+        });
+    }
 }
 
 export const postTarget = async (payload: PostTargetPayload) => {
-  const validPayload = new PostTargetPayloadValidator().validate(payload);
+    const validPayload = new PostTargetPayloadValidator().validate(payload);
 
-  const { data, error } = await supabase.client
-    .from("target")
-    .insert([{ ...validPayload }])
-    .select()
-    .single();
+    const { data, error } = await supabase.client
+        .from("target")
+        .insert([{ ...validPayload }])
+        .select()
+        .single();
 
-  if (error) {
-    handleSupabaseError("postTarget", error, "Failed to create target.");
-  }
-  return generateResponse.success<Target>(data as Target);
+    if (error) {
+        handleSupabaseError("postTarget", error, "Failed to create target.");
+    }
+    return generateResponse.success<Target>(data as Target);
 };
 
 export interface PatchTargetPayload extends PostTargetPayload {
-  id: string;
+    id: string;
 }
 
 export const patchTarget = async ({ id, ...restPayload }: PatchTargetPayload) => {
-  const { data: currentData, error: fetchError } = await supabase.client.from("target").select().eq("id", id).single();
-  if (!currentData) {
-    throw new Error("Target NOT exists");
-  }
-  if (fetchError) handleSupabaseError("patchTarget", fetchError, "Failed to fetch target.");
+    const { data: currentData, error: fetchError } = await supabase.client
+        .from("target")
+        .select()
+        .eq("id", id)
+        .single();
+    if (!currentData) {
+        throw new Error("Target NOT exists");
+    }
+    if (fetchError) handleSupabaseError("patchTarget", fetchError, "Failed to fetch target.");
 
-  const updatedTarget = new PostTargetPayloadValidator().validate(restPayload);
+    const updatedTarget = new PostTargetPayloadValidator().validate(restPayload);
 
-  const { data, error } = await supabase.client
-    .from("target")
-    .update({
-      ...updatedTarget,
-    })
-    .eq("id", id)
-    .select()
-    .single();
+    const { data, error } = await supabase.client
+        .from("target")
+        .update({
+            ...updatedTarget,
+        })
+        .eq("id", id)
+        .select()
+        .single();
 
-  if (error) {
-    handleSupabaseError("patchTarget", error, "Failed to update target.");
-  }
-  return generateResponse.success<Target>(data as Target);
+    if (error) {
+        handleSupabaseError("patchTarget", error, "Failed to update target.");
+    }
+    return generateResponse.success<Target>(data as Target);
 };
 
 /**
@@ -464,128 +456,125 @@ export const patchTarget = async ({ id, ...restPayload }: PatchTargetPayload) =>
  * row conditions via `optimisticLockFilterList` so they are applied on the UPDATE statement.
  */
 export interface UpdateTargetDetailsParams<D> {
-  /** Target row id. */
-  id: string;
-  /**
-   * Computes new details from the row fetched immediately before UPDATE.
-   * Runs after SELECT; the write still relies on `optimisticLockFilterList` for atomic guards.
-   */
-  updateFn: (existing: D) => D;
-  /**
-   * Optional `target.extra` derived from existing details (written together with details).
-   */
-  updateExtraFn?: (existing: D) => string;
-  /**
-   * Optimistic lock conditions applied on UPDATE (not on the prior SELECT).
-   *
-   * Replaces the removed `beforeUpdateValidator`: validators ran in app code between read and
-   * write and could not prevent concurrent overwrites. These filters become part of the UPDATE
-   * WHERE clause (via `applyQueryFilters`), e.g. `{ field: "details->>status", operator: "eq", value: "TODO" }`.
-   *
-   * If no row matches after UPDATE, throws "Optimistic lock failed". Empty array = update by id only.
-   */
-  optimisticLockFilterList?: QueryFilter[];
+    /** Target row id. */
+    id: string;
+    /**
+     * Computes new details from the row fetched immediately before UPDATE.
+     * Runs after SELECT; the write still relies on `optimisticLockFilterList` for atomic guards.
+     */
+    updateFn: (existing: D) => D;
+    /**
+     * Optional `target.extra` derived from existing details (written together with details).
+     */
+    updateExtraFn?: (existing: D) => string;
+    /**
+     * Optimistic lock conditions applied on UPDATE (not on the prior SELECT).
+     *
+     * Replaces the removed `beforeUpdateValidator`: validators ran in app code between read and
+     * write and could not prevent concurrent overwrites. These filters become part of the UPDATE
+     * WHERE clause (via `applyQueryFilters`), e.g. `{ field: "details->>status", operator: "eq", value: "TODO" }`.
+     *
+     * If no row matches after UPDATE, throws "Optimistic lock failed". Empty array = update by id only.
+     */
+    optimisticLockFilterList?: QueryFilter[];
 }
 
 export const updateTargetDetails = async <T, D>({
-  id,
-  updateFn,
-  updateExtraFn,
-  optimisticLockFilterList = [],
+    id,
+    updateFn,
+    updateExtraFn,
+    optimisticLockFilterList = [],
 }: UpdateTargetDetailsParams<D>) => {
-  const { data: currentData, error: fetchError } = await supabase.client
-    .from("target")
-    .select("details")
-    .eq("id", id)
-    .single();
+    const { data: currentData, error: fetchError } = await supabase.client
+        .from("target")
+        .select("details")
+        .eq("id", id)
+        .single();
 
-  if (fetchError) {
-    handleSupabaseError("updateTargetDetails", fetchError, "Failed to fetch target.");
-  }
-  if (!currentData) {
-    const msg = "[updateTargetDetails] Target NOT exists: " + id;
-    console.error(msg);
-    throw new Error(msg);
-  }
+    if (fetchError) {
+        handleSupabaseError("updateTargetDetails", fetchError, "Failed to fetch target.");
+    }
+    if (!currentData) {
+        const msg = `[updateTargetDetails] Target NOT exists: ${id}`;
+        console.error(msg);
+        throw new Error(msg);
+    }
 
-  const currentDetails = currentData.details as D;
-  const updatedDetails: D = updateFn(currentDetails);
-  const updated =
-    updateExtraFn == null
-      ? {
-        details: updatedDetails,
-      }
-      : {
-        details: updatedDetails,
-        extra: updateExtraFn(currentDetails),
-      };
+    const currentDetails = currentData.details as D;
+    const updatedDetails: D = updateFn(currentDetails);
+    const updated =
+        updateExtraFn == null
+            ? {
+                  details: updatedDetails,
+              }
+            : {
+                  details: updatedDetails,
+                  extra: updateExtraFn(currentDetails),
+              };
 
-  const updateQuery = applyQueryFilters(
-    supabase.client.from("target").update(updated).eq("id", id),
-    optimisticLockFilterList
-  );
+    const updateQuery = applyQueryFilters(
+        supabase.client.from("target").update(updated).eq("id", id),
+        optimisticLockFilterList,
+    );
 
-  const { data, error } = await updateQuery.select().maybeSingle();
+    const { data, error } = await updateQuery.select().maybeSingle();
 
-  if (error) {
-    handleSupabaseError("updateTargetDetails", error, "Failed to update target details.");
-  }
-  if (!data) {
-    const msg =
-      optimisticLockFilterList.length > 0
-        ? OPTIMISTIC_LOCK_FAILED_MESSAGE
-        : "[updateTargetDetails] Target not found or was deleted.";
-    throw new Error(msg);
-  }
+    if (error) {
+        handleSupabaseError("updateTargetDetails", error, "Failed to update target details.");
+    }
+    if (!data) {
+        const msg =
+            optimisticLockFilterList.length > 0
+                ? OPTIMISTIC_LOCK_FAILED_MESSAGE
+                : "[updateTargetDetails] Target not found or was deleted.";
+        throw new Error(msg);
+    }
 
-  return data as T;
+    return data as T;
 };
 
 export const OPTIMISTIC_LOCK_FAILED_MESSAGE =
-  "[updateTargetDetails] Optimistic lock failed: target no longer matches expected state.";
+    "[updateTargetDetails] Optimistic lock failed: target no longer matches expected state.";
 
 export const OPTIMISTIC_LOCK_ERROR_CODE = "OPTIMISTIC_LOCK" as const;
 
 export function isOptimisticLockError(error: unknown): boolean {
-  return error instanceof Error && error.message === OPTIMISTIC_LOCK_FAILED_MESSAGE;
+    return error instanceof Error && error.message === OPTIMISTIC_LOCK_FAILED_MESSAGE;
 }
 
 export function isOptimisticLockResponse(error: { code?: string } | null | undefined): boolean {
-  return error?.code === OPTIMISTIC_LOCK_ERROR_CODE;
+    return error?.code === OPTIMISTIC_LOCK_ERROR_CODE;
 }
 
 export const CREATE_TARGET_ALREADY_EXISTS_MESSAGE = "[createTarget] Target already exists";
 
 const CREATE_TARGET_REDUNDANCY_MISMATCH_MESSAGE =
-  "[createTarget] Inserted row does not match checkRedundancyFilterList; verify createFn aligns with filters.";
+    "[createTarget] Inserted row does not match checkRedundancyFilterList; verify createFn aligns with filters.";
 
 /** Max rows to fetch during post-verify — only need to detect one other match. */
 const REDUNDANCY_VERIFY_ROW_LIMIT = 2;
 
 export function isCreateTargetAlreadyExistsError(error: unknown): boolean {
-  return error instanceof Error && error.message === CREATE_TARGET_ALREADY_EXISTS_MESSAGE;
+    return error instanceof Error && error.message === CREATE_TARGET_ALREADY_EXISTS_MESSAGE;
 }
 
 /** Roll back an optimistic insert when redundancy filters match other rows. */
 async function rollbackCreateTargetInsert(id: string) {
-  const { error } = await supabase.client.from("target").delete().eq("id", id);
-  if (error) {
-    handleSupabaseError("createTarget", error, "Failed to rollback conflicting insert.");
-  }
+    const { error } = await supabase.client.from("target").delete().eq("id", id);
+    if (error) {
+        handleSupabaseError("createTarget", error, "Failed to rollback conflicting insert.");
+    }
 }
 
 /** Roll back the new row and signal a redundancy conflict to the caller. */
 function throwCreateTargetAlreadyExists(checkRedundancyFilterList: QueryFilter[]): never {
-  console.error(CREATE_TARGET_ALREADY_EXISTS_MESSAGE, checkRedundancyFilterList);
-  throw new Error(CREATE_TARGET_ALREADY_EXISTS_MESSAGE);
+    console.error(CREATE_TARGET_ALREADY_EXISTS_MESSAGE, checkRedundancyFilterList);
+    throw new Error(CREATE_TARGET_ALREADY_EXISTS_MESSAGE);
 }
 
-async function failCreateTargetRedundancy(
-  selfId: string,
-  checkRedundancyFilterList: QueryFilter[]
-): Promise<never> {
-  await rollbackCreateTargetInsert(selfId);
-  return throwCreateTargetAlreadyExists(checkRedundancyFilterList);
+async function failCreateTargetRedundancy(selfId: string, checkRedundancyFilterList: QueryFilter[]): Promise<never> {
+    await rollbackCreateTargetInsert(selfId);
+    return throwCreateTargetAlreadyExists(checkRedundancyFilterList);
 }
 
 /**
@@ -595,104 +584,100 @@ async function failCreateTargetRedundancy(
  * See `.cursor/skills/create-target-redundancy/SKILL.md`.
  */
 export const createTarget = async <T extends Target, P extends object>({
-  payload,
-  validator,
-  createFn,
-  checkRedundancyFilterList,
-  upsert = false,
+    payload,
+    validator,
+    createFn,
+    checkRedundancyFilterList,
+    upsert = false,
 }: {
-  payload: P;
-  validator?: new () => BaseValidator<P>;
-  createFn: (validPayload: P) => TargetDraft<T>;
-  /** Business-key filters; if another row matches after insert, conflict handling runs. */
-  checkRedundancyFilterList?: QueryFilter[];
-  /**
-   * @deprecated Not supported — ignored at runtime. Use domain patch APIs or future RPC upsert.
-   * Reserved for a later release; do not pass `true`.
-   */
-  upsert?: boolean;
+    payload: P;
+    validator?: new () => BaseValidator<P>;
+    createFn: (validPayload: P) => TargetDraft<T>;
+    /** Business-key filters; if another row matches after insert, conflict handling runs. */
+    checkRedundancyFilterList?: QueryFilter[];
+    /**
+     * @deprecated Not supported — ignored at runtime. Use domain patch APIs or future RPC upsert.
+     * Reserved for a later release; do not pass `true`.
+     */
+    upsert?: boolean;
 }) => {
-  if (upsert) {
-    console.warn("[createTarget] `upsert` is deprecated and has no effect.");
-  }
+    if (upsert) {
+        console.warn("[createTarget] `upsert` is deprecated and has no effect.");
+    }
 
-  const validPayload = validator != null ? new validator().validate(payload) : payload;
-  const newTarget = createFn(validPayload);
+    const validPayload = validator != null ? new validator().validate(payload) : payload;
+    const newTarget = createFn(validPayload);
 
-  const hasRedundancyCheck =
-    checkRedundancyFilterList != null && checkRedundancyFilterList.length > 0;
+    const hasRedundancyCheck = checkRedundancyFilterList != null && checkRedundancyFilterList.length > 0;
 
-  // 1. Optimistic insert (see create-target-redundancy skill)
-  const { data, error } = await supabase.client.from("target").insert([newTarget]).select().single();
-  if (error) {
-    handleSupabaseError("createTarget", error, "Failed to create target.");
-  }
+    // 1. Optimistic insert (see create-target-redundancy skill)
+    const { data, error } = await supabase.client.from("target").insert([newTarget]).select().single();
+    if (error) {
+        handleSupabaseError("createTarget", error, "Failed to create target.");
+    }
 
-  if (!hasRedundancyCheck) {
-    return generateResponse.success<T>(data);
-  }
+    if (!hasRedundancyCheck) {
+        return generateResponse.success<T>(data);
+    }
 
-  // 2. Post-verify: limit(2) — enough to detect one other row matching the business-key filters
-  const { data: matches, error: matchError } = await applyQueryFilters(
-    supabase.client.from("target").select("id"),
-    checkRedundancyFilterList
-  ).limit(REDUNDANCY_VERIFY_ROW_LIMIT);
-  if (matchError) {
-    handleSupabaseError("createTarget", matchError, "Failed to verify target redundancy.");
-  }
+    // 2. Post-verify: limit(2) — enough to detect one other row matching the business-key filters
+    const { data: matches, error: matchError } = await applyQueryFilters(
+        supabase.client.from("target").select("id"),
+        checkRedundancyFilterList,
+    ).limit(REDUNDANCY_VERIFY_ROW_LIMIT);
+    if (matchError) {
+        handleSupabaseError("createTarget", matchError, "Failed to verify target redundancy.");
+    }
 
-  const selfId = data.id as string;
-  const rows = matches ?? [];
-  const selfMatchesFilters = rows.some((row) => row.id === selfId);
-  if (!selfMatchesFilters) {
-    console.warn(CREATE_TARGET_REDUNDANCY_MISMATCH_MESSAGE, checkRedundancyFilterList);
-  }
+    const selfId = data.id as string;
+    const rows = matches ?? [];
+    const selfMatchesFilters = rows.some((row) => row.id === selfId);
+    if (!selfMatchesFilters) {
+        console.warn(CREATE_TARGET_REDUNDANCY_MISMATCH_MESSAGE, checkRedundancyFilterList);
+    }
 
-  const hasOtherRow = rows.some((row) => row.id !== selfId);
+    const hasOtherRow = rows.some((row) => row.id !== selfId);
 
-  // 3. No conflict — keep the inserted row; otherwise rollback and reject
-  if (!hasOtherRow) {
-    return generateResponse.success<T>(data);
-  }
+    // 3. No conflict — keep the inserted row; otherwise rollback and reject
+    if (!hasOtherRow) {
+        return generateResponse.success<T>(data);
+    }
 
-  return failCreateTargetRedundancy(selfId, checkRedundancyFilterList);
+    return failCreateTargetRedundancy(selfId, checkRedundancyFilterList);
 };
 
 export function validateWith<P extends object, V extends BaseValidator<P>>(ValidatorClass: new () => V) {
-  return <R>(fn: (validPayload: P) => R) => {
-    return (payload: P): R => {
-      const validPayload = new ValidatorClass().validate(payload);
-      return fn(validPayload);
+    return <R>(fn: (validPayload: P) => R) => {
+        return (payload: P): R => {
+            const validPayload = new ValidatorClass().validate(payload);
+            return fn(validPayload);
+        };
     };
-  };
 }
 
 function formatZodValidationError(schemaName: string, error: ZodError): Error {
-  const errorList = error.issues
-    .map((issue, index) => {
-      const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
-      return `  ${index + 1}. ${path}: ${issue.message}`;
-    })
-    .join("\n");
-  const errorCount = error.issues.length;
-  return new Error(
-    `[${schemaName}] Validation failed (${errorCount} error${errorCount > 1 ? "s" : ""}):\n${errorList}`
-  );
+    const errorList = error.issues
+        .map((issue, index) => {
+            const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
+            return `  ${index + 1}. ${path}: ${issue.message}`;
+        })
+        .join("\n");
+    const errorCount = error.issues.length;
+    return new Error(
+        `[${schemaName}] Validation failed (${errorCount} error${errorCount > 1 ? "s" : ""}):\n${errorList}`,
+    );
 }
 
 /** Zod-based counterpart to {@link validateWith} — requires `zod` as a peer dependency. */
-export function validateWithSchema<T extends ZodType>(
-  schema: T,
-  schemaName = "Schema"
-) {
-  type Parsed = T["_output"];
-  return <R>(fn: (validPayload: Parsed) => R | Promise<R>) => {
-    return (payload: Parsed): R | Promise<R> => {
-      const result = schema.safeParse(payload);
-      if (!result.success) {
-        throw formatZodValidationError(schemaName, result.error);
-      }
-      return fn(result.data);
+export function validateWithSchema<T extends ZodType>(schema: T, schemaName = "Schema") {
+    type Parsed = T["_output"];
+    return <R>(fn: (validPayload: Parsed) => R | Promise<R>) => {
+        return (payload: Parsed): R | Promise<R> => {
+            const result = schema.safeParse(payload);
+            if (!result.success) {
+                throw formatZodValidationError(schemaName, result.error);
+            }
+            return fn(result.data);
+        };
     };
-  };
 }

@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess, type StdioOptions } from "node:child_process";
+import { type ChildProcess, type StdioOptions, spawn } from "node:child_process";
 
 export interface BuildNodeImportArgsInput {
     /** Relative `--import` paths (e.g. `./scripts/preload-env.mjs`). */
@@ -52,7 +52,7 @@ export function spawnTsxChild(options: SpawnTsxChildOptions): ChildProcess {
             env: options.env ?? process.env,
             stdio: options.stdio ?? "inherit",
             shell: false,
-        }
+        },
     );
 }
 

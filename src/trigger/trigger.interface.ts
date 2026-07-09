@@ -1,6 +1,6 @@
-import { Target } from "../core.interface";
+import type { Target } from "../core.interface";
 import type { LoggerWithScope } from "../shared/log";
-import { TaskStatus } from "../task/task.interface";
+import type { TaskStatus } from "../task/task.interface";
 
 export enum CategoryTrigger {
     TRIGGER = "trigger",

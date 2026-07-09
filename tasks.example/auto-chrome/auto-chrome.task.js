@@ -41,8 +41,7 @@ export default {
 
     async taskFn(params) {
         const start = Date.now();
-        const { tabKey, tabUrl, wsUrl, closeTabDelayMs } =
-            autoChromeParamsSchema.parse(params);
+        const { tabKey, tabUrl, wsUrl, closeTabDelayMs } = autoChromeParamsSchema.parse(params);
         const prepareSelector = selector(`prepare-${tabKey}`);
         const saveSelector = selector(`save-${tabKey}`);
         const doneSelector = selector(`done-${tabKey}`);
@@ -57,8 +56,7 @@ export default {
         try {
             await client.connect();
             const opened = await client.openTab(tabKey, tabUrl);
-            openedTabId =
-                typeof opened?.tabId === "number" ? opened.tabId : undefined;
+            openedTabId = typeof opened?.tabId === "number" ? opened.tabId : undefined;
             tabOpened = true;
 
             // Stage 1: prepare — wait until loadMoreProducts finishes (save becomes visible)

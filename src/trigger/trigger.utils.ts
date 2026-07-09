@@ -29,7 +29,7 @@ export function buildDailyFireKey(_schedule: TriggerDailySchedule, now: Date): s
 export function isDailyScheduleDue(
     schedule: TriggerDailySchedule,
     now: Date,
-    lastFireKey: string | null | undefined
+    lastFireKey: string | null | undefined,
 ): boolean {
     const parts = parseUtcDateParts(now);
     if (parts.hour !== schedule.hour || parts.minute !== schedule.minute) {

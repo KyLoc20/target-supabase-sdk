@@ -1,4 +1,4 @@
-import { Target } from "../core.interface";
+import type { Target } from "../core.interface";
 
 export enum CategoryLink {
     LINK = "link",
@@ -21,5 +21,4 @@ export interface LinkDetails {
     /** How to render the link */
     loaderKey: string;
     original: unknown;
-};
-
+}

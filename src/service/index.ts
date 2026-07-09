@@ -3,10 +3,8 @@ import { generateResponse, type SupabaseResponse } from "../core.interface";
 import { createLogger } from "../shared/log";
 import { ServiceLifecycleStatus } from "./base.interface";
 import { getService } from "./service.api";
-import { CategoryService, Service } from "./service.interface";
+import { CategoryService, type Service } from "./service.interface";
 
-export { CategoryApi, CategoryService, ApiMethod } from "./service.interface";
-export type { Api, ApiDetails, Service, ServiceDetails } from "./service.interface";
 export type {
     EnumMembers,
     FieldDefinition,
@@ -14,23 +12,24 @@ export type {
     ServiceLifecycle,
 } from "./base.interface";
 export { ServiceLifecycleStatus } from "./base.interface";
-
+export type { GetApiPayload, GetServicePayload, PostApiPayload, PostServicePayload } from "./service.api";
 export {
-    postApi,
-    postApiSchema,
+    apiDetailsSchema,
+    fieldDefinitionSchema,
     getApi,
     getApiSchema,
-    postService,
-    postServiceSchema,
     getService,
     getServiceSchema,
-    apiDetailsSchema,
+    postApi,
+    postApiSchema,
+    postService,
+    postServiceSchema,
+    schemaDefinitionSchema,
     serviceDetailsSchema,
     serviceLifecycleSchema,
-    fieldDefinitionSchema,
-    schemaDefinitionSchema,
 } from "./service.api";
-export type { PostApiPayload, GetApiPayload, PostServicePayload, GetServicePayload } from "./service.api";
+export type { Api, ApiDetails, Service, ServiceDetails } from "./service.interface";
+export { ApiMethod, CategoryApi, CategoryService } from "./service.interface";
 
 export interface DiscoverServiceInput {
     /** {@link Service.value} */
@@ -64,9 +63,7 @@ async function lookupServiceByScan(value: string): Promise<Service | null> {
     return data?.[0] ?? null;
 }
 
-async function resolveDiscoverFailureReason(
-    value: string
-): Promise<"not-found" | "not-available"> {
+async function resolveDiscoverFailureReason(value: string): Promise<"not-found" | "not-available"> {
     const response = await getService({ value });
     if (response.data == null) {
         return "not-found";
@@ -80,9 +77,7 @@ async function resolveDiscoverFailureReason(
  *
  * Lookup: primary `getService` → fallback `scanTargetList` by value.
  */
-export async function discoverService(
-    input: DiscoverServiceInput
-): Promise<SupabaseResponse<Service>> {
+export async function discoverService(input: DiscoverServiceInput): Promise<SupabaseResponse<Service>> {
     const value = input.value.trim();
     const logger = createLogger({
         module: "discoverService",
@@ -157,8 +152,7 @@ export async function discoverService(
         try {
             service = await lookupServiceByScan(value);
         } catch (fallbackError) {
-            const fallbackMessage =
-                fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+            const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
             logger.error("扫描回退失败", {
                 topic: "service",
                 data: { value, message: fallbackMessage },

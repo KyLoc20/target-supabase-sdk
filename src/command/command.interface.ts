@@ -1,5 +1,4 @@
-import { Target } from "../core.interface";
-
+import type { Target } from "../core.interface";
 
 export enum CategoryCommand {
     COMMAND = "command",

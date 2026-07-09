@@ -26,7 +26,6 @@ export function parseArgs(argv: string[]): Record<string, string> {
     return out;
 }
 
-
 export function keyPathForSourceFile(sourcePath: string): string {
     return `${resolve(sourcePath)}${KEY_SUFFIX}`;
 }
@@ -53,7 +52,6 @@ export function createLocalDirStorageAdapter(sourcePath: string): StorageAdapter
     };
 }
 
-
 export async function exportKeyToJwk(key: CryptoKey, keyPath: string): Promise<void> {
     const jwk = await crypto.subtle.exportKey("jwk", key);
     await writeFile(keyPath, `${JSON.stringify(jwk, null, 2)}\n`, "utf8");
@@ -61,13 +59,7 @@ export async function exportKeyToJwk(key: CryptoKey, keyPath: string): Promise<v
 
 export async function importKeyFromJwk(keyPath: string): Promise<CryptoKey> {
     const jwk = JSON.parse(await readFile(keyPath, "utf8"));
-    return crypto.subtle.importKey(
-        "jwk",
-        jwk,
-        { name: "AES-GCM", length: 256 },
-        true,
-        ["encrypt", "decrypt"]
-    );
+    return crypto.subtle.importKey("jwk", jwk, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
 }
 
 /**
@@ -79,12 +71,7 @@ export function installLocalChunkFetch(baseDir: string): () => void {
     const originalFetch = globalThis.fetch.bind(globalThis);
 
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url =
-            typeof input === "string"
-                ? input
-                : input instanceof URL
-                  ? input.href
-                  : input.url;
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 
         if (url.startsWith("http://") || url.startsWith("https://")) {
             return originalFetch(input, init);
@@ -107,6 +94,5 @@ export function chunkStorageBaseDir(parcel: Parcel): string {
     }
     return dirname(resolve(firstUrl));
 }
-
 
 export const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));

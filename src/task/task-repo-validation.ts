@@ -1,6 +1,6 @@
-import { RepoManager, type RepoContextFailureReason } from "../repo/repo-manager";
-import { LoggerWithScope } from "../shared/log";
-import { bootstrapLocalTasks, type BootstrapLocalTasksOptions } from "./local-task-registry";
+import { type RepoContextFailureReason, RepoManager } from "../repo/repo-manager";
+import type { LoggerWithScope } from "../shared/log";
+import { type BootstrapLocalTasksOptions, bootstrapLocalTasks } from "./local-task-registry";
 import { ResultCode } from "./task.interface";
 import type { TaskRepoContext } from "./task-repo-context";
 
@@ -40,14 +40,12 @@ export type ValidateTaskRepoAndParamsSuccess = {
     repoContext: TaskRepoContext;
 };
 
-export type ValidateTaskRepoAndParamsResult =
-    | ValidateTaskRepoAndParamsFailure
-    | ValidateTaskRepoAndParamsSuccess;
+export type ValidateTaskRepoAndParamsResult = ValidateTaskRepoAndParamsFailure | ValidateTaskRepoAndParamsSuccess;
 
 function validateTaskParams(
     validator: TaskRepoContext["taskParamsValidator"],
     taskParams: unknown,
-    logger: LoggerWithScope
+    logger: LoggerWithScope,
 ): boolean {
     try {
         return validator(taskParams) === true;

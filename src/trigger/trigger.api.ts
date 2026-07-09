@@ -1,14 +1,14 @@
+import { z } from "zod";
 import { createTarget, scanTargetList, updateTargetDetails, validateWithSchema } from "../core.api";
 import { generateResponse, type SupabaseResponse } from "../core.interface";
-import { TaskStatus } from "../task/task.interface";
 import { createLogger } from "../shared/log";
-import { z } from "zod";
+import { TaskStatus } from "../task/task.interface";
 import {
     CategoryTrigger,
-    Trigger,
-    TriggerStatus,
+    type Trigger,
     type TriggerAction,
     type TriggerSchedule,
+    TriggerStatus,
 } from "./trigger.interface";
 
 const TRIGGER_STATUS_FIELD = "details->>status" as const;
@@ -63,7 +63,7 @@ function enabledTriggerFilter() {
 /** List all ENABLED triggers (Phase 1: in-memory due check). */
 export const scanEnabledTriggers = validateWithSchema(
     scanEnabledTriggersSchema,
-    "scanEnabledTriggersSchema"
+    "scanEnabledTriggersSchema",
 )(async ({ traceId }) => {
     const logger = createLogger({ module: "scanEnabledTriggers", traceId });
 
@@ -90,7 +90,7 @@ export const scanEnabledTriggers = validateWithSchema(
 /** Create a trigger row (scheduler / admin). */
 export const postTrigger = validateWithSchema(
     postTriggerSchema,
-    "postTriggerSchema"
+    "postTriggerSchema",
 )(async ({ name, value, status, schedule, action, tagList, traceId }) => {
     const logger = createLogger({ module: "postTrigger", traceId });
 
@@ -128,7 +128,7 @@ export const postTrigger = validateWithSchema(
  */
 export const patchTriggerFired = validateWithSchema(
     patchTriggerFiredSchema,
-    "patchTriggerFiredSchema"
+    "patchTriggerFiredSchema",
 )(async ({ triggerId, fireKey, expectedLastFireKey, traceId }) => {
     const logger = createLogger({ module: "patchTriggerFired", traceId });
     const now = Date.now();

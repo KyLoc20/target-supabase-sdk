@@ -30,27 +30,23 @@ export interface EvaluateBusyNodeLivenessOptions {
 }
 
 function isBusyWithHeartbeat(node: Node): boolean {
-    return (
-        node.details.status === NodeStatus.BUSY && typeof node.details.lastHeartBeat === "number"
-    );
+    return node.details.status === NodeStatus.BUSY && typeof node.details.lastHeartBeat === "number";
 }
 
 /** Evaluate TaskNode liveness from a scanned node list (no I/O). */
 export function evaluateBusyNodeLiveness(
     nodes: Node[],
-    options: EvaluateBusyNodeLivenessOptions
+    options: EvaluateBusyNodeLivenessOptions,
 ): TaskNodeLivenessReport {
     const now = options.now ?? Date.now();
     const { staleMs, excludeNodeId, onlyFreshCandidates = false } = options;
 
     const candidates = nodes.filter(
-        (node) => (excludeNodeId == null || node.id !== excludeNodeId) && isBusyWithHeartbeat(node)
+        (node) => (excludeNodeId == null || node.id !== excludeNodeId) && isBusyWithHeartbeat(node),
     );
 
     const busyWorkerCount = candidates.length;
-    const freshCandidates = candidates.filter(
-        (node) => now - node.details.lastHeartBeat < staleMs
-    );
+    const freshCandidates = candidates.filter((node) => now - node.details.lastHeartBeat < staleMs);
     const freshWorkerCount = freshCandidates.length;
 
     const pool = onlyFreshCandidates ? freshCandidates : candidates;
@@ -62,12 +58,9 @@ export function evaluateBusyNodeLiveness(
         return node.details.lastHeartBeat > best.details.lastHeartBeat ? node : best;
     }, null);
 
-    const ageMs =
-        freshestNode == null ? Number.POSITIVE_INFINITY : now - freshestNode.details.lastHeartBeat;
+    const ageMs = freshestNode == null ? Number.POSITIVE_INFINITY : now - freshestNode.details.lastHeartBeat;
 
-    const healthy = onlyFreshCandidates
-        ? freshestNode != null
-        : freshestNode != null && ageMs < staleMs;
+    const healthy = onlyFreshCandidates ? freshestNode != null : freshestNode != null && ageMs < staleMs;
 
     return {
         healthy,

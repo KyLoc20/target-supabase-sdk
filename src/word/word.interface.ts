@@ -1,5 +1,5 @@
-import { Target } from "../core.interface";
-import { Link } from "../link/link.interface";
+import type { Target } from "../core.interface";
+import type { Link } from "../link/link.interface";
 
 export enum CategoryWord {
     WORD = "word",
@@ -19,5 +19,4 @@ export interface WordDetails {
     extensions: string[];
     scope: string;
     reviewList: Array<string | Link>;
-};
-
+}

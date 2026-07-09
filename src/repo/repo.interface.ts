@@ -1,4 +1,4 @@
-import { Target } from "../core.interface";
+import type { Target } from "../core.interface";
 
 export enum CategoryRepo {
     /** Project */
@@ -28,4 +28,3 @@ export interface RepoDetails {
     url: string;
     hash: string;
 }
-

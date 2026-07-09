@@ -18,9 +18,7 @@ export interface InitSupabaseFromStandardEnvOptions {
  * Required: `SUPABASE_URL`, `SUPABASE_ANON_KEY`
  * Optional: `SUPABASE_NEED_AUTH_URL`, `SUPABASE_NEED_AUTH_ANON_KEY`
  */
-export async function initSupabaseFromStandardEnv(
-    options: InitSupabaseFromStandardEnvOptions = {}
-): Promise<void> {
+export async function initSupabaseFromStandardEnv(options: InitSupabaseFromStandardEnvOptions = {}): Promise<void> {
     const env = options.env ?? process.env;
     const loadEnv = options.loadEnv ?? true;
 

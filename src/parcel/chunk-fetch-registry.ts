@@ -60,9 +60,7 @@ async function resolveOpaqueUrl(url: string): Promise<ArrayBuffer> {
         return matches[0].resolve(url);
     }
     if (matches.length > 1) {
-        throw new Error(
-            `Ambiguous chunk url (${url}); use provider-prefixed form e.g. telegram:${url.slice(0, 12)}…`
-        );
+        throw new Error(`Ambiguous chunk url (${url}); use provider-prefixed form e.g. telegram:${url.slice(0, 12)}…`);
     }
 
     const registered = [...resolvers.keys()].join(", ") || "(none)";
@@ -84,7 +82,7 @@ export function installChunkFetchRegistry(): () => void {
         if (isLocalFilesystemPath(url)) {
             throw new Error(
                 `Chunk fetch registry: local path not supported (${url}). ` +
-                    "Use a local provider module or parcel-restore-local."
+                    "Use a local provider module or parcel-restore-local.",
             );
         }
 

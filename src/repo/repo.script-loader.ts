@@ -1,16 +1,12 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { LoggerWithScope } from "../shared/log";
+import type { LoggerWithScope } from "../shared/log";
 import { resolvePathFromCwd, toFileImportHref } from "../shared/utils/config-path.utils";
-import { TaskRepoScriptRecord } from "../task/task-repo-context";
-import {
-    getScriptLoadKey,
-    LoadedRepoContext,
-    normalizeRepoContextModule,
-} from "./repo-context.utils";
+import type { TaskRepoScriptRecord } from "../task/task-repo-context";
+import { getScriptLoadKey, type LoadedRepoContext, normalizeRepoContextModule } from "./repo-context.utils";
 
 const importedModuleCache = new Map<string, LoadedRepoContext>();
 

@@ -24,7 +24,7 @@ function mergeWithNested<T extends object>(
     defaults: T,
     current: Partial<T> | undefined,
     patch: Partial<T>,
-    nestedKeys: (keyof T)[]
+    nestedKeys: (keyof T)[],
 ): T {
     const merged = {
         ...defaults,
@@ -56,7 +56,7 @@ async function atomicWriteJson(filePath: string, data: unknown): Promise<void> {
 
 /** JSON file-backed state with optional nested key merge and atomic writes. */
 export function createJsonFileStateStore<T extends object, NK extends keyof T = never>(
-    options: CreateJsonFileStateStoreOptions<T, NK>
+    options: CreateJsonFileStateStoreOptions<T, NK>,
 ): JsonFileStateStore<T, NK> {
     const { filePath, defaultState, nestedKeys = [] as NK[], updatedAtKey } = options;
 
@@ -83,9 +83,7 @@ export function createJsonFileStateStore<T extends object, NK extends keyof T = 
 
         async write(patch: JsonStatePatch<T, NK>): Promise<T> {
             const current = await this.read();
-            const next = touchUpdatedAt(
-                mergeWithNested(defaultState, current, patch as Partial<T>, nestedKeys)
-            );
+            const next = touchUpdatedAt(mergeWithNested(defaultState, current, patch as Partial<T>, nestedKeys));
             await atomicWriteJson(filePath, next);
             return next;
         },

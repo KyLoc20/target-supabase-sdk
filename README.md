@@ -241,6 +241,8 @@ Detailed conventions: `.cursor/skills/browser-node-exports/SKILL.md` and `.curso
 ```bash
 pnpm install
 pnpm typecheck
+pnpm format        # Biome: format + lint + organize imports (write)
+pnpm format:check  # CI gate (read-only)
 pnpm build
 pnpm dev
 ```

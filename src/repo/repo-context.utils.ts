@@ -31,15 +31,14 @@ export function isTaskRepoContext(value: unknown): value is TaskRepoContext {
 export function normalizeRepoContextModule(
     moduleExports: unknown,
     taskTypeKey: string,
-    exportName?: string
+    exportName?: string,
 ): TaskRepoContext | null {
     if (moduleExports == null) {
         return null;
     }
 
     const record = moduleExports as Record<string, unknown>;
-    const namedExport =
-        exportName != null && exportName !== "" ? record[exportName] : undefined;
+    const namedExport = exportName != null && exportName !== "" ? record[exportName] : undefined;
     const defaultExport = record.default;
     const candidate = namedExport ?? defaultExport ?? moduleExports;
 
@@ -103,7 +102,7 @@ export function getScriptLoadKey(script: TaskRepoScriptRecord): string {
 }
 
 export function assertScriptLoadable(
-    details: TaskRepoScriptDetails
+    details: TaskRepoScriptDetails,
 ): details is TaskRepoScriptDetails & ({ source: string } | { modulePath: string }) {
     const hasSource = details.source != null && details.source.trim() !== "";
     const hasModulePath = details.modulePath != null && details.modulePath.trim() !== "";

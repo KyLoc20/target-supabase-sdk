@@ -1,4 +1,4 @@
-import { Target } from "../core.interface";
+import type { Target } from "../core.interface";
 
 export enum CategoryIdea {
     OPPORTUNITY = "opportunity",
@@ -17,7 +17,7 @@ export interface IdeaDetails {
     reviewList: string[];
     /** 切入點 */
     point: string;
-};
+}
 
 export enum Market {
     NA = "NA",
@@ -25,4 +25,4 @@ export enum Market {
     JP = "JP",
     CN = "CN",
     TW = "TW",
-};
+}

@@ -1,8 +1,6 @@
 import type { ReadinessCheck, ReadinessReport } from "./readiness.types";
 
-function formatFailureMessage(
-    checks: ReadinessReport["checks"]
-): string {
+function formatFailureMessage(checks: ReadinessReport["checks"]): string {
     return checks
         .filter((check) => !check.ok)
         .map((check) => `${check.name}: ${check.detail ?? "failed"}`)
