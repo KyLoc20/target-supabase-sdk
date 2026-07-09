@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getErrorMessage } from "../src/shared/utils/error.utils.js";
 import { TaskStatus } from "../src/task/task.interface.js";
-import { postTask } from "../src/task/task-post.api.js";
+import { postTaskWithValidation } from "../src/task/task-post-validated.api.js";
 import { LOG_TOPIC_TRIGGER } from "../src/trigger/trigger.constant.js";
 import { TriggerManager } from "../src/trigger/trigger-manager.js";
 import { TriggerNode } from "../src/trigger/trigger-node.js";
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
         retryDelayMs: 5_000,
         timeoutMs: 60_000,
         fn: async (ctx) => {
-            const { data, error } = await postTask({
+            const { data, error } = await postTaskWithValidation({
                 name: "trigger-example",
                 value: "example-task",
                 params: { source: "run-trigger-node" },

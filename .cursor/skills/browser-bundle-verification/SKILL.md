@@ -97,7 +97,7 @@ module.exports = {
 
 ```text
 Layer 1 — Design (browser-node-exports skill)
-  browser.ts / node.ts split, postTask in task-post.api.ts
+  browser.ts / node.ts split; postTask in task-post.api.ts (browser-safe); postTaskWithValidation in task-post-validated.api.ts
 
 Layer 2 — SDK CI (current)
   pnpm build → verify-browser-entry on dist/

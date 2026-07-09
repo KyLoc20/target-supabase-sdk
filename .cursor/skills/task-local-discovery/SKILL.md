@@ -3,7 +3,7 @@ name: task-local-discovery
 description: >-
   Task discovery, registration, and runtime JS loading in target-supabase-sdk.
   Use when implementing or reviewing task.config.js, registerTasks, bootstrapLocalTasks,
-  RepoManager, prepareTask, postTask, TaskRepoValidation, Task.value / Repo.value keys, worker availableTaskList,
+  RepoManager, prepareTask, postTask, postTaskWithValidation, TaskRepoValidation, Task.value / Repo.value keys, worker availableTaskList,
   getScanRemoteRepoValues, patchClaimTask, or remote vs local script loading.
 ---
 
@@ -95,9 +95,12 @@ NodeManager.executeTask
        → taskParamsValidator(params)
        → bindTaskFn → ExecutableTaskFn
 
-CLI / Trigger postTask
+CLI / Trigger postTaskWithValidation
   → TaskRepoValidation.validate({ bootstrapLocal: true, includeRemote: true })
        → same getRepoContext priority as above
+
+Scheduler / browser postTask (cross-service)
+  → createTaskRow only — validation at prepareTask on executor
 ```
 
 See [target-list-query](../target-list-query/SKILL.md) for `scanTargetList` vs `getTargetList`.
@@ -131,11 +134,13 @@ Options: `RegisterTasksOptions` — `logger`, `local?`, `includeRemote?`.
 | Concern | API | Remote? |
 |---------|-----|---------|
 | **Which task types can be claimed** | `registerTasks` → `availableTaskList` | `includeRemote` controls remote **discovery** for claim list |
-| **Resolve one Repo + validate params** | `TaskRepoValidation.validate` / `prepareTask` / `postTask` | `includeRemote` (default `true`) controls remote **load** when local registry misses |
+| **Resolve one Repo + validate params** | `TaskRepoValidation.validate` / `prepareTask` / `postTaskWithValidation` | `includeRemote` (default `true`) controls remote **load** when local registry misses |
 
 Both paths share `RepoManager.getRepoContext`: **local registry first**; remote only when `includeRemote: true`.
 
-`postTask` (CLI / Trigger): `bootstrapLocal: true`, `includeRemote: true` (defaults).
+`postTaskWithValidation` (CLI / monolithic Trigger): `bootstrapLocal: true`, `includeRemote: true` (defaults).
+
+`postTask` (scheduler / browser enqueue): no Repo or params validation — execution gate is `prepareTask`.
 
 `prepareTask` (Worker): no upfront `bootstrapLocal` (startup already scanned); **lazy** `bootstrapLocalTasks({ forTaskTypeKey })` when registry misses the claimed `task.value`. Passes `includeRemote` from `registerTasks` result.
 
@@ -193,7 +198,8 @@ export default {
 | `TaskManager.clearBootstrapLocalTasksCache()` | Clear bootstrap fingerprint cache (tests / hot reload) |
 | `TaskRepoValidation.validate({ ... })` | **Shared validation** — resolve Repo + `taskParamsValidator` |
 | `TaskManager.prepareTask({ logger, task, includeRemote? })` | Worker execution prep; lazy local bootstrap on registry miss |
-| `postTask` | Scheduler insert; `bootstrapLocal: true` + validation before DB write |
+| `postTask` | Enqueue task row (browser + node); Zod payload only |
+| `postTaskWithValidation` | Insert after `bootstrapLocal` + Repo + params validation (node) |
 | `TaskManager.getRegisteredLocalTaskTypeKeys()` | Keys in local registry |
 | `TASK_REPO_USAGE` | `"task"` — remote Repo `details.usage` for task worker |
 | `getScanRemoteRepoValues({ usage })` | Remote `Repo.value` via `scanTargetList` + `details.usage`; returns `SupabaseResponse<string[]>` |
@@ -251,6 +257,8 @@ Caches: bootstrap fingerprint; module import cache; remote context cache by `tas
 | Config scan + bootstrap cache | `src/task/local-task-registry.ts` |
 | registerTasks + prepareTask | `src/task/task-manager.ts` |
 | Shared repo + params validation | `src/task/task-repo-validation.ts` |
+| Enqueue (browser + node) | `src/task/task-post.api.ts` |
+| Enqueue with validation (node) | `src/task/task-post-validated.api.ts` |
 | Remote repo values | `src/repo/repo.api.ts` |
 | Full-scan primitive | `src/core.api.ts` (`scanTargetList`) |
 | Local registry + remote load | `src/repo/repo-manager.ts` |

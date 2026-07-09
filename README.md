@@ -51,18 +51,20 @@ Used by `scripts/` (`pnpm worker`, `pnpm post-task`) via `.env.local`. Browser a
 Chrome extensions, React, Vite — import from the main entry (no Node built-ins):
 
 ```typescript
-import { supabase, getTarget, postLinkCreate } from "target-supabase-sdk";
+import { supabase, getTarget, postLinkCreate, postTask } from "target-supabase-sdk";
 ```
+
+`postTask` enqueues a task row (Zod payload only). Repo and params validation run at worker `prepareTask`, not at publish time.
 
 ### Node.js workers / CLI
 
 Local task registry, repo script loading, TaskNode — use the `/node` entry:
 
 ```typescript
-import { TaskManager, RepoManager, TaskNode, postTask } from "target-supabase-sdk/node";
+import { TaskManager, RepoManager, TaskNode, postTaskWithValidation } from "target-supabase-sdk/node";
 ```
 
-> **Breaking change in 0.2.0:** `TaskManager`, `RepoManager`, and `postTask` are no longer on the default entry. Import them from `/node`.
+> **Breaking change in 0.2.0:** `TaskManager`, `RepoManager`, and `postTaskWithValidation` are no longer the only task publish path on `/node`. **`postTask`** (no Repo validation) is on the **default** browser entry and re-exported from `/node`.
 
 ### Browser vs Node (package layout)
 
@@ -74,7 +76,7 @@ Since **0.2.0**, the package ships two compiled entries:
 | `target-supabase-sdk/node` | `dist/node.js` | Workers, CLI, TaskNode — includes browser API + Node-only code |
 | `target-supabase-sdk/browser` | `dist/browser.js` | Explicit alias of default |
 
-`src/browser.ts` is the curated browser public surface. `src/node.ts` re-exports browser and adds Node-only symbols (`TaskManager`, `postTask`, `RepoManager`, …).
+`src/browser.ts` is the curated browser public surface (includes `postTask`). `src/node.ts` re-exports browser and adds Node-only symbols (`TaskManager`, `postTaskWithValidation`, `RepoManager`, …).
 
 ### Initialize Supabase
 
@@ -227,7 +229,7 @@ Node entry (`/node`) is bundled by the same Rollup build (peers and `node:*` sta
 | Safe on default entry `.` | Node entry `/node` only |
 |---------------------------|-------------------------|
 | `*.interface.ts`, Supabase RPC `*.api.ts` | `TaskManager`, `RepoManager`, `TaskNode`, `TriggerNode`, `TriggerManager` |
-| `createTarget`, `postLinkCreate`, task `patch*` APIs | `postTask`, `TaskRepoValidation` |
+| `createTarget`, `postLinkCreate`, task `patch*` APIs, **`postTask`** | `postTaskWithValidation`, `TaskRepoValidation` |
 | `repo.api` (remote) | `local-task-registry`, `repo.script-loader` |
 
 **Do not rely on dynamic `import()`** to hide Node code: if `browser.ts` statically re-exports a file, bundlers include the whole module. Keep Node-only code in separate files that `browser.ts` never touches.

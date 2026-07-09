@@ -106,10 +106,7 @@ export {
 } from "./task/task-manager";
 export { TaskNode } from "./task/task-node";
 export type { PostTaskPayload } from "./task/task-post.api";
-export {
-    postTask,
-    postTaskSchema,
-} from "./task/task-post.api";
+export { postTaskWithValidation } from "./task/task-post-validated.api";
 export type {
     TaskRepoValidationFailureReason,
     ValidateTaskRepoAndParamsInput,

@@ -35,6 +35,7 @@ export type {
 export { TaskManager } from "./task-manager";
 export type { PostTaskPayload } from "./task-post.api";
 export { postTask, postTaskSchema } from "./task-post.api";
+export { postTaskWithValidation } from "./task-post-validated.api";
 export type {
     TaskRepoValidationFailureReason,
     ValidateTaskRepoAndParamsInput,

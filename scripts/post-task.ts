@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TaskStatus } from "../src/task/task.interface.js";
-import { type PostTaskPayload, postTask } from "../src/task/task-post.api.js";
+import type { PostTaskPayload } from "../src/task/task-post.api.js";
+import { postTaskWithValidation } from "../src/task/task-post-validated.api.js";
 import { initSupabaseFromEnv } from "./init-supabase.js";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -106,7 +107,7 @@ async function main(): Promise<void> {
     await initSupabaseFromEnv(projectRoot);
 
     const payload = buildPayloadFromArgs(args);
-    const { data, error } = await postTask(payload);
+    const { data, error } = await postTaskWithValidation(payload);
 
     if (error) {
         throw new Error(error.message);

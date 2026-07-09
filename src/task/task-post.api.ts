@@ -1,9 +1,8 @@
 import { z } from "zod";
 import { createTarget, validateWithSchema } from "../core.api";
-import { generateResponse, type SupabaseResponse } from "../core.interface";
-import { createLogger, logManager } from "../shared/log";
+import type { SupabaseResponse } from "../core.interface";
+import { createLogger, type LoggerWithScope, logManager } from "../shared/log";
 import { CategoryTask, type Task, TaskStatus } from "./task.interface";
-import { TaskRepoValidation } from "./task-repo-validation";
 
 const traceIdSchema = z.string().trim().min(1).optional();
 const traceParentIdSchema = z.string().trim().min(1).nullable().optional();
@@ -28,40 +27,15 @@ export const postTaskSchema = z.object({
 
 export type PostTaskPayload = z.infer<typeof postTaskSchema>;
 
-/**
- * Create a task row (scheduler / admin). **Node entry only** — requires local Repo bootstrap.
- *
- * @see target-supabase-sdk/node
- */
-export const postTask = validateWithSchema(
-    postTaskSchema,
-    "postTaskSchema",
-)(async ({ name, value, params, taskStatus, tagList, extra, traceId, traceParentId }) => {
-    const taskTraceId = traceId?.trim() || logManager.generateTraceId();
-    const logger = createLogger({
-        module: "postTask",
-        traceId: taskTraceId,
-        traceParentId: traceParentId ?? null,
-    });
+export type CreateTaskRowInput = PostTaskPayload & {
+    taskTraceId: string;
+};
 
-    const validation = await TaskRepoValidation.validate({
-        logger,
-        taskTypeKey: value,
-        params,
-        bootstrapLocal: true,
-    });
-    if (!validation.isValid) {
-        logger.warn(validation.message, {
-            topic: "task",
-            data: {
-                taskTypeKey: value,
-                reason: validation.reason,
-                step: validation.step,
-            },
-        });
-        return generateResponse.error(validation.message, undefined, String(validation.code)) as SupabaseResponse<Task>;
-    }
-
+/** Shared DB insert for {@link postTask} and {@link postTaskWithValidation}. */
+export async function createTaskRow(
+    { name, value, params, taskStatus, tagList, extra, taskTraceId, traceParentId }: CreateTaskRowInput,
+    logger: LoggerWithScope,
+): Promise<SupabaseResponse<Task>> {
     const result = await createTarget<Task, PostTaskPayload>({
         payload: {
             name,
@@ -101,4 +75,25 @@ export const postTask = validateWithSchema(
     });
 
     return result;
+}
+
+/**
+ * Create a task row (scheduler / admin). **Browser and Node** — no Repo or params validation.
+ * Execution-time checks live in {@link TaskManager.prepareTask}.
+ */
+export const postTask = validateWithSchema(
+    postTaskSchema,
+    "postTaskSchema",
+)(async ({ name, value, params, taskStatus, tagList, extra, traceId, traceParentId }) => {
+    const taskTraceId = traceId?.trim() || logManager.generateTraceId();
+    const logger = createLogger({
+        module: "postTask",
+        traceId: taskTraceId,
+        traceParentId: traceParentId ?? null,
+    });
+
+    return createTaskRow(
+        { name, value, params, taskStatus, tagList, extra, traceId, traceParentId, taskTraceId },
+        logger,
+    );
 });

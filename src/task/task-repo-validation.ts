@@ -15,7 +15,7 @@ export type ValidateTaskRepoAndParamsInput = {
     taskTypeKey: string;
     params: unknown;
     /**
-     * When true, run {@link bootstrapLocalTasks} before resolve (CLI / Trigger / postTask).
+     * When true, run {@link bootstrapLocalTasks} before resolve (CLI / Trigger / postTaskWithValidation).
      * Worker paths should omit — {@link TaskManager.registerTasks} already bootstrapped.
      */
     bootstrapLocal?: boolean;

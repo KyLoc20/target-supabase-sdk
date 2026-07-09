@@ -40,14 +40,14 @@ src/index.ts     — export * from "./browser"
 ### Browser entry includes
 
 - `supabase`, `core.*`, `auth`, `link`, `list`, domain APIs
-- `task.interface`, `task.api` **patch\*** functions only (not `postTask`)
+- `task.interface`, `task.api` **patch\*** functions, **`postTask`** (enqueue only, no Repo validation)
 - `node.interface`, `node.api` (Supabase RPC — no TaskNode class)
 - `repo.interface`, `repo.api` (not `RepoManager`)
 
 ### Node entry adds
 
 - `TaskManager`, `RepoManager`
-- `postTask`, `TaskRepoValidation`
+- `postTaskWithValidation`, `TaskRepoValidation`
 - `TaskNode`, `TriggerNode`, `TriggerManager`, `BaseNodeRuntime`
 - `command.*`, `trigger.*` (API); runner scheduling → [trigger-local-runners](../trigger-local-runners/SKILL.md)
 
@@ -62,7 +62,7 @@ Every new domain, API, or Manager must be classified **before** registering it o
 ```text
 Write code     → classify browser vs node, pick entry file(s)
 pnpm build     → verify-browser scans static import graph from dist/browser.js
-Consumers      → default entry = browser; TaskManager / postTask = /node
+Consumers      → default entry = browser (incl. postTask); TaskManager / postTaskWithValidation = /node
 ```
 
 ### Step 1 — Scan the module and its static import chain
@@ -114,8 +114,8 @@ If `browser.ts` re-exports `./task.api` and `task.api.ts` has a top-level `impor
 
 **Types vs implementations**
 
-- Browser: `task.interface`, `task.api` (patch\*), `repo.interface`, `repo.api`
-- Node: `TaskManager`, `RepoManager`, `postTask`, `TaskRepoValidation`, `TaskNode`
+- Browser: `task.interface`, `task.api` (patch\*), `postTask`, `repo.interface`, `repo.api`
+- Node: `TaskManager`, `RepoManager`, `postTaskWithValidation`, `TaskRepoValidation`, `TaskNode`
 
 Interfaces and Supabase RPC helpers can be browser-safe; classes that touch local FS or crypto cannot.
 
@@ -125,7 +125,7 @@ Within a domain, import `from "./task.api"` not `from "./index"` — avoids barr
 
 **Never statically import from browser graph**
 
-Do not import `task-manager`, `repo-manager`, `local-task-registry`, `repo.script-loader`, `task-post.api`, or `task-repo-validation` from `browser.ts` or any file that `browser.ts` re-exports.
+Do not import `task-manager`, `repo-manager`, `local-task-registry`, `repo.script-loader`, `task-post-validated.api`, or `task-repo-validation` from `browser.ts` or any file that `browser.ts` re-exports.
 
 ---
 
@@ -138,22 +138,35 @@ Do not import `task-manager`, `repo-manager`, `local-task-registry`, `repo.scrip
 
 ---
 
-## postTask pattern (separate module)
+## postTask pattern (split modules)
 
-`postTask` needs `TaskRepoValidation` → `RepoManager` → Node. It lives in **`src/task/task-post.api.ts`**, not `task.api.ts`.
+**Publish** and **validate-then-publish** are separate leaves so the browser bundle never pulls `TaskRepoValidation` → `RepoManager`.
 
-- **`task.api.ts`** — browser-safe patch\* functions only (`patchClaimTask`, `patchTaskProgress`, …)
-- **`task-post.api.ts`** — `postTask`, `postTaskSchema`, `PostTaskPayload` (Node-only consumers)
+| Module | Symbols | Entry |
+|--------|---------|-------|
+| **`task.api.ts`** | `patchClaimTask`, `patchTaskProgress`, … | browser + node |
+| **`task-post.api.ts`** | `postTask`, `postTaskSchema`, `PostTaskPayload`, `createTaskRow` | **browser + node** |
+| **`task-post-validated.api.ts`** | `postTaskWithValidation` | **node only** |
 
-**Never** statically import `task-post.api.ts` or `task-repo-validation.ts` from `browser.ts` or from modules in the browser graph. Bundlers (Webpack) follow static imports even when only one export is used.
+- **`postTask`** — enqueue only (Zod payload shape); Repo + `taskParamsValidator` run at **`prepareTask`** on the worker.
+- **`postTaskWithValidation`** — same insert path via shared `createTaskRow`; runs `TaskRepoValidation.validate({ bootstrapLocal: true })` first (CLI, monolithic schedulers that own `taskDir`).
 
-Node entry re-exports:
+**Never** statically import `task-post-validated.api.ts` or `task-repo-validation.ts` from `browser.ts` or from modules in the browser graph.
+
+Browser entry:
 
 ```typescript
 export { postTask, postTaskSchema } from "./task/task-post.api";
+export type { PostTaskPayload } from "./task/task-post.api";
 ```
 
-Internal Node callers import from `../task/task-post.api` (e.g. `trigger/trigger-node.ts`, `scripts/post-task.ts`).
+Node entry adds:
+
+```typescript
+export { postTaskWithValidation } from "./task/task-post-validated.api";
+```
+
+Internal Node callers: `scripts/post-task.ts` → `postTaskWithValidation`; cross-service schedulers → `postTask` from browser or `/node`.
 
 ---
 
@@ -162,8 +175,8 @@ Internal Node callers import from `../task/task-post.api` (e.g. `trigger/trigger
 **Same Node process may import both entries** (e.g. preload initializes via `/node`, app code uses `.`). That requires the SDK Rollup build to emit **shared chunks** so `supabase` is one module instance — see [rollup-library-build](../rollup-library-build/SKILL.md#dual-entry-singleton-shared-chunk).
 
 ```typescript
-// Chrome extension popup / background
-import { supabase, createTarget, postLinkCreate } from "target-supabase-sdk";
+// Chrome extension popup / background — enqueue without local taskDir
+import { supabase, postTask } from "target-supabase-sdk";
 
 // Node worker / preload — init env + Supabase here
 import { TaskManager, TaskNode, initSupabaseFromStandardEnv } from "target-supabase-sdk/node";
@@ -171,8 +184,8 @@ import { TaskManager, TaskNode, initSupabaseFromStandardEnv } from "target-supab
 // Same process can also use browser entry after init
 import { getApi } from "target-supabase-sdk";
 
-// CLI post-task script (internal — prefer ../src/ paths in scripts/)
-import { postTask } from "target-supabase-sdk/node";
+// CLI post-task script — validate before insert when taskDir is local
+import { postTaskWithValidation } from "target-supabase-sdk/node";
 ```
 
 ---
@@ -199,7 +212,7 @@ Node entry is not separately verified — Rollup + shared-chunk smoke in consume
 - [ ] Internal same-domain imports use leaf paths, not domain barrel?
 - [ ] `pnpm build` + verify-browser passes?
 - [ ] README / consumer docs if new public entry symbol?
-- [ ] Node consumers use `/node` for `TaskManager`, `postTask`, `RepoManager`?
+- [ ] Node consumers use `/node` for `TaskManager`, `postTaskWithValidation`, `RepoManager`?
 
 ---
 
@@ -220,4 +233,5 @@ Node entry is not separately verified — Rollup + shared-chunk smoke in consume
 | `scripts/verify-graph.mjs` | Static graph walker: `./` + `../`, `dist/`-bounded, resolves `dir/index.js` |
 | `scripts/verify-browser-entry.mjs` | Browser entry guard (no `node:*`) |
 | `src/task/task.api.ts` | Browser-safe task patch APIs |
-| `src/task/task-post.api.ts` | Node-only `postTask` |
+| `src/task/task-post.api.ts` | Browser + Node `postTask` (enqueue only) |
+| `src/task/task-post-validated.api.ts` | Node-only `postTaskWithValidation` |

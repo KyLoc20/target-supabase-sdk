@@ -47,6 +47,8 @@ import {
   postTask,
 } from "target-supabase-sdk/node";
 
+// Same-process scheduler with local taskDir — use postTaskWithValidation instead.
+
 TriggerManager.registerRunner({
   key: "post-weather-task",
   intervalMs: 24 * 60 * 60 * 1000,

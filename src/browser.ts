@@ -151,13 +151,15 @@ export {
     patchTaskProgressSchema,
 } from "./task/task.api";
 export type { Task, TaskDetails, TaskFlow } from "./task/task.interface";
-// task — api + validation only (TaskManager is Node-only → node entry)
+// task — api + enqueue only (TaskManager / postTaskWithValidation → node entry)
 export {
     CategoryTask,
     ResultCode,
     TaskStatus,
     TaskStatusAction,
 } from "./task/task.interface";
+export type { PostTaskPayload } from "./task/task-post.api";
+export { postTask, postTaskSchema } from "./task/task-post.api";
 export type { TaskStatusCount } from "./task/task-queue";
 export { countTasksByType, summarizeTaskQueue } from "./task/task-queue";
 export * from "./word/word.interface";

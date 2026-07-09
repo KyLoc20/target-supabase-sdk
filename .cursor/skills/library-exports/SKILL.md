@@ -105,6 +105,7 @@ export { patchClaimTask, patchClaimTaskSchema, patchTaskProgress, patchTaskProgr
 export type { PatchClaimTaskPayload, PatchTaskProgressPayload, ... } from "./task.api";
 export { postTask, postTaskSchema } from "./task-post.api";
 export type { PostTaskPayload } from "./task-post.api";
+export { postTaskWithValidation } from "./task-post-validated.api";
 
 // manager — value + caller-facing types only
 export { TaskManager } from "./task-manager";
