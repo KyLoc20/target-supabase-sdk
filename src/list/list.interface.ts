@@ -19,5 +19,5 @@ export interface ListDetails {
     preview: string;
     /** How to render the List */
     loaderKey: string;
-    items: Array<TargetDraft<Target>>;
+    items: Array<unknown>;
 }

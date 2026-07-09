@@ -10,6 +10,7 @@ export interface Link extends Target {
     /** URL */
     value: string;
     details: LinkDetails;
+    /** Only Link can own a custom category, like 'link-log' */
     category: CategoryLink;
 }
 

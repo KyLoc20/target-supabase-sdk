@@ -62,7 +62,6 @@ interface LogOptions {
     formatTimestamp: boolean;
     formatEmoji: boolean;
     formatPrefix: string;
-    maxHistoryLength: number;
     /** Logs below this level are skipped. Defaults to DEBUG in dev, INFO in production. */
     minLevel?: LogLevel;
     onLog?: (entry: LogEntry) => void;
@@ -78,7 +77,6 @@ const DEFAULT_OPTIONS: LogOptions = {
     formatTimestamp: true,
     formatEmoji: true,
     formatPrefix: "",
-    maxHistoryLength: 4096,
     minLevel: isDevEnvironment() ? LogLevel.DEBUG : LogLevel.INFO,
 };
 
@@ -130,7 +128,6 @@ function validateLogScope(logScope: LogScope): void {
 class LogManager {
     private static instance: LogManager;
     private options: LogOptions;
-    private history: LogEntry[] = [];
     private readonly levelEmojis = {
         [LogLevel.DEBUG]: "🔍",
         [LogLevel.INFO]: "ℹ️",
@@ -157,14 +154,6 @@ class LogManager {
 
     public setOptions(options: Partial<LogOptions>): void {
         this.options = mergeLogOptions({ ...this.options, ...options });
-    }
-
-    public getHistory(): LogEntry[] {
-        return [...this.history];
-    }
-
-    public clearHistory(): void {
-        this.history = [];
     }
 
     private getMinLevel(): LogLevel {
@@ -271,11 +260,6 @@ class LogManager {
             data,
             ...logScope,
         });
-
-        this.history.push(entry);
-        if (this.history.length > this.options.maxHistoryLength) {
-            this.history.shift();
-        }
 
         const formatted = this.formatLog(entry);
         this.emitLog(entry, formatted);
