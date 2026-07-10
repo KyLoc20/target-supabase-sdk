@@ -36,7 +36,7 @@ export interface LogPersistConfig {
 export interface EnableLogPersistOptions {
     service: string;
     process: string;
-    /** Shared registry file — all processes of one service use the same path. */
+    /** Shared registry root directory — all processes use the same path; each writes its own shard file. */
     registryFilePath?: string;
     config?: Partial<LogPersistConfig>;
 }

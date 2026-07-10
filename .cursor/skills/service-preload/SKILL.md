@@ -106,6 +106,32 @@ spawnTsxChild({
 
 Launcher sets `LOG_PERSIST_PROCESS` per child (`guard` | `scheduler` | `worker`). Main passes `process: "main"` in `ensureLogPersistFromEnv`.
 
+## Log-persist registry (multi-process)
+
+When `LOG_PERSIST_ENABLED=true`, every process calls `ensureLogPersistFromEnv` and registers in a **shared registry directory** (default `<RUNTIME_DATA_DIR>/log-persist-registry/`). Main uses `waitForLogPersistReady` to poll until all expected processes have fresh heartbeats.
+
+### Use per-process shard files (required on Windows)
+
+**Do not** store all process records in one JSON file that every child read-modify-writes. `createJsonFileStateStore` uses atomic `rename(temp, target)`; concurrent writers on Windows hit `EPERM` and can lose updates.
+
+| Layout | Verdict | Notes |
+|--------|---------|-------|
+| Single `log-persist-registry.json` | ❌ | guard + scheduler register together → EPERM on Windows |
+| Directory + one shard per process | ✅ | `log-persist-registry/main.json`, `guard.json`, … — each process owns its file |
+| Reader | Aggregate | `readLogPersistRegistry(registryDir)` merges `*.json` shards into `LogPersistRegistryState` |
+
+SDK: `defaultLogPersistRegistryPath(registryDir)` → `…/log-persist-registry` (directory). Option `registryFilePath` is the registry **root** (name kept for API stability). Legacy single `.json` path still works if explicitly passed.
+
+```text
+data/runtime/log-persist-registry/
+  main.json        ← main only writes
+  guard.json       ← guard only writes
+  scheduler.json
+  worker.json
+```
+
+Main readiness gate unchanged: `waitForLogPersistReady({ registryFilePath, expectedProcesses })`.
+
 ## SDK surface (planned)
 
 | Export path | Symbol | Role |
@@ -171,6 +197,7 @@ supabase-sdk/
 - Use absolute paths in `--import` on Windows
 - Duplicate `.env` parsing in service `env.ts` and preload (preload loads; app reads `process.env`)
 - Reintroduce multi-file preload chains in new services
+- Use a single shared JSON registry file for multi-process log-persist registration (use per-process shards under `log-persist-registry/` instead)
 
 ## Related skills
 
