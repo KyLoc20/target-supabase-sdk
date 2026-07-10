@@ -25,6 +25,7 @@ export default {
     input: {
         browser: resolve(root, "src/browser.ts"),
         node: resolve(root, "src/node.ts"),
+        preload: resolve(root, "src/preload.ts"),
     },
     output: {
         dir: resolve(root, "dist"),

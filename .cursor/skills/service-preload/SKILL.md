@@ -74,13 +74,10 @@ Phase 5 — Process diagnostics
 ### Required: `scripts/preload.mjs`
 
 ```javascript
-/**
- * watch-service preload — follows target-supabase-sdk service-preload protocol.
- * @see ../supabase-sdk/.cursor/skills/service-preload/SKILL.md
- */
 import { runServicePreload } from "target-supabase-sdk/preload";
 
 runServicePreload({
+    callerImportMetaUrl: import.meta.url,
     packageName: "watch-service",
     serviceValue: "watch-service",
     runtimeDataDirRelative: "data/runtime",
@@ -121,6 +118,8 @@ Launcher sets `LOG_PERSIST_PROCESS` per child (`guard` | `scheduler` | `worker`)
 
 ```typescript
 interface ServicePreloadOptions {
+    /** import.meta.url from service scripts/preload.mjs */
+    callerImportMetaUrl: string;
     /** package.json name — for resolveProjectRootByPackageName */
     packageName: string;
     /** LOG_PERSIST_SERVICE default when persistence enabled */

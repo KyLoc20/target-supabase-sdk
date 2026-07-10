@@ -34,6 +34,11 @@
             "types": "./dist/node.d.ts",
             "import": "./dist/node.js",
             "default": "./dist/node.js"
+        },
+        "./preload": {
+            "types": "./dist/preload.d.ts",
+            "import": "./dist/preload.js",
+            "default": "./dist/preload.js"
         }
     },
     "files": [
