@@ -1,6 +1,6 @@
 import { createTarget } from "../core.api";
 import { BaseValidator } from "../core.utils";
-import type { List, ListDetails } from "./list.interface";
+import { CategoryList, type List, type ListDetails } from "./list.interface";
 
 export interface PostListCreatePayload {
     name: List["name"];
@@ -26,6 +26,29 @@ export const postListCreate = async (payload: PostListCreatePayload) => {
     return createTarget<List, PostListCreatePayload>({
         payload: payload,
         validator: PostListValidator,
+        createFn: (validPayload) => {
+            const { name, value, category, details } = validPayload;
+
+            return {
+                name,
+                category,
+                value,
+                tagList: [],
+                details,
+            };
+        },
+    });
+};
+
+/** Log batch create — idempotent on List.value (stable batch hash). */
+export const postLogListCreate = async (payload: PostListCreatePayload) => {
+    return createTarget<List, PostListCreatePayload>({
+        payload,
+        validator: PostListValidator,
+        checkRedundancyFilterList: [
+            { field: "category", operator: "eq", value: CategoryList.LIST },
+            { field: "value", operator: "eq", value: payload.value },
+        ],
         createFn: (validPayload) => {
             const { name, value, category, details } = validPayload;
 

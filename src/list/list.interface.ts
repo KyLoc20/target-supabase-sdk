@@ -1,4 +1,4 @@
-import type { Target, TargetDraft } from "../core.interface";
+import type { Target } from "../core.interface";
 
 export enum CategoryList {
     LIST = "list",

@@ -38,7 +38,7 @@ Process-local — **one instance per OS process** (main vs supervisor each have 
 ```typescript
 const children = new ManagedChildProcesses({
   projectRoot,
-  preloadModules: ["./scripts/preload-env.mjs", "./scripts/preload-diagnostics.mjs"],
+  preloadModules: ["./scripts/preload.mjs"],
   logger, // optional createLogger instance
 });
 

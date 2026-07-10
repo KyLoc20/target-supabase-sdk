@@ -82,7 +82,9 @@ Keep domain getters in `src/env.ts`:
 
 ## Preload script
 
-`scripts/preload-env.mjs` should call `loadEnvFiles` from SDK (same parser as app code).
+Use **one** `scripts/preload.mjs` calling `runServicePreload` from `target-supabase-sdk/preload`. Do not duplicate `.env` parsing in service code.
+
+See [service-preload](../service-preload/SKILL.md) for the full protocol. Supabase init stays in app entry (`initSupabaseFromStandardEnv`).
 
 ## Reference
 

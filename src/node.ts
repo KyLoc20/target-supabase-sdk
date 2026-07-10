@@ -79,6 +79,25 @@ export {
     waitForServiceReady,
 } from "./node/readiness";
 export { RepoManager } from "./repo/repo-manager";
+export {
+    disableLogPersist,
+    enableLogPersist,
+    ensureLogPersistFromEnv,
+    getLogPersistStats,
+    logPersistEnabledFromEnv,
+    resolveLogPersistRegistryPath,
+    snapshotLogPersistReady,
+    validateLogPersistPreloadEnv,
+    waitForLogPersistReady,
+} from "./shared/log/enable-log-persist";
+export type {
+    EnableLogPersistOptions,
+    EnsureLogPersistFromEnvOptions,
+    LogPersistLane,
+    LogPersistReadySnapshot,
+    LogPersistStats,
+    WaitForLogPersistReadyOptions,
+} from "./shared/log/log-persist.interface";
 export type {
     BootstrapLocalTasksResult,
     BootstrapLocalTasksStatus,

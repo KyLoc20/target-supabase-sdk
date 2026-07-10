@@ -1,5 +1,6 @@
 import { isDevEnvironment } from "../../core.utils";
 import { generateUniqueId } from "../utils/id.utils";
+import { offerToLogPersist } from "./log-persist-hook";
 import { formatScopeLabels, type LoggerResetScopePatch, type LogScope, patchScope, resolveLogData } from "./log-scope";
 
 /**
@@ -264,6 +265,7 @@ class LogManager {
         const formatted = this.formatLog(entry);
         this.emitLog(entry, formatted);
         this.options.onLog?.(entry);
+        offerToLogPersist(entry);
     }
 
     public generateTraceId(): string {
