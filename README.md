@@ -35,7 +35,7 @@ cp .env.example .env.local
 | `SUPABASE_NEED_AUTH_URL` | No | Separate auth project URL |
 | `SUPABASE_NEED_AUTH_ANON_KEY` | No | Separate auth project anon key |
 
-Used by `scripts/` (`pnpm worker`, `pnpm post-task`) via `.env.local`. Browser apps pass the same values to `supabase.initialize()` (e.g. `import.meta.env.VITE_SUPABASE_URL` if your bundler uses a `VITE_` prefix).
+Used by `scripts/` (`pnpm worker:trigger`) via `.env.local`. Browser apps pass the same values to `supabase.initialize()` (e.g. `import.meta.env.VITE_SUPABASE_URL` if your bundler uses a `VITE_` prefix).
 
 ### Security
 
@@ -63,6 +63,8 @@ Local task registry, repo script loading, TaskNode — use the `/node` entry:
 ```typescript
 import { TaskManager, RepoManager, TaskNode, postTaskWithValidation } from "target-supabase-sdk/node";
 ```
+
+Consumer services (e.g. [`../download-service`](../download-service), [`../watch-service`](../watch-service)) run `TaskNode` / `TriggerNode` with their own `config/task.config.js` and `tasks/` packages.
 
 > **Breaking change in 0.2.0:** `TaskManager`, `RepoManager`, and `postTaskWithValidation` are no longer the only task publish path on `/node`. **`postTask`** (no Repo validation) is on the **default** browser entry and re-exported from `/node`.
 
@@ -154,7 +156,7 @@ const { data: service } = await discoverService({ value: "storage-service" });
 
 Types: `Service`, `Api`, `ApiDetails` (`method`, `path`, `endpoint`, `request`, `response`), `FieldDefinition` for inline schemas.
 
-**Example consumer:** [`../storage-service`](../storage-service) — Express server that bootstraps catalog rows on startup and serves chunk upload/download.
+**Example consumers:** [`../storage-service`](../storage-service) (chunk upload/download), [`../watch-service`](../watch-service) (site scan scheduler), [`../download-service`](../download-service) (Chrome-backed `auto-chrome` executor).
 
 ### TriggerNode (local interval runners)
 

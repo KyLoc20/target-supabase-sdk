@@ -23,12 +23,12 @@ export function buildLogListDraft(input: BuildLogListDraftInput): LogListDraft {
     const last = entries[entries.length - 1];
 
     return {
-        name: `${service}:${process}`,
+        name: `log-batch:${service}:${process}:${lane}`,
         value: idempotencyKey,
         category: CategoryList.LIST,
         tagList: ["log", lane, service],
         details: {
-            manifestVersion: 1,
+            manifestVersion: 0,
             loaderKey: LOG_PERSIST_LOADER_KEY,
             meta: JSON.stringify({
                 service,

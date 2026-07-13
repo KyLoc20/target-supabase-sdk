@@ -2,9 +2,9 @@
 name: library-dev-scripts
 description: >-
   Dev-only scripts/ layout for target-supabase-sdk: tsx runner, tsconfig.scripts.json,
-  separate typecheck from library src, NodeManager worker entry. Use when adding or
-  reviewing scripts/, package.json worker/typecheck:scripts, tsx, or why scripts must
-  not be in the main tsconfig include for a publishable library.
+  separate typecheck from library src. Use when adding or reviewing scripts/,
+  package.json typecheck:scripts, tsx, or why scripts must not be in the main tsconfig
+  include for a publishable library.
 ---
 
 # Library dev scripts (target-supabase-sdk)
@@ -20,6 +20,8 @@ description: >-
 
 Do **not** add `scripts` to the main `tsconfig.json` `include`. A library's root tsconfig defines the **package contract**, not local runner entrypoints.
 
+**TaskNode workers** run in consumer services ([`download-service`](../../download-service), [`watch-service`](../../watch-service)), not in this repo.
+
 ---
 
 ## What is `tsx`?
@@ -27,13 +29,13 @@ Do **not** add `scripts` to the main `tsconfig.json` `include`. A library's root
 **`tsx`** is an npm CLI (devDependency) that **runs TypeScript files directly in Node** without a prior `tsc` build.
 
 ```json
-"worker": "tsx scripts/run-node-worker.ts"
+"worker:trigger": "tsx scripts/run-trigger-node.ts"
 ```
 
 | Aspect | Detail |
 |--------|--------|
 | Role | Runtime TS loader (typically backed by esbuild) |
-| Use here | Bootstrap `NodeManager` from `scripts/run-node-worker.ts` |
+| Use here | Bootstrap `TriggerNode` from `scripts/run-trigger-node.ts` |
 | Scope | `devDependencies` only — never shipped in `dist` |
 | Imports | Scripts may `import "../src/..."` to run against source during dev |
 
@@ -54,24 +56,16 @@ Default for this repo's `scripts/`: **tsx**.
 ```text
 scripts/
   load-env.ts           ← read .env.local / .env (no override of existing process.env)
-  run-node-worker.ts    ← supabase.initialize() → new NodeManager().start()
+  init-supabase.ts      ← supabase.initialize() helper for dev scripts
   run-trigger-node.ts   ← register TriggerManager runners → new TriggerNode().start()
 tsconfig.scripts.json   ← extends root tsconfig; include scripts only
 ```
 
 **`run-trigger-node.ts` responsibilities:**
 
-1. `initSupabaseFromEnv(projectRoot)` — same env as task worker
+1. `initSupabaseFromEnv(projectRoot)` — same env as consumer service workers
 2. `TriggerManager.registerRunner({ key, intervalMs, fn })` — code-only registration (see [trigger-local-runners](../trigger-local-runners/SKILL.md))
 3. `await new TriggerNode().start()` — 60s loop, parallel due runners
-
-**`run-node-worker.ts` responsibilities:**
-
-1. `loadEnvFiles(projectRoot)` — `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optional `SUPABASE_NEED_AUTH_*`
-2. `supabase.initialize({ ... })` via `scripts/init-supabase.ts` (see [supabase-holder](../supabase-holder/SKILL.md))
-3. `await new NodeManager().start()` — blocks on main loop; exit via `shutdown` / signals
-
-Local tasks: `config/task.config.js` → `taskDir` (see [task-local-discovery](../task-local-discovery/SKILL.md)).
 
 ---
 
@@ -97,7 +91,7 @@ Local tasks: `config/task.config.js` → `taskDir` (see [task-local-discovery](.
 ```json
 "typecheck": "tsc -p tsconfig.json --noEmit",
 "typecheck:scripts": "tsc -p tsconfig.scripts.json",
-"worker": "tsx scripts/run-node-worker.ts"
+"worker:trigger": "tsx scripts/run-trigger-node.ts"
 ```
 
 CI runs both steps separately (library, then scripts).
@@ -113,7 +107,7 @@ CI runs both steps separately (library, then scripts).
 - [ ] Runner uses `tsx` (or document why `tsc`+`node` is required)
 - [ ] `tsx` remains in `devDependencies`, not `dependencies`
 - [ ] `files` in `package.json` unchanged (`dist`, `src` only)
-- [ ] Library exports (`src/index.ts`) expose runtime APIs (`NodeManager`, etc.); scripts are not exported as package entrypoints
+- [ ] Library exports (`src/index.ts`) expose runtime APIs; scripts are not exported as package entrypoints
 
 ---
 
@@ -123,7 +117,7 @@ CI runs both steps separately (library, then scripts).
 - Add `scripts/` to `package.json` `files` or `exports`
 - Compile `scripts/` via `tsconfig.build.json` into `dist/`
 - Put `tsx` in `dependencies` (consumers of the SDK should not inherit it)
-- Use `scripts/` inside `.cursor/skills/*/scripts/` naming — skill utility scripts are unrelated to repo `scripts/` worker layout
+- Use `scripts/` inside `.cursor/skills/*/scripts/` naming — skill utility scripts are unrelated to repo `scripts/` layout
 
 ---
 
@@ -131,9 +125,11 @@ CI runs both steps separately (library, then scripts).
 
 | File | Purpose |
 |------|---------|
-| `scripts/run-node-worker.ts` | Worker entry |
+| `scripts/run-trigger-node.ts` | TriggerNode dev entry |
 | `scripts/load-env.ts` | Env bootstrap |
+| `scripts/init-supabase.ts` | Supabase init for scripts |
 | `tsconfig.scripts.json` | Scripts-only typecheck |
-| `package.json` | `worker`, `typecheck:scripts` |
+| `package.json` | `worker:trigger`, `typecheck:scripts` |
 | `.github/workflows/ci.yml` | Separate typecheck steps |
-| `src/index.ts` | `NodeManager` export for apps; worker script imports `src` directly in dev |
+
+Consumer TaskNode workers: see [`download-service`](../../download-service) (`auto-chrome`) and [`watch-service`](../../watch-service) (`site-scan`, `data-collect`).

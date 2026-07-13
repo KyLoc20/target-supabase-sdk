@@ -166,7 +166,7 @@ Node entry adds:
 export { postTaskWithValidation } from "./task/task-post-validated.api";
 ```
 
-Internal Node callers: `scripts/post-task.ts` → `postTaskWithValidation`; cross-service schedulers → `postTask` from browser or `/node`.
+Internal Node callers: consumer services use `postTaskWithValidation` when they own `taskDir` (e.g. `download-service` `scripts/post-task.ts`); cross-service schedulers → `postTask` from browser or `/node`.
 
 ---
 
