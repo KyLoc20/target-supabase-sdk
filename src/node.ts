@@ -10,25 +10,32 @@ export * from "./command/command.interface";
 export type {
     EnvIntOptions,
     EnvNumberOptions,
+    EnvProfileFromProcessOptions,
     InitSupabaseFromStandardEnvOptions,
     LoadEnvFilesOptions,
     PublicBaseUrlFromEnvOptions,
 } from "./node/env";
 export {
+    CLI_PROD_FLAG,
     envBool,
     envInt,
     envMs,
     envNumber,
     envPort,
+    envProfileFromProcess,
     initSupabaseFromStandardEnv,
     loadEnvFiles,
     parseEnvFile,
     parseEnvLine,
+    pinEnvProfileFromArgv,
     publicBaseUrlFromEnv,
     readEnv,
     requireEnv,
+    resolveDefaultEnvFiles,
     resolveProjectRootByPackageName,
     resolveProjectRootFromModule,
+    SERVICE_ENV_PROFILE_ENV_KEY,
+    SERVICE_ENV_PROFILE_PROD,
 } from "./node/env";
 export type {
     CreateJsonFileStateStoreOptions,

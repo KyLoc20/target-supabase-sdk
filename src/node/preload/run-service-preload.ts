@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { validateLogPersistPreloadEnv } from "../../shared/log/enable-log-persist";
 import { logPersistEnabledFromEnv } from "../../shared/log/log-persist.config";
-import { loadEnvFiles } from "../env/load-env";
+import { loadEnvFiles, pinEnvProfileFromArgv } from "../env/load-env";
 import { resolveProjectRootByPackageName } from "../env/project-root";
 import type { ServicePreloadOptions } from "./service-preload.interface";
 
@@ -26,7 +26,7 @@ function applyServiceEnvDefaults(projectRoot: string, options: ServicePreloadOpt
  * Unified Node `--import` preload runner (sync only).
  *
  * Phase 1 — Resolve project root from service package name
- * Phase 2 — Load `.env.local` / `.env`
+ * Phase 2 — Load env files (`.env.local` / `.env`, or `.env.prod` when `--prod`)
  * Phase 3 — Apply SDK service env defaults + optional L3 hook
  * Phase 4 — Validate log-persist env when enabled
  * Phase 5 — Process diagnostics (TODO)
@@ -36,6 +36,7 @@ function applyServiceEnvDefaults(projectRoot: string, options: ServicePreloadOpt
 export function runServicePreload(options: ServicePreloadOptions): void {
     const projectRoot = resolveProjectRootByPackageName(options.callerImportMetaUrl, options.packageName);
 
+    pinEnvProfileFromArgv();
     loadEnvFiles(projectRoot, { afterLoad: options.afterLoadEnv });
 
     applyServiceEnvDefaults(projectRoot, options);

@@ -5,7 +5,7 @@ import { readEnv, requireEnv } from "./require-env";
 export interface InitSupabaseFromStandardEnvOptions {
     /** Project root for `.env` files (required when `loadEnv` is true). */
     root?: string;
-    /** Load `.env.local` / `.env` before initialize (default true). */
+    /** Load env files before initialize (default true). Uses `.env.prod` when profile is `prod`. */
     loadEnv?: boolean;
     /** Hook after env files loaded (legacy aliases, etc.). */
     afterLoadEnv?: () => void;
