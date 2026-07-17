@@ -2,8 +2,8 @@ import { isCreateTargetAlreadyExistsError } from "../../core.api";
 import { postLogListCreate } from "../../list/list.api";
 import { CategoryList } from "../../list/list.interface";
 import type { LogEntry } from "./log-manager";
-import { LOG_PERSIST_LOADER_KEY } from "./log-persist.config";
 import type { BuildLogListDraftInput, LogListDraft } from "./log-persist.interface";
+import { LOG_PERSIST_LOADER_KEY } from "./log-persist.interface";
 import { persistLogger } from "./log-persist-logger";
 
 export function estimateEntriesBytes(entries: LogEntry[]): number {
@@ -30,7 +30,7 @@ export function buildLogListDraft(input: BuildLogListDraftInput): LogListDraft {
         details: {
             manifestVersion: 0,
             loaderKey: LOG_PERSIST_LOADER_KEY,
-            meta: JSON.stringify({
+            meta: {
                 service,
                 process,
                 pid: globalThis.process.pid,
@@ -40,7 +40,7 @@ export function buildLogListDraft(input: BuildLogListDraftInput): LogListDraft {
                 to: last?.timestamp ?? null,
                 flushedAt: Date.now(),
                 idempotencyKey,
-            }),
+            },
             preview: first?.message ?? "",
             items: entries,
         },

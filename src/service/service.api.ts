@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createTarget, getPossibleTarget, getTarget, type QueryFilter, validateWithSchema } from "../core.api";
+import { NodeStatus } from "../node/node.interface";
 import { type FieldDefinition, type SchemaDefinition, ServiceLifecycleStatus } from "./base.interface";
 import {
     type Api,
@@ -94,11 +95,23 @@ export const apiDetailsSchema = z.object({
     lifecycle: serviceLifecycleSchema,
 });
 
+export const serviceNodeSnapshotSchema = z.object({
+    nodeId: z.string().trim().min(1),
+    status: z.nativeEnum(NodeStatus),
+    lastHeartBeat: z.number().int().nonnegative(),
+});
+
+export const serviceRuntimeSchema = z.object({
+    lastHeartBeat: z.number().int().nonnegative(),
+    nodes: z.array(serviceNodeSnapshotSchema).default([]),
+});
+
 export const serviceDetailsSchema = z.object({
     manifestVersion: z.number().int().nonnegative(),
     apiKeys: z.array(z.string().trim().min(1)),
     dependencies: z.array(z.string().trim().min(1)).default([]),
     lifecycle: serviceLifecycleSchema,
+    runtime: serviceRuntimeSchema.optional(),
 });
 
 export const postApiSchema = z.object({

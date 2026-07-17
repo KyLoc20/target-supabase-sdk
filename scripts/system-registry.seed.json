@@ -1,0 +1,7 @@
+{
+    "slots": [
+        { "serviceValue": "log-service" },
+        { "serviceValue": "watch-service" },
+        { "serviceValue": "download-service" }
+    ]
+}

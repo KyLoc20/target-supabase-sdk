@@ -2,6 +2,16 @@ import type { TargetDraft } from "../../core.interface";
 import type { List } from "../../list/list.interface";
 import type { LogEntry } from "./log-manager";
 
+/**
+ * `ListDetails.loaderKey` stamped on every persisted log batch (write + read side).
+ * Business type: **LogBatch** (transport flush). Pairs with log-service **LogTrace**
+ * (`LogTrace.0`) after rekeying by `traceId`.
+ */
+export const LOG_PERSIST_LOADER_KEY = "LogBatch.0";
+
+/** Alias for {@link LOG_PERSIST_LOADER_KEY} — preferred when contrasting with LogTrace. */
+export const LOG_BATCH_LOADER_KEY = LOG_PERSIST_LOADER_KEY;
+
 /** Persistence lane — maps to List tagList and flush policy. */
 export type LogPersistLane = "fast" | "medium" | "slow";
 

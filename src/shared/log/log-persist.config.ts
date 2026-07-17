@@ -1,8 +1,6 @@
 import { envBool, envInt, envMs } from "../../node/env/env-parsers";
 import type { LogPersistConfig } from "./log-persist.interface";
 
-export const LOG_PERSIST_LOADER_KEY = "LogBatch.0";
-
 export const DEFAULT_LOG_PERSIST_CONFIG: LogPersistConfig = {
     fast: {
         maxBufferEntries: 500,

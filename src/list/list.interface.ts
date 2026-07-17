@@ -13,8 +13,8 @@ export interface List extends Target {
 
 export interface ListDetails {
     manifestVersion: number;
-    /** If string, it is the meta brief of the list, TODO */
-    meta: string;
+    /** Optional list metadata (shape depends on `loaderKey`). */
+    meta: unknown;
     /** If string, it is the url of the preview TODO */
     preview: string;
     /** How to render the List */

@@ -1,4 +1,5 @@
 import type { Target } from "../core.interface";
+import type { NodeStatus } from "../node/node.interface";
 import type { FieldDefinition, ServiceLifecycle } from "./base.interface";
 
 export interface Service extends Target {
@@ -20,6 +21,36 @@ export interface ServiceDetails {
     /** 依赖的服务 Service keys */
     dependencies: string[];
     lifecycle: ServiceLifecycle;
+    /** Present on runtime instances; omitted on catalog-only rows until guard starts. */
+    runtime?: ServiceRuntime;
+}
+
+/** Per-node snapshot under a running Service — maintained by the service guard. */
+export interface ServiceNodeSnapshot {
+    nodeId: string;
+    status: NodeStatus;
+    lastHeartBeat: number;
+}
+
+/**
+ * Runtime observability for a registered Service instance.
+ * Heartbeat and node rollups are written by the service guard, not the system registry Config.
+ */
+export interface ServiceRuntime {
+    lastHeartBeat: number;
+    nodes: ServiceNodeSnapshot[];
+}
+
+export enum ServiceSlotStatus {
+    EMPTY = "EMPTY",
+    ACTIVE = "ACTIVE",
+}
+
+export interface ServiceSlot {
+    serviceValue: string;
+    /** Bound {@link Service.id} when {@link ServiceSlotStatus.ACTIVE}; null when EMPTY. */
+    serviceId: string | null;
+    status: ServiceSlotStatus;
 }
 
 export interface Api extends Target {
