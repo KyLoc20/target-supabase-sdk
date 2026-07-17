@@ -97,4 +97,9 @@ export interface TriggerNodeOptions {
      * Default `false` (warn and idle loop).
      */
     requireRunners?: boolean;
+    /**
+     * Called after node logout, immediately before `process.exit`.
+     * Typical use: {@link unregisterServiceAtShutdown} for single-process L3 services.
+     */
+    beforeProcessExit?: () => void | Promise<void>;
 }

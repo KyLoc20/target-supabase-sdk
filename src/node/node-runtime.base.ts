@@ -21,6 +21,16 @@ export interface NodeLoopContext {
     nodeId: string;
 }
 
+/** Shared options for {@link BaseNodeRuntime} and subclasses (e.g. TriggerNode). */
+export interface BaseNodeRuntimeOptions {
+    /**
+     * Called after node logout (or when the node was never registered),
+     * immediately before `process.exit`. Use for best-effort cleanup such as
+     * {@link unregisterServiceAtShutdown}. Errors are logged and ignored.
+     */
+    beforeProcessExit?: () => void | Promise<void>;
+}
+
 export const LOG_TOPIC_NODE = "node";
 const LOG_TOPIC_COMMAND = "command";
 const LOG_TOPIC_PROCESS = "process";
@@ -35,6 +45,7 @@ abstract class BaseNodeRuntime {
     private static readonly NODE_ID_PENDING_ASSIGNMENT = "pending-node-id";
 
     protected readonly runtimeModule: string;
+    private readonly beforeProcessExitHook: (() => void | Promise<void>) | null;
 
     private _localNodeId: string | null = null;
     private _isNodeIdLocked = false;
@@ -63,12 +74,32 @@ abstract class BaseNodeRuntime {
         this._isNodeIdLocked = true;
     }
 
-    protected constructor(runtimeModule: string) {
+    protected constructor(runtimeModule: string, options?: BaseNodeRuntimeOptions) {
         this.runtimeModule = runtimeModule;
+        this.beforeProcessExitHook = options?.beforeProcessExit ?? null;
         this.isRunning = false;
         this.loopCount = 0;
         this.startupTraceId = logManager.generateTraceId();
         this.startupScope = createScope({ module: runtimeModule, traceId: this.startupTraceId });
+    }
+
+    private async runBeforeProcessExit(logger: LoggerWithScope): Promise<void> {
+        if (this.beforeProcessExitHook == null) {
+            return;
+        }
+        try {
+            await this.beforeProcessExitHook();
+        } catch (error) {
+            logger.warn("beforeProcessExit 钩子失败（best-effort）", {
+                topic: LOG_TOPIC_PROCESS,
+                data: { error: getErrorMessage(error) },
+            });
+        }
+    }
+
+    private async exitProcess(code: number, logger: LoggerWithScope): Promise<never> {
+        await this.runBeforeProcessExit(logger);
+        process.exit(code);
     }
 
     /** Hook: task registration, trigger config load, etc. Throw to abort bootstrap. */
@@ -296,7 +327,7 @@ abstract class BaseNodeRuntime {
         }
 
         this.isRunning = false;
-        this.shutdownPromise = this.runShutdown(options?.trigger).catch((error) => {
+        this.shutdownPromise = this.runShutdown(options?.trigger).catch(async (error) => {
             const logger = createLogger({
                 scope: patchScope({ scope: this.startupScope, patch: { labels: { nodeId: this.getLogNodeId() } } }),
             });
@@ -307,7 +338,7 @@ abstract class BaseNodeRuntime {
                     error: getErrorMessage(error),
                 },
             });
-            process.exit(1);
+            await this.exitProcess(1, logger);
         });
         return this.shutdownPromise;
     }
@@ -324,7 +355,7 @@ abstract class BaseNodeRuntime {
 
         if (this.localNodeId == null) {
             logger.warn("本地節點未註冊，進程退出", { topic: LOG_TOPIC_NODE });
-            process.exit(0);
+            await this.exitProcess(0, logger);
             return;
         }
 
@@ -344,7 +375,7 @@ abstract class BaseNodeRuntime {
                 data: { error: getErrorMessage(error) },
             });
         } finally {
-            process.exit(0);
+            await this.exitProcess(0, logger);
         }
     }
 

@@ -145,6 +145,8 @@ export {
     serviceRuntimeSchema,
     systemRegistrySeedSlotSchema,
     TARGET_SYSTEM_REGISTRY_KEY,
+    unregisterService,
+    unregisterServiceAtShutdown,
 } from "./service/index";
 export type { FetchInitFactory, FetchRetryOptions } from "./shared/http/fetch-retry";
 export {

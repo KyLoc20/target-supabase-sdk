@@ -39,6 +39,8 @@ export {
     registerServiceAtStartup,
     resolveActiveRegistryServiceId,
     ServiceRegistryError,
+    unregisterService,
+    unregisterServiceAtShutdown,
 } from "./registry.service";
 export type { GetApiPayload, GetServicePayload, PostApiPayload, PostServicePayload } from "./service.api";
 export {

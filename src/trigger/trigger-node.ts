@@ -17,7 +17,7 @@ class TriggerNode extends BaseNodeRuntime {
     private readonly requireRunners: boolean;
 
     constructor(options?: TriggerNodeOptions) {
-        super("triggerNode");
+        super("triggerNode", { beforeProcessExit: options?.beforeProcessExit });
         this.requireRunners = options?.requireRunners ?? false;
     }
 

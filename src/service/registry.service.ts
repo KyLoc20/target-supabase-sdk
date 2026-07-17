@@ -1,11 +1,12 @@
 /**
  * System registry — declarative service capacity (`target-system-registry` Config)
- * and startup slot claims (`registerService`).
+ * and startup/shutdown slot claims (`registerService` / `unregisterService`).
  *
  * Data planes:
  *   - Config `details.objects` — {@link ServiceSlot} desired layout (EMPTY / ACTIVE)
  *   - Service rows — runtime instances; guard maintains {@link ServiceDetails.runtime}
- *   - Monitor service (later) — ACTIVE → EMPTY on stale instances; not done here
+ *   - Slot release: graceful shutdown via {@link unregisterService}; monitor (later)
+ *     for crashed / ungraceful exits (stale `Service.details.runtime`)
  */
 
 import { isOptimisticLockError, updateTargetDetails } from "../core.api";
@@ -214,13 +215,30 @@ async function persistSlotClaim(params: { configId: string; revision: number; sl
     });
 }
 
+function releaseOwnedSlot(slots: ServiceSlot[], serviceId: string): ServiceSlot[] | null {
+    const slotIndex = slots.findIndex(
+        (slot) => slot.serviceId === serviceId && slot.status === ServiceSlotStatus.ACTIVE,
+    );
+    if (slotIndex < 0) {
+        return null;
+    }
+
+    const next = [...slots];
+    next[slotIndex] = {
+        ...next[slotIndex],
+        serviceId: null,
+        status: ServiceSlotStatus.EMPTY,
+    };
+    return next;
+}
+
 /**
  * Claim one EMPTY slot for a running Service instance (`EMPTY → ACTIVE` only).
  *
  * - Declared capacity = count of {@link ServiceSlot} rows sharing `service.value`
  * - Idempotent when the same `service.id` already owns an ACTIVE slot
  * - Does not write heartbeats; guard maintains {@link ServiceDetails.runtime}
- * - Does not release slots (`ACTIVE → EMPTY` is owned by the monitor service)
+ * - Graceful release: {@link unregisterService}; crash recovery: future monitor
  */
 export async function registerService(input: RegisterServiceInput): Promise<void> {
     const { service } = input;
@@ -374,5 +392,118 @@ export async function registerServiceAtStartup(input: RegisterServiceInput): Pro
             throw new Error(`System registry: ${error.code} — ${error.message}`);
         }
         throw error;
+    }
+}
+
+/**
+ * Release the ACTIVE slot owned by this Service instance (`ACTIVE → EMPTY` only).
+ *
+ * - Idempotent when no ACTIVE slot is bound to `service.id`
+ * - Does not mutate the Service row or `details.runtime`
+ * - Does not release slots owned by other instances
+ */
+export async function unregisterService(input: RegisterServiceInput): Promise<void> {
+    const { service } = input;
+    const serviceValue = service.value;
+    const maxAttempts = input.maxAttempts ?? DEFAULT_REGISTER_RETRY_ATTEMPTS;
+    const logger = createLogger({
+        module: "unregisterService",
+        traceId: input.traceId,
+        labels: { serviceValue, serviceId: service.id },
+    });
+
+    logger.info("开始释放系统 registry 槽位", {
+        topic: LOG_TOPIC_REGISTRY,
+        data: { serviceValue, serviceId: service.id },
+    });
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            const config = await loadSystemRegistryConfig();
+            const revision = parseRegistryRevision(config.details.meta);
+            const slots = parseServiceSlots(config);
+            const nextSlots = releaseOwnedSlot(slots, service.id);
+
+            if (nextSlots == null) {
+                logger.info("无绑定槽位，跳过释放", {
+                    topic: LOG_TOPIC_REGISTRY,
+                    data: { serviceValue, serviceId: service.id, attempt },
+                });
+                return;
+            }
+
+            await persistSlotClaim({
+                configId: config.id,
+                revision,
+                slots: nextSlots,
+            });
+
+            logger.info("槽位释放成功", {
+                topic: LOG_TOPIC_REGISTRY,
+                data: {
+                    serviceValue,
+                    serviceId: service.id,
+                    attempt,
+                    revision: revision + 1,
+                },
+            });
+            return;
+        } catch (error) {
+            if (error instanceof ServiceRegistryError) {
+                logger.error("槽位释放被拒绝", {
+                    topic: LOG_TOPIC_REGISTRY,
+                    data: { serviceValue, serviceId: service.id, code: error.code, message: error.message },
+                });
+                throw error;
+            }
+
+            if (isOptimisticLockError(error) && attempt < maxAttempts) {
+                logger.warn("registry 乐观锁冲突，重试", {
+                    topic: LOG_TOPIC_REGISTRY,
+                    data: { serviceValue, serviceId: service.id, attempt, maxAttempts },
+                });
+                await sleep(50 * attempt);
+                continue;
+            }
+
+            const message = error instanceof Error ? error.message : String(error);
+            logger.error("槽位释放失败", {
+                topic: LOG_TOPIC_REGISTRY,
+                data: { serviceValue, serviceId: service.id, attempt, message },
+            });
+            throw new ServiceRegistryError(message, "REGISTRY_UPDATE_FAILED");
+        }
+    }
+
+    throw new ServiceRegistryError(
+        `Failed to unregister ${serviceValue} after ${maxAttempts} attempts`,
+        "REGISTRY_UPDATE_FAILED",
+    );
+}
+
+/**
+ * Best-effort slot release for process shutdown — never throws.
+ */
+export async function unregisterServiceAtShutdown(input: RegisterServiceInput): Promise<void> {
+    const logger = createLogger({
+        module: "unregisterServiceAtShutdown",
+        traceId: input.traceId,
+        labels: { serviceValue: input.service.value, serviceId: input.service.id },
+    });
+
+    try {
+        await unregisterService(input);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const code = error instanceof ServiceRegistryError ? error.code : undefined;
+        logger.warn("shutdown 释放 registry 槽位失败（best-effort）", {
+            topic: LOG_TOPIC_REGISTRY,
+            data: {
+                serviceValue: input.service.value,
+                serviceId: input.service.id,
+                code,
+                message,
+            },
+        });
     }
 }

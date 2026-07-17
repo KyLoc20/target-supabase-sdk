@@ -3,17 +3,17 @@ name: target-system-registry
 description: >-
   Declarative system service registry in target-supabase-sdk: Config category,
   globally unique target-system-registry row, ServiceSlot capacity, registerService
-  slot claims, getTargetSystemRegistry, postSystemRegistryConfig seed, and separation
-  from Service guard runtime / monitor slot release. Use when implementing or reviewing
-  service startup registration, registry Config rows, ServiceSlot EMPTY/ACTIVE, or
-  capacity limits for L3 services.
+  / unregisterService slot claims, getTargetSystemRegistry, postSystemRegistryConfig
+  seed, and separation from Service guard runtime / monitor crash recovery. Use when
+  implementing or reviewing service startup registration, graceful shutdown release,
+  registry Config rows, ServiceSlot EMPTY/ACTIVE, or capacity limits for L3 services.
 ---
 
 # Target system registry (Config + ServiceSlot)
 
 ## One-line rule
 
-**`target-system-registry` is a single declarative Config row (`category=config`) listing fixed `ServiceSlot`s; L3 services claim EMPTY slots at startup; guard maintains `ServiceDetails.runtime`; a future monitor service releases dead slots (`ACTIVE → EMPTY`).**
+**`target-system-registry` is a single declarative Config row (`category=config`) listing fixed `ServiceSlot`s; L3 services claim EMPTY slots at startup and release them on graceful shutdown; guard maintains `ServiceDetails.runtime`; a future monitor recovers dead slots after crashes (`ACTIVE → EMPTY`).**
 
 Not the same as local `config/*.config.js` — see [config-file-relative-paths](../config-file-relative-paths/SKILL.md) for filesystem config.
 
@@ -31,7 +31,7 @@ EMPTY ↔ ACTIVE slot claims           heartbeat + node rollup         per-proce
 
 | Plane | Authority | Writers |
 |-------|-----------|---------|
-| **Config `ServiceSlot`** | Declared replica count + which instance owns which slot | Seed / ops (layout); `registerService` (`EMPTY→ACTIVE`); monitor (later, `ACTIVE→EMPTY`) |
+| **Config `ServiceSlot`** | Declared replica count + which instance owns which slot | Seed / ops (layout); `registerService` (`EMPTY→ACTIVE`); `unregisterService` (graceful `ACTIVE→EMPTY`); monitor (later, crash recovery) |
 | **Service `details.runtime`** | Observed health of one instance + its nodes | Service **guard** only |
 | **Service catalog** (`discoverService`) | API manifest, lifecycle ACTIVE/DEPRECATED | `postService` / ops — not slot assignment |
 
@@ -89,7 +89,7 @@ interface ServiceSlot {
 | `config.interface.ts` | types | `Config`, `ConfigDetails`, `CategoryConfig`, `TARGET_SYSTEM_REGISTRY_KEY` |
 | `service.interface.ts` | types | `ServiceSlot`, `ServiceSlotStatus`, `ServiceDetails.runtime` |
 | `config.api.ts` | API | `getConfig`, `postSystemRegistryConfig`, `buildEmptyServiceSlots`, `buildSystemRegistryConfigDetails` |
-| `registry.service.ts` | Service | `getTargetSystemRegistry`, `registerService`, `registerServiceAtStartup`, `resolveActiveRegistryServiceId`, `patchServiceRuntime`, `parseServiceSlot(s)` |
+| `registry.service.ts` | Service | `getTargetSystemRegistry`, `registerService`, `registerServiceAtStartup`, `unregisterService`, `unregisterServiceAtShutdown`, `resolveActiveRegistryServiceId`, `patchServiceRuntime`, `parseServiceSlot(s)` |
 | `scripts/seed-system-registry.ts` | CLI | Idempotent seed |
 
 Public entry: `target-supabase-sdk` (`browser.ts`).
@@ -147,6 +147,34 @@ registerService({ service, traceId?, maxAttempts? })
 
 ---
 
+## Service: `unregisterService`
+
+**Only** `ACTIVE → EMPTY` for the slot owned by `service.id`. Does **not** mutate the Service row.
+
+Flow:
+
+1. Load registry Config  
+2. **Idempotent**: if no ACTIVE slot bound to `service.id` → return  
+3. Clear `serviceId`, set `status = EMPTY`  
+4. Same `meta.revision` optimistic lock as `registerService`
+
+```typescript
+unregisterService({ service, traceId?, maxAttempts? })
+unregisterServiceAtShutdown({ service })  // best-effort; never throws — use in process shutdown
+```
+
+### Call sites (L3 services)
+
+| Pattern | Where | Call |
+|---------|-------|------|
+| Multi-process main (watch / storage / download) | `main` SIGINT/SIGTERM after `stopChildProcesses` | `unregisterServiceAtShutdown({ service })` |
+| Single-process TriggerNode (log-service) | `TriggerNode({ beforeProcessExit })` | hook → `unregisterServiceAtShutdown` |
+| Startup failure after claim | `main().catch` when register succeeded | `unregisterServiceAtShutdown` |
+
+Shutdown order (multi-process): `server.close` → stop children → **unregister** → log-persist shutdown → `process.exit`.
+
+---
+
 ## Service: `getTargetSystemRegistry`
 
 Read-only:
@@ -177,12 +205,13 @@ Zod: `serviceRuntimeSchema` in `service.api.ts`. Catalog `postService` may omit 
 
 ## Monitor service (future — not in SDK yet)
 
-Owned by separate L3 service:
+Owned by separate L3 service — **crash / ungraceful exit recovery only**:
 
 - Read `getTargetSystemRegistry()` + check `Service.details.runtime` staleness  
 - Write Config: `ACTIVE → EMPTY`, clear `serviceId`  
-- Uses same `meta.revision` optimistic lock as `registerService`
+- Uses same `meta.revision` optimistic lock as `registerService` / `unregisterService`
 
+Graceful exits must call `unregisterService` / `unregisterServiceAtShutdown` themselves.  
 Do **not** implement stale detection inside `registerService`.
 
 ---
@@ -191,7 +220,9 @@ Do **not** implement stale detection inside `registerService`.
 
 - [ ] Add `{ serviceValue: "<name>" }` to seed slots (or ops updates Config `objects`)  
 - [ ] Register runtime `Service` row + guard updating `details.runtime`  
-- [ ] On startup: `registerServiceAtStartup({ service })` after instance row exists
+- [ ] On startup: `registerServiceAtStartup({ service })` after instance row exists  
+- [ ] On graceful shutdown: `unregisterServiceAtShutdown({ service })` (main or `beforeProcessExit`)  
+- [ ] On startup failure after claim: best-effort `unregisterServiceAtShutdown` in `main().catch`  
 - [ ] Guard (or sole TriggerNode runner) calls `patchServiceRuntime({ serviceValue, nodes, lastHeartBeat })`  
 - [ ] Do not duplicate capacity in env vars — registry Config is source of truth  
 - [ ] Do not store heartbeat in Config `meta` — only `revision`
@@ -204,7 +235,8 @@ Do **not** implement stale detection inside `registerService`.
 |-------|-----|
 | Nested `maxInstances` + `instances[]` on Config | Use flat `ServiceSlot` rows (declarative replica count) |
 | Exporting `SystemRegistryMeta` / rich meta types | Keep `ConfigDetails.meta` as `unknown`; revision parse stays private |
-| `registerService` writing `ACTIVE→EMPTY` | Monitor service owns release |
+| Putting release inside `registerService` | Use `unregisterService` for graceful release |
+| Relying only on monitor for Ctrl+C | Graceful path must self-release; monitor is crash recovery |
 | Heartbeat in registry Config | Belongs on `Service.details.runtime` |
 | Using `getTarget` by value for instance identity | Slots bind `serviceId` (row id) |
 | Second registry Config row | Enforce global uniqueness on `value` |
@@ -223,7 +255,8 @@ Do **not** implement stale detection inside `registerService`.
 
 - `src/service/config.interface.ts` — `Config`, `TARGET_SYSTEM_REGISTRY_KEY`  
 - `src/service/config.api.ts` — `getConfig`, `postSystemRegistryConfig`  
-- `src/service/registry.service.ts` — `getTargetSystemRegistry`, `registerService`  
+- `src/service/registry.service.ts` — `getTargetSystemRegistry`, `registerService`, `unregisterService`  
 - `src/service/service.interface.ts` — `ServiceSlot`, `ServiceRuntime`  
+- `src/node/node-runtime.base.ts` — `beforeProcessExit` hook for single-process L3  
 - `scripts/seed-system-registry.ts` — idempotent seed  
 - `scripts/system-registry.seed.json` — example slot list

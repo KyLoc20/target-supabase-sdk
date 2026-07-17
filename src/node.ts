@@ -51,6 +51,7 @@ export {
     nodeBufferToArrayBuffer,
     readAndVerifySourceFile,
 } from "./node/fs/read-source-file";
+export type { BaseNodeRuntimeOptions, NodeLoopContext } from "./node/node-runtime.base";
 export { BaseNodeRuntime } from "./node/node-runtime.base";
 export type {
     BuildNodeImportArgsInput,
