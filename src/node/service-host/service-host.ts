@@ -1,0 +1,168 @@
+import { createLogger, type Service, ServiceRegistryError } from "../../browser";
+import { claimServiceRegistrySlot, type ServiceRegistrySession } from "../../service/registry-lifecycle";
+import type { LoggerWithScope } from "../../shared/log";
+import type { ManagedChildProcesses } from "../process/managed-child-processes";
+
+export interface ServiceHostClosable {
+    close: () => Promise<void>;
+}
+
+export interface ServiceHostContext {
+    service: Service;
+    session: ServiceRegistrySession;
+}
+
+export interface ServiceHostOptions {
+    serviceValue: string;
+    logger?: LoggerWithScope;
+    logTopic?: string;
+    childProcesses?: ManagedChildProcesses;
+    /** Labels that trigger host shutdown when the child exits unexpectedly. */
+    criticalSupervisors?: readonly string[];
+
+    prepare?: () => Promise<void>;
+    createInstance: () => Promise<Service | { service: Service; baseUrl?: string }>;
+    onRegistryClaimed?: (ctx: ServiceHostContext) => Promise<void>;
+    startSupervisors?: () => void | Promise<void>;
+    waitUntilReady?: () => Promise<void>;
+    startServer?: () => Promise<ServiceHostClosable>;
+    /** Stop child processes and other local resources (not registry release). */
+    onShutdown?: (signal: string) => Promise<void>;
+}
+
+const DEFAULT_CRITICAL_SUPERVISORS = ["guard", "supervisor"] as const;
+
+export interface ServiceHost {
+    run: () => Promise<void>;
+    requestShutdown: (signal: string, exitCode?: number) => void;
+}
+
+function unwrapService(created: Service | { service: Service; baseUrl?: string }): Service {
+    return typeof created === "object" && created != null && "service" in created ? created.service : created;
+}
+
+export function createServiceHost(options: ServiceHostOptions): ServiceHost {
+    const logger = options.logger ?? createLogger({ module: "service-host" });
+    const logTopic = options.logTopic ?? "startup";
+    const criticalSupervisors = options.criticalSupervisors ?? DEFAULT_CRITICAL_SUPERVISORS;
+
+    let session: ServiceRegistrySession | null = null;
+    let httpServer: ServiceHostClosable | null = null;
+    let shuttingDown = false;
+
+    async function shutdown(signal: string, exitCode = 0): Promise<void> {
+        if (shuttingDown) {
+            return;
+        }
+        shuttingDown = true;
+
+        logger.info("shutting down", { topic: logTopic, data: { signal, exitCode } });
+
+        if (httpServer != null) {
+            await httpServer.close().catch(() => undefined);
+            httpServer = null;
+        }
+
+        if (options.onShutdown != null) {
+            await options.onShutdown(signal).catch(() => undefined);
+        }
+
+        if (session != null) {
+            await session.release();
+            session = null;
+        }
+
+        process.exit(exitCode);
+    }
+
+    function requestShutdown(signal: string, exitCode = 0): void {
+        void shutdown(signal, exitCode);
+    }
+
+    function installProcessHandlers(): void {
+        process.on("SIGINT", () => void shutdown("SIGINT"));
+        process.on("SIGTERM", () => void shutdown("SIGTERM"));
+
+        options.childProcesses?.setCriticalExitHandler({
+            labels: criticalSupervisors,
+            onCriticalExit: (label, code, signal) => {
+                if (shuttingDown) {
+                    return;
+                }
+                logger.critical("Critical supervisor exited — shutting down service", {
+                    topic: logTopic,
+                    data: { label, code, signal },
+                });
+                void shutdown("supervisor-exit", 1);
+            },
+        });
+    }
+
+    async function run(): Promise<void> {
+        installProcessHandlers();
+
+        if (options.prepare != null) {
+            await options.prepare();
+        }
+
+        try {
+            session = await claimServiceRegistrySlot({
+                serviceValue: options.serviceValue,
+                createInstance: async () => unwrapService(await options.createInstance()),
+            });
+        } catch (error) {
+            if (error instanceof ServiceRegistryError && error.code === "SERVICE_SLOTS_FULL") {
+                logger.critical("No EMPTY registry slot — refusing to start", {
+                    topic: logTopic,
+                    data: { serviceValue: options.serviceValue, code: error.code },
+                });
+                process.exit(1);
+            }
+            throw error;
+        }
+
+        if (options.onRegistryClaimed != null) {
+            await options.onRegistryClaimed({ service: session.service, session });
+        }
+
+        if (options.startSupervisors != null) {
+            await options.startSupervisors();
+        }
+
+        if (options.waitUntilReady != null) {
+            await options.waitUntilReady();
+        }
+
+        if (options.startServer != null) {
+            httpServer = await options.startServer();
+        }
+    }
+
+    async function runWithFatalHandling(): Promise<void> {
+        try {
+            await run();
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            const code = error instanceof ServiceRegistryError ? error.code : undefined;
+            logger.error("fatal", { topic: logTopic, data: { message, code } });
+
+            if (httpServer != null) {
+                await httpServer.close().catch(() => undefined);
+                httpServer = null;
+            }
+
+            if (options.onShutdown != null) {
+                await options.onShutdown("fatal").catch(() => undefined);
+            }
+
+            if (session != null) {
+                await session.release().catch(() => undefined);
+                session = null;
+            }
+
+            process.exit(1);
+        }
+    }
+
+    return { run: runWithFatalHandling, requestShutdown };
+}

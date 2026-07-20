@@ -1,5 +1,7 @@
 export type {
+    CriticalExitHandler,
     ManagedChildProcessesOptions,
+    SpawnChildOptions,
     SpawnChildResult,
     StopAllChildrenOptions,
 } from "./managed-child-processes";

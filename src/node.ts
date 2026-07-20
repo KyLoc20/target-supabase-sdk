@@ -55,7 +55,9 @@ export type { BaseNodeRuntimeOptions, NodeLoopContext } from "./node/node-runtim
 export { BaseNodeRuntime } from "./node/node-runtime.base";
 export type {
     BuildNodeImportArgsInput,
+    CriticalExitHandler,
     ManagedChildProcessesOptions,
+    SpawnChildOptions,
     SpawnChildResult,
     SpawnTsxChildOptions,
     StopAllChildrenOptions,
@@ -86,6 +88,21 @@ export {
     runReadinessChecks,
     waitForServiceReady,
 } from "./node/readiness";
+export type {
+    ApplyRegistrySlotGuardInput,
+    ApplyRegistrySlotGuardResult,
+    ServiceHost,
+    ServiceHostClosable,
+    ServiceHostContext,
+    ServiceHostOptions,
+    SingleProcessServiceContext,
+    SingleProcessServiceOptions,
+} from "./node/service-host";
+export {
+    applyRegistrySlotGuardStep,
+    createServiceHost,
+    runSingleProcessService,
+} from "./node/service-host";
 export { RepoManager } from "./repo/repo-manager";
 export {
     disableLogPersist,

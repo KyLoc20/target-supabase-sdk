@@ -58,6 +58,7 @@ export class ServiceRegistryError extends Error {
             | "REGISTRY_CONFIG_NOT_FOUND"
             | "SERVICE_NOT_DECLARED"
             | "SERVICE_SLOTS_FULL"
+            | "REGISTRY_SLOT_LOST"
             | "REGISTRY_UPDATE_FAILED",
     ) {
         super(message);
@@ -174,17 +175,82 @@ export async function getTargetSystemRegistry(): Promise<TargetSystemRegistryVie
     return { config, slots: views };
 }
 
-function findOwnedActiveSlot(slots: ServiceSlot[], serviceId: string): ServiceSlot | null {
-    for (const slot of slots) {
-        if (slot.serviceId === serviceId && slot.status === ServiceSlotStatus.ACTIVE) {
-            return slot;
-        }
-    }
-    return null;
-}
-
 function findFirstEmptySlot(slots: ServiceSlot[], serviceValue: string): number {
     return slots.findIndex((slot) => slot.serviceValue === serviceValue && slot.status === ServiceSlotStatus.EMPTY);
+}
+
+function countSlotsForValue(
+    slots: ServiceSlot[],
+    serviceValue: string,
+): { declared: number; active: number; empty: number } {
+    let declared = 0;
+    let active = 0;
+    let empty = 0;
+    for (const slot of slots) {
+        if (slot.serviceValue !== serviceValue) {
+            continue;
+        }
+        declared++;
+        if (slot.status === ServiceSlotStatus.ACTIVE) {
+            active++;
+        } else if (slot.status === ServiceSlotStatus.EMPTY) {
+            empty++;
+        }
+    }
+    return { declared, active, empty };
+}
+
+/**
+ * Preflight before `postService` — fail fast when registry capacity is full.
+ * Prevents orphan Service rows and child process spawn when no slot is available.
+ */
+export async function assertRegistrySlotAvailable(serviceValue: string): Promise<void> {
+    const config = await loadSystemRegistryConfig();
+    const slots = parseServiceSlots(config);
+    const counts = countSlotsForValue(slots, serviceValue);
+
+    if (counts.declared === 0) {
+        throw new ServiceRegistryError(
+            `Service ${serviceValue} is not declared in system registry config`,
+            "SERVICE_NOT_DECLARED",
+        );
+    }
+
+    if (counts.empty === 0) {
+        throw new ServiceRegistryError(
+            `No EMPTY slot for ${serviceValue} — declared=${counts.declared}, active=${counts.active}. Refusing startup.`,
+            "SERVICE_SLOTS_FULL",
+        );
+    }
+}
+
+/**
+ * Runtime guard: this process's Service instance must still own an ACTIVE registry slot.
+ * Supports N>1 replicas — checks whether `serviceId` appears in any ACTIVE slot for
+ * `serviceValue`, not merely the first ACTIVE slot.
+ */
+export async function assertRegistrySlotOwner(input: { serviceValue: string; serviceId: string }): Promise<void> {
+    const config = await loadSystemRegistryConfig();
+    const slots = parseServiceSlots(config);
+    const ownsSlot = slots.some(
+        (slot) =>
+            slot.serviceValue === input.serviceValue &&
+            slot.status === ServiceSlotStatus.ACTIVE &&
+            slot.serviceId === input.serviceId,
+    );
+    if (ownsSlot) {
+        return;
+    }
+    const activeId = slots.find(
+        (slot) =>
+            slot.serviceValue === input.serviceValue &&
+            slot.status === ServiceSlotStatus.ACTIVE &&
+            slot.serviceId != null,
+    )?.serviceId;
+    throw new ServiceRegistryError(
+        `Registry slot for ${input.serviceValue} is not owned by ${input.serviceId} (active=${activeId ?? "none"})`,
+        "REGISTRY_SLOT_LOST",
+    );
 }
 
 function isServiceValueDeclared(slots: ServiceSlot[], serviceValue: string): boolean {
@@ -235,8 +301,10 @@ function releaseOwnedSlot(slots: ServiceSlot[], serviceId: string): ServiceSlot[
 /**
  * Claim one EMPTY slot for a running Service instance (`EMPTY → ACTIVE` only).
  *
+ * - Each startup should `postService` a **new** instance row; do not reuse prior Service ids.
  * - Declared capacity = count of {@link ServiceSlot} rows sharing `service.value`
- * - Idempotent when the same `service.id` already owns an ACTIVE slot
+ * - No idempotent skip — if all slots are ACTIVE (e.g. crashed prior instance), throws
+ *   `SERVICE_SLOTS_FULL` until monitor/ops releases the slot
  * - Does not write heartbeats; guard maintains {@link ServiceDetails.runtime}
  * - Graceful release: {@link unregisterService}; crash recovery: future monitor
  */
@@ -260,14 +328,6 @@ export async function registerService(input: RegisterServiceInput): Promise<void
             const config = await loadSystemRegistryConfig();
             const revision = parseRegistryRevision(config.details.meta);
             const slots = parseServiceSlots(config);
-
-            if (findOwnedActiveSlot(slots, service.id) != null) {
-                logger.info("槽位已绑定，跳过重复注册", {
-                    topic: LOG_TOPIC_REGISTRY,
-                    data: { serviceValue, serviceId: service.id, attempt },
-                });
-                return;
-            }
 
             if (!isServiceValueDeclared(slots, serviceValue)) {
                 throw new ServiceRegistryError(
@@ -356,13 +416,15 @@ function nodeToServiceNodeSnapshot(node: Node): ServiceNodeSnapshot {
 
 export interface PatchServiceRuntimeInput {
     serviceValue: string;
+    /** Prefer explicit id (N>1 replicas); falls back to first ACTIVE slot when omitted. */
+    serviceId?: string;
     nodes: readonly Node[];
     lastHeartBeat: number;
 }
 
 /** Roll up Node liveness into `Service.details.runtime` (service guard only). */
 export async function patchServiceRuntime(input: PatchServiceRuntimeInput): Promise<void> {
-    const serviceId = await resolveActiveRegistryServiceId(input.serviceValue);
+    const serviceId = input.serviceId ?? (await resolveActiveRegistryServiceId(input.serviceValue));
     if (serviceId == null) {
         return;
     }
@@ -382,17 +444,10 @@ export async function patchServiceRuntime(input: PatchServiceRuntimeInput): Prom
 }
 
 /**
- * Claim a registry slot at L3 startup — wraps {@link registerService} with a plain Error on rejection.
+ * Claim a registry slot at L3 startup — propagates {@link ServiceRegistryError} (e.g. `SERVICE_SLOTS_FULL`).
  */
 export async function registerServiceAtStartup(input: RegisterServiceInput): Promise<void> {
-    try {
-        await registerService(input);
-    } catch (error) {
-        if (error instanceof ServiceRegistryError) {
-            throw new Error(`System registry: ${error.code} — ${error.message}`);
-        }
-        throw error;
-    }
+    await registerService(input);
 }
 
 /**

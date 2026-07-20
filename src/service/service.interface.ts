@@ -4,7 +4,11 @@ import type { FieldDefinition, ServiceLifecycle } from "./base.interface";
 
 export interface Service extends Target {
     name: string;
-    /** "storage-service" 唯一键 */
+    /**
+     * Logical service key (e.g. `watch-service`). **Not unique** — each `postService` creates
+     * a new instance row. Which instance is **available** is determined by registry slots
+     * (`getTargetSystemRegistry` / `resolveActiveRegistryServiceId`), not by `getService({ value })`.
+     */
     value: string;
     category: CategoryService;
     details: ServiceDetails;

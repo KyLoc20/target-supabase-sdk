@@ -22,8 +22,6 @@ export {
 } from "./config.api";
 export type { Config, ConfigDetails } from "./config.interface";
 export { CategoryConfig, TARGET_SYSTEM_REGISTRY_KEY } from "./config.interface";
-export type { DiscoverServiceInput } from "./discover.service";
-export { discoverService } from "./discover.service";
 export type {
     PatchServiceRuntimeInput,
     RegisterServiceInput,
@@ -31,6 +29,8 @@ export type {
     TargetSystemRegistryView,
 } from "./registry.service";
 export {
+    assertRegistrySlotAvailable,
+    assertRegistrySlotOwner,
     getTargetSystemRegistry,
     parseServiceSlot,
     parseServiceSlots,
@@ -42,6 +42,19 @@ export {
     unregisterService,
     unregisterServiceAtShutdown,
 } from "./registry.service";
+export type {
+    ClaimRegistrySlotInput,
+    RegistrySlotGuardResult,
+    RegistrySlotRuntimeState,
+    ServiceRegistrySession,
+} from "./registry-lifecycle";
+export {
+    claimServiceRegistrySlot,
+    createClaimedRegistrySlotRuntimeState,
+    EMPTY_REGISTRY_SLOT_RUNTIME_STATE,
+    registrySlotRuntimePatchFromGuardResult,
+    runRegistrySlotGuardCheck,
+} from "./registry-lifecycle";
 export type { GetApiPayload, GetServicePayload, PostApiPayload, PostServicePayload } from "./service.api";
 export {
     apiDetailsSchema,

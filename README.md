@@ -97,7 +97,7 @@ const target = await getTarget({ id: "..." });
 
 ### Service catalog
 
-Register and discover HTTP-backed services and their Api capabilities in Supabase Target rows.
+Register services and Api capabilities in Supabase Target rows. L3 startup uses **`claimServiceRegistrySlot`** (see [l3-service-host](.cursor/skills/l3-service-host/SKILL.md)) — each process creates a new Service instance and claims a registry slot.
 
 ```typescript
 import {
@@ -105,7 +105,7 @@ import {
   postService,
   getService,
   getApi,
-  discoverService,
+  claimServiceRegistrySlot,
   ApiMethod,
   ServiceLifecycleStatus,
 } from "target-supabase-sdk";
@@ -131,28 +131,34 @@ await postApi({
   },
 });
 
-// Register a Service that references Api keys
-await postService({
-  name: "Storage Service",
-  value: "storage-service",
-  tagList: [],
-  details: {
-    manifestVersion: 0,
-    apiKeys: ["storage.post.chunk.0"],
-    dependencies: [],
-    lifecycle: { /* same shape as Api */ },
-  },
+// L3 startup: new instance + registry slot claim
+const session = await claimServiceRegistrySlot({
+  serviceValue: "storage-service",
+  createInstance: () =>
+    postService({
+      name: "Storage Service",
+      value: "storage-service",
+      tagList: [],
+      details: {
+        manifestVersion: 0,
+        apiKeys: ["storage.post.chunk.0"],
+        dependencies: [],
+        lifecycle: { /* same shape as Api */ },
+      },
+    }).then((r) => {
+      if (!r.success || r.data == null) throw new Error(r.error?.message ?? "postService failed");
+      return r.data;
+    }),
 });
-
-// Discover — only returns ACTIVE services
-const { data: service } = await discoverService({ value: "storage-service" });
+// session.release() on graceful shutdown
 ```
 
 | API | Description |
 |-----|-------------|
 | `postApi` / `getApi` | Create or fetch Api Target rows |
-| `postService` / `getService` | Create or fetch Service Target rows (`getService` optional `lifecycleStatus` filter) |
-| `discoverService` | Resolve a single ACTIVE service by `value`; errors: `SERVICE_NOT_FOUND`, `SERVICE_NOT_AVAILABLE` |
+| `postService` / `getService` | Create or fetch Service rows (`getService({ id })` for a specific instance) |
+| `claimServiceRegistrySlot` | Preflight + register slot for a new instance (`createServiceHost` wraps this) |
+| `getTargetSystemRegistry` | Read slot layout and which instance ids are ACTIVE |
 
 Types: `Service`, `Api`, `ApiDetails` (`method`, `path`, `endpoint`, `request`, `response`), `FieldDefinition` for inline schemas.
 

@@ -8,7 +8,13 @@ export interface ManagedChildProcessesOptions {
     preloadModules?: readonly string[];
     /** SIGTERM -> wait -> SIGKILL delay (default 5000 ms). */
     graceMs?: number;
-    logger?: Pick<LoggerWithScope, "info" | "warn" | "error">;
+    logger?: Pick<LoggerWithScope, "info" | "warn" | "error" | "critical">;
+    useTsx?: boolean;
+}
+
+export interface SpawnChildOptions {
+    env?: Record<string, string>;
+    useTsx?: boolean;
 }
 
 export interface SpawnChildResult {
@@ -22,6 +28,11 @@ export interface StopAllChildrenOptions {
     extraPids?: readonly number[];
 }
 
+export interface CriticalExitHandler {
+    labels: readonly string[];
+    onCriticalExit: (label: string, code: number | null, signal: NodeJS.Signals | null) => void;
+}
+
 /**
  * Process-local registry for tsx child processes (supervisor, worker, etc.).
  * Each OS process has its own instance - do not expect cross-process PID tracking.
@@ -30,14 +41,22 @@ export class ManagedChildProcesses {
     private readonly projectRoot: string;
     private readonly preloadModules: readonly string[];
     private readonly graceMs: number;
-    private readonly logger?: Pick<LoggerWithScope, "info" | "warn" | "error">;
+    private readonly defaultUseTsx: boolean;
+    private readonly logger?: Pick<LoggerWithScope, "info" | "warn" | "error" | "critical">;
     private readonly byLabel = new Map<string, ChildProcess>();
+    private criticalExitHandler: CriticalExitHandler | null = null;
+    private suppressCriticalExit = false;
 
     constructor(options: ManagedChildProcessesOptions) {
         this.projectRoot = options.projectRoot;
         this.preloadModules = options.preloadModules ?? [];
         this.graceMs = options.graceMs ?? 5_000;
+        this.defaultUseTsx = options.useTsx ?? true;
         this.logger = options.logger;
+    }
+
+    setCriticalExitHandler(handler: CriticalExitHandler): void {
+        this.criticalExitHandler = handler;
     }
 
     get(label: string): ChildProcess | null {
@@ -55,7 +74,7 @@ export class ManagedChildProcesses {
             .map(([label]) => label);
     }
 
-    spawn(label: string, entryScript: string): SpawnChildResult {
+    spawn(label: string, entryScript: string, spawnOptions?: SpawnChildOptions): SpawnChildResult {
         const existing = this.getRunning(label);
         if (existing != null) {
             return { child: existing, created: false };
@@ -65,13 +84,22 @@ export class ManagedChildProcesses {
             projectRoot: this.projectRoot,
             entryScript,
             preloadModules: this.preloadModules,
+            useTsx: spawnOptions?.useTsx ?? this.defaultUseTsx,
+            env: spawnOptions?.env != null ? { ...process.env, ...spawnOptions.env } : process.env,
         });
 
-        child.on("exit", (code, signal) => {
+        child.on("exit", (code: number | null, signal: NodeJS.Signals | null) => {
             this.logger?.info("child exited", { topic: "process", data: { label, code, signal } });
             const current = this.byLabel.get(label);
             if (current === child) {
                 this.byLabel.delete(label);
+            }
+            if (
+                !this.suppressCriticalExit &&
+                this.criticalExitHandler != null &&
+                this.criticalExitHandler.labels.includes(label)
+            ) {
+                this.criticalExitHandler.onCriticalExit(label, code, signal);
             }
         });
 
@@ -90,20 +118,25 @@ export class ManagedChildProcesses {
     }
 
     async stopAll(options?: StopAllChildrenOptions): Promise<void> {
-        const tracked = [...this.byLabel.values()].filter((child) => isChildProcessRunning(child));
+        this.suppressCriticalExit = true;
+        try {
+            const tracked = [...this.byLabel.values()].filter((child) => isChildProcessRunning(child));
 
-        await Promise.all(tracked.map((child) => this.stopChild(child)));
+            await Promise.all(tracked.map((child) => this.stopChild(child)));
 
-        const extraPids = options?.extraPids ?? [];
-        for (const pid of extraPids) {
-            if (pid == null || tracked.some((child) => child.pid === pid)) {
-                continue;
+            const extraPids = options?.extraPids ?? [];
+            for (const pid of extraPids) {
+                if (pid == null || tracked.some((child) => child.pid === pid)) {
+                    continue;
+                }
+                try {
+                    process.kill(pid, "SIGTERM");
+                } catch {
+                    // already exited
+                }
             }
-            try {
-                process.kill(pid, "SIGTERM");
-            } catch {
-                // already exited
-            }
+        } finally {
+            this.suppressCriticalExit = false;
         }
     }
 
