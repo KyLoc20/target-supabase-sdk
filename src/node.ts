@@ -128,6 +128,23 @@ export type {
 export type { LogPersistCoordinator, LogPersistCoordinatorOptions } from "./shared/log/log-persist-coordinator";
 export { createLogPersistCoordinator } from "./shared/log/log-persist-coordinator";
 export type {
+    ConfigSchema,
+    LoadCachedJsConfigOptions,
+    ResolveFirstExistingPathOptions,
+} from "./shared/utils/config-path.utils";
+export {
+    getConfigFileDir,
+    importJsConfigModule,
+    loadCachedJsConfigModule,
+    pathExists,
+    resolveFirstExistingPath,
+    resolvePathFromBaseDir,
+    resolvePathFromConfigFile,
+    resolvePathFromCwd,
+    toFileImportHref,
+} from "./shared/utils/config-path.utils";
+export { getValueAtPath } from "./shared/utils/get-value-at-path";
+export type {
     BootstrapLocalTasksResult,
     BootstrapLocalTasksStatus,
     ExecutableTaskFn,

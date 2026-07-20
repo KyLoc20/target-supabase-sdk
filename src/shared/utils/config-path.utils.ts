@@ -102,3 +102,38 @@ export async function importJsConfigModule(configPath: string): Promise<unknown>
     const mod = await import(toFileImportHref(configPath));
     return mod.default ?? mod;
 }
+
+export interface ConfigSchema<T> {
+    safeParse(input: unknown): { success: true; data: T } | { success: false; error: { message: string } };
+}
+
+export interface LoadCachedJsConfigOptions<T> {
+    path: string;
+    schema: ConfigSchema<T>;
+    force?: boolean;
+}
+
+const jsConfigCache = new Map<string, { mtimeMs: number; data: unknown }>();
+
+/**
+ * Import a JS config module, validate with a schema, cache by file mtime.
+ * For hot-reload, pass `{ force: true }` or rely on mtime change.
+ */
+export async function loadCachedJsConfigModule<T>(options: LoadCachedJsConfigOptions<T>): Promise<T> {
+    const { stat } = await import("node:fs/promises");
+    const { path, schema, force } = options;
+    const fileStat = await stat(path);
+    const cached = jsConfigCache.get(path);
+    if (!force && cached != null && cached.mtimeMs === fileStat.mtimeMs) {
+        return cached.data as T;
+    }
+
+    const raw = await importJsConfigModule(path);
+    const parsed = schema.safeParse(raw);
+    if (!parsed.success) {
+        throw new Error(`Invalid config ${path}: ${parsed.error.message}`);
+    }
+
+    jsConfigCache.set(path, { mtimeMs: fileStat.mtimeMs, data: parsed.data });
+    return parsed.data;
+}

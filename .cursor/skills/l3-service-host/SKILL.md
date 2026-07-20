@@ -94,7 +94,7 @@ runSingleProcessService({
 ## Bootstrap contract
 
 - **Always** `postService` new instance row each startup (same `value` allowed).
-- Api catalog `ensureApi` stays in service `bootstrap.ts`.
+- **`apiKeys: []`** — L3 services do not register Api catalog rows at startup; HTTP routes are code-defined. Api primitives (`postApi` / `getApi`) remain in the SDK for other use cases.
 
 ---
 

@@ -188,6 +188,7 @@ export {
     parseLogBatchMeta,
 } from "./shared/log";
 export { isHttpUrl, resolveFetchUrl } from "./shared/utils/fetch-url";
+export { getValueAtPath } from "./shared/utils/get-value-at-path";
 export type {
     ClassifiedNetworkError,
     FormatNetworkErrorOptions,

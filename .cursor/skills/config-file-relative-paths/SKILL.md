@@ -75,6 +75,8 @@ Wrong (common mistake): `config/task.config.js` + `taskDir: "./tasks"` → resol
 | `pathExists(path)` | async existence check |
 | `toFileImportHref(filePath)` | `file://` URL for `import()` |
 | `importJsConfigModule(configPath)` | dynamic import + `default` fallback |
+| `loadCachedJsConfigModule({ path, schema, force? })` | import + validate + mtime cache |
+| `getValueAtPath(value, dottedPath)` | read nested JSON field (browser-safe) |
 
 **Reuse these** — do not duplicate `dirname` + `resolve` + `pathToFileURL` in feature modules.
 
