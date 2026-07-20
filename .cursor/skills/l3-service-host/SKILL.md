@@ -23,7 +23,8 @@ description: >-
 | Multi-process host | `createServiceHost` | node — main index.ts for watch / download / storage |
 | Single-process | `runSingleProcessService` | node — log-service (TriggerNode only) |
 | Guard step | `applyRegistrySlotGuardStep` | node — guard / supervisor runner tick |
-| Child spawn | `ManagedChildProcesses` | node — spawn/stop + critical label exit → host shutdown |
+| Child spawn | `ManagedChildProcesses`, `createManagedChildProcesses` | node — spawn/stop + critical label exit → host shutdown |
+| Log-persist gate | `createLogPersistCoordinator` | node — bind service + process list + registry path |
 
 ---
 
@@ -31,7 +32,7 @@ description: >-
 
 ```typescript
 import { createServiceHost, createClaimedRegistrySlotRuntimeState } from "target-supabase-sdk/node";
-import { childProcesses } from "./lib/child-processes";
+import { childProcesses } from "./startup/child-processes";
 
 let bootstrapResult: BootstrapResult | null = null;
 
@@ -55,15 +56,13 @@ createServiceHost({
 }).run();
 ```
 
-### `lib/child-processes.ts` (per service)
+### `src/startup/child-processes.ts` (per service)
 
 ```typescript
-export const childProcesses = new ManagedChildProcesses({
-  projectRoot,
-  preloadModules: ["./scripts/preload.mjs"],
-  useTsx: false,
-  logger: createLogger({ module: "launcher" }),
-});
+import { createManagedChildProcesses } from "target-supabase-sdk/node";
+import { projectRoot } from "../env";
+
+export const childProcesses = createManagedChildProcesses({ projectRoot });
 ```
 
 Launcher spawns via `childProcesses.spawn(label, script, { env: { LOG_PERSIST_PROCESS: label } })`.

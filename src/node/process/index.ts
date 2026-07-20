@@ -1,3 +1,5 @@
+export type { CreateManagedChildProcessesOptions } from "./create-managed-child-processes";
+export { createManagedChildProcesses } from "./create-managed-child-processes";
 export type {
     CriticalExitHandler,
     ManagedChildProcessesOptions,

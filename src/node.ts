@@ -55,6 +55,7 @@ export type { BaseNodeRuntimeOptions, NodeLoopContext } from "./node/node-runtim
 export { BaseNodeRuntime } from "./node/node-runtime.base";
 export type {
     BuildNodeImportArgsInput,
+    CreateManagedChildProcessesOptions,
     CriticalExitHandler,
     ManagedChildProcessesOptions,
     SpawnChildOptions,
@@ -64,6 +65,7 @@ export type {
 } from "./node/process";
 export {
     buildNodeImportArgs,
+    createManagedChildProcesses,
     isChildProcessRunning,
     ManagedChildProcesses,
     spawnTsxChild,
@@ -123,6 +125,8 @@ export type {
     LogPersistStats,
     WaitForLogPersistReadyOptions,
 } from "./shared/log/log-persist.interface";
+export type { LogPersistCoordinator, LogPersistCoordinatorOptions } from "./shared/log/log-persist-coordinator";
+export { createLogPersistCoordinator } from "./shared/log/log-persist-coordinator";
 export type {
     BootstrapLocalTasksResult,
     BootstrapLocalTasksStatus,
