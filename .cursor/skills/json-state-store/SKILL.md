@@ -3,7 +3,7 @@ name: json-state-store
 description: >-
   JSON file-backed cross-process state for target-supabase-sdk/node:
   createJsonFileStateStore with nested key merge and atomic writes.
-  Use with ServiceReadyGate for main/supervisor/worker coordination.
+  Use with ServiceReadyGate for main/guard/worker coordination.
 ---
 
 # JSON state store (target-supabase-sdk/node)
@@ -22,7 +22,7 @@ Location: `src/node/fs/json-state-store.ts`
 const store = createJsonFileStateStore({
   filePath: join(dataDir, "state.json"),
   defaultState: DEFAULT_STATE,
-  nestedKeys: ["readiness", "supervisor", "worker"],
+  nestedKeys: ["readiness", "guard", "worker"],
   updatedAtKey: "updatedAt",
 });
 

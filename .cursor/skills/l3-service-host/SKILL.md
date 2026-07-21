@@ -11,7 +11,7 @@ description: >-
 
 ## One-line rule
 
-**Registry claim/release lives in the SDK; each L3 service only supplies bootstrap, supervisors, readiness, and Express routes.**
+**Registry claim/release lives in the SDK; each L3 service only supplies bootstrap, guard/scheduler/worker processes, readiness, and Express routes.**
 
 ---
 
@@ -22,7 +22,7 @@ description: >-
 | Registry lifecycle | `claimServiceRegistrySlot`, `runRegistrySlotGuardCheck`, `RegistrySlotRuntimeState` | browser — preflight, claim, orphan cleanup |
 | Multi-process host | `createServiceHost` | node — main index.ts for watch / download / storage |
 | Single-process | `runSingleProcessService` | node — log-service (TriggerNode only) |
-| Guard step | `applyRegistrySlotGuardStep` | node — guard / supervisor runner tick |
+| Guard step | `ServiceGuardNode`, `applyRegistrySlotGuardStep` | node — guard process |
 | Child spawn | `ManagedChildProcesses`, `createManagedChildProcesses` | node — spawn/stop + critical label exit → host shutdown |
 | Log-persist gate | `createLogPersistCoordinator` | node — bind service + process list + registry path |
 
@@ -39,7 +39,7 @@ let bootstrapResult: BootstrapResult | null = null;
 createServiceHost({
   serviceValue: SERVICE_VALUE,
   childProcesses,
-  criticalSupervisors: ["guard"], // or ["supervisor"]
+  criticalSupervisors: ["guard"],
 
   prepare: async () => { /* reset state, initSupabase, log-persist */ },
   createInstance: async () => {
@@ -109,7 +109,8 @@ import { EMPTY_REGISTRY_SLOT_RUNTIME_STATE } from "target-supabase-sdk/node";
 registry: RegistrySlotRuntimeState; // default { ...EMPTY_REGISTRY_SLOT_RUNTIME_STATE }
 ```
 
-Guard/supervisor writes `slotOwned` / `lastSlotCheckAt` via `applyRegistrySlotGuardStep`.
+Guard runner writes `slotOwned` / `lastSlotCheckAt` via `applyRegistrySlotGuardStep`.
+Guard process state lives in the `guard` slice (`lastCheckAt`, `lastDecision`, `lastSpawnAt`, `spawnCount`).
 
 ---
 
@@ -121,6 +122,7 @@ Expose top-level `registry` + include `runtime.registry.slotOwned !== false` in 
 
 ## Related skills
 
+- [service-guard](../service-guard/SKILL.md) — guard process API
 - [target-system-registry](../target-system-registry/SKILL.md) — slot semantics
 - [service-preload](../service-preload/SKILL.md) — preload + log-persist registry
 - [node-service-build](../../../watch-service/.cursor/skills/node-service-build/SKILL.md) — esbuild dist entries

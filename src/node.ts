@@ -93,6 +93,11 @@ export {
 export type {
     ApplyRegistrySlotGuardInput,
     ApplyRegistrySlotGuardResult,
+    RegisterServiceGuardRunnerOptions,
+    RunReadinessGateInput,
+    ServiceGuardNodeOptions,
+    ServiceGuardTickInput,
+    ServiceGuardTickResult,
     ServiceHost,
     ServiceHostClosable,
     ServiceHostContext,
@@ -103,7 +108,14 @@ export type {
 export {
     applyRegistrySlotGuardStep,
     createServiceHost,
+    getWorkerSpawnCooldownLastAt,
+    markWorkerSpawned,
+    registerServiceGuardRunner,
+    runReadinessGate,
+    runServiceGuardTick,
     runSingleProcessService,
+    SERVICE_GUARD_RUNNER_KEY,
+    ServiceGuardNode,
 } from "./node/service-host";
 export { RepoManager } from "./repo/repo-manager";
 export {

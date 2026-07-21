@@ -1,4 +1,20 @@
 export type {
+    RegisterServiceGuardRunnerOptions,
+    RunReadinessGateInput,
+    ServiceGuardNodeOptions,
+    ServiceGuardTickInput,
+    ServiceGuardTickResult,
+} from "../service-guard";
+export {
+    getWorkerSpawnCooldownLastAt,
+    markWorkerSpawned,
+    registerServiceGuardRunner,
+    runReadinessGate,
+    runServiceGuardTick,
+    SERVICE_GUARD_RUNNER_KEY,
+    ServiceGuardNode,
+} from "../service-guard";
+export type {
     ApplyRegistrySlotGuardInput,
     ApplyRegistrySlotGuardResult,
 } from "./registry-slot-guard-step";
