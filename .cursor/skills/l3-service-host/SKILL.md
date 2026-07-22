@@ -93,8 +93,20 @@ runSingleProcessService({
 
 ## Bootstrap contract
 
-- **Always** `postService` new instance row each startup (same `value` allowed).
-- **`apiKeys: []`** — L3 services do not register Api catalog rows at startup; HTTP routes are code-defined. Api primitives (`postApi` / `getApi`) remain in the SDK for other use cases.
+- **Always** `postServiceInstance` (SDK) — new instance row each startup (same `value` allowed).
+- **`apiKeys: []`** — L3 services do not register Api catalog rows at startup; HTTP routes are code-defined.
+- **`initSupabaseFromEnv`** belongs in `createServiceHost.prepare`, not bootstrap.
+- **`baseUrl`** — derive in `startServer` via `publicBaseUrl(envPort())`; bootstrap returns `Service` only.
+
+```typescript
+import { createLogger, postServiceInstance } from "target-supabase-sdk/node";
+
+const logger = createLogger({ module: "bootstrap" });
+
+export async function bootstrap() {
+  return postServiceInstance({ name: "My Service", value: SERVICE_VALUE, logger });
+}
+```
 
 ---
 

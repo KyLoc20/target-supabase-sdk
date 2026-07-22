@@ -33,9 +33,10 @@ export interface WorkerRuntimeSlice {
 
 /**
  * Default when an L3 service has no service-specific runtime state slices.
- * Prefer this over `{}` for generic defaults (Biome `noBannedTypes`).
+ * Use an empty object type (not `Record<string, never>`) so intersecting with core
+ * slices does not add a string index signature that collapses property types to `never`.
  */
-export type DefaultExtraRuntimeSlices = Record<string, never>;
+export type DefaultExtraRuntimeSlices = Record<never, never>;
 
 /**
  * Cross-process service runtime state persisted to `state.json`.

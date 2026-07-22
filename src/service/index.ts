@@ -90,3 +90,9 @@ export type {
     ServiceSlot,
 } from "./service.interface";
 export { ApiMethod, CategoryApi, CategoryService, ServiceSlotStatus } from "./service.interface";
+export type { PostServiceInstanceOptions, ServiceBootstrapResult } from "./service-bootstrap";
+export {
+    createActiveServiceLifecycle,
+    defaultL3ServiceDetails,
+    postServiceInstance,
+} from "./service-bootstrap";
