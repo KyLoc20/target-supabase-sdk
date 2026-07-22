@@ -91,6 +91,21 @@ export {
     waitForServiceReady,
 } from "./node/readiness";
 export type {
+    CreateServiceRuntimeStateStoreOptions,
+    FinishRunnerTickOptions,
+    GuardRuntimeSlice,
+    ReadinessRuntimeSlice,
+    ReadinessStatus,
+    SchedulerRuntimeSlice,
+    ServiceRuntimeCoreNestedKey,
+    ServiceRuntimeExtraSlicePatch,
+    ServiceRuntimeNestedKeys,
+    ServiceRuntimeState,
+    ServiceRuntimeStateStore,
+    WorkerRuntimeSlice,
+} from "./node/runtime-state";
+export { createServiceRuntimeStateStore } from "./node/runtime-state";
+export type {
     ApplyRegistrySlotGuardInput,
     ApplyRegistrySlotGuardResult,
     RegisterServiceGuardRunnerOptions,

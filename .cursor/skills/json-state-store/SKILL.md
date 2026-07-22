@@ -31,7 +31,7 @@ await store.write({ worker: { ready: true } });
 await store.reset();
 ```
 
-Schema (`RuntimeState` shape) stays in each service L3.
+Schema for L3 services: use **`createServiceRuntimeStateStore`** — see [watch-service SKILL](../../watch-service/.cursor/skills/watch-service/SKILL.md) **Runtime state** section. Low-level `createJsonFileStateStore` remains for non-L3 or custom shapes.
 
 Pair with `ServiceReadyGate` + `waitForServiceReady` from the same node entry.
 
