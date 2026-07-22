@@ -422,7 +422,7 @@ abstract class BaseNodeRuntime {
         }
 
         this.consecutiveHeartbeatFailures = 0;
-        logger.success("心跳更新成功", {
+        logger.info("心跳更新成功", {
             topic: LOG_TOPIC_NODE,
             data: { lastHeartBeat: formatHeartbeat(lastHeartBeat) },
         });

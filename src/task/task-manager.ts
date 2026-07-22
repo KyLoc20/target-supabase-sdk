@@ -2,12 +2,13 @@ import { getScanRemoteRepoValues } from "../repo/repo.api";
 import { TASK_REPO_USAGE } from "../repo/repo.interface";
 import type { LoggerWithScope } from "../shared/log";
 import type { ResultCode, Task } from "./task.interface";
-import type { ExecutableTaskFn, TaskFn } from "./task-repo-context";
+import type { ExecutableTaskFn, TaskExecutionContext, TaskFn } from "./task-repo-context";
 
 export type {
     BootstrapLocalTasksResult,
     BootstrapLocalTasksStatus,
     ExecutableTaskFn,
+    TaskExecutionContext,
     TaskFn,
     TaskLocalPackageConfig,
     TaskRepoContext,
@@ -169,8 +170,8 @@ async function registerTasks({
 }
 
 /** 将 taskFn 与 params 闭包绑定，供 TaskNode 无参调用 `await taskFn()` */
-function bindTaskFn(taskFn: TaskFn, taskParams: unknown): ExecutableTaskFn {
-    const run = async () => taskFn(taskParams);
+function bindTaskFn(taskFn: TaskFn, taskParams: unknown, ctx: TaskExecutionContext): ExecutableTaskFn {
+    const run = async () => taskFn(taskParams, ctx);
     return Object.assign(run, {
         displayName: taskFn.displayName,
         taskTypeKey: taskFn.taskTypeKey,
@@ -272,7 +273,12 @@ const prepareTask = async ({
         },
     });
 
-    const boundTaskFn = bindTaskFn(repoContext.taskFn, taskParams);
+    const boundTaskFn = bindTaskFn(repoContext.taskFn, taskParams, {
+        taskId,
+        taskName,
+        taskTypeKey,
+        traceId: details.traceId ?? taskId,
+    });
     logger.debug("任務準備完成", {
         topic: LOG_TOPIC_TASK,
         data: {

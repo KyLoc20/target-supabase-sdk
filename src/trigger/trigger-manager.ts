@@ -144,9 +144,11 @@ export const TriggerManager = {
         return [...runnerRegistry.keys()];
     },
 
-    getRunnersBelowLoopInterval(): Array<{ key: string; intervalMs: number }> {
+    getRunnersBelowLoopInterval(
+        loopIntervalMs: number = TRIGGER_LOOP_INTERVAL_MS,
+    ): Array<{ key: string; intervalMs: number }> {
         return [...runnerRegistry.values()]
-            .filter((runner) => runner.intervalMs < TRIGGER_LOOP_INTERVAL_MS)
+            .filter((runner) => runner.intervalMs < loopIntervalMs)
             .map((runner) => ({ key: runner.key, intervalMs: runner.intervalMs }));
     },
 

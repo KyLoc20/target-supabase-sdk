@@ -9,7 +9,12 @@ export type {
     ServiceLifecycle,
 } from "./base.interface";
 export { ServiceLifecycleStatus } from "./base.interface";
-export type { GetConfigPayload, PostSystemRegistryConfigPayload, SystemRegistrySeedSlot } from "./config.api";
+export type {
+    GetConfigPayload,
+    PostSystemRegistryConfigPayload,
+    ResetSystemRegistryConfigPayload,
+    SystemRegistrySeedSlot,
+} from "./config.api";
 export {
     buildEmptyServiceSlots,
     buildSystemRegistryConfigDetails,
@@ -18,6 +23,8 @@ export {
     getConfigSchema,
     postSystemRegistryConfig,
     postSystemRegistryConfigSchema,
+    resetSystemRegistryConfig,
+    resetSystemRegistryConfigSchema,
     systemRegistrySeedSlotSchema,
 } from "./config.api";
 export type { Config, ConfigDetails } from "./config.interface";

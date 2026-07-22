@@ -98,6 +98,11 @@ export interface TriggerNodeOptions {
      */
     requireRunners?: boolean;
     /**
+     * Main loop tick interval (ms). Runners are evaluated each tick; effective runner
+     * precision is bounded by this value. Default {@link TRIGGER_LOOP_INTERVAL_MS} (60s).
+     */
+    loopIntervalMs?: number;
+    /**
      * Called after node logout, immediately before `process.exit`.
      * Typical use: {@link unregisterServiceAtShutdown} for single-process L3 services.
      */

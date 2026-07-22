@@ -9,40 +9,60 @@ import {
 import type { LogPersistReadySnapshot, LogPersistStats } from "./log-persist.interface";
 
 export interface LogPersistCoordinatorOptions {
+    /** Service identity written into each registry shard (e.g. `log-service`). */
     service: string;
+    /** Directory holding one JSON shard per process (`main.json`, `guard.json`, …). */
     registryFilePath: string;
+    /** Process labels main waits for before accepting traffic (must match `LOG_PERSIST_PROCESS` per child). */
     expectedProcesses: readonly string[];
-    /** Passed to `waitForLogPersistReady` (default 60_000 ms). */
+    /** Max wait for {@link LogPersistCoordinator.waitForAllProcessesReady} (default 60_000 ms). */
     readyTimeoutMs?: number;
 }
 
+/** Service-bound facade over env-driven log-persist registration and readiness gates. */
 export interface LogPersistCoordinator {
-    enabled(): boolean;
-    registryPath(): string;
-    ensure(process?: string): Promise<boolean>;
-    waitUntilReady(): Promise<LogPersistReadySnapshot>;
-    snapshotReady(): Promise<LogPersistReadySnapshot | null>;
-    collectStats(): LogPersistStats | null;
-    shutdown(): Promise<void>;
+    /** Whether `LOG_PERSIST_ENABLED` is active in this process. */
+    isEnabled(): boolean;
+
+    /** Absolute path to the multi-process registry directory configured at construction. */
+    getRegistryFilePath(): string;
+
+    /**
+     * Enable log-persist for this process and write/update its registry shard.
+     * @param process Optional label; defaults to `LOG_PERSIST_PROCESS` env.
+     */
+    registerProcess(process?: string): Promise<boolean>;
+
+    /** Block until every {@link LogPersistCoordinatorOptions.expectedProcesses} entry is registered and fresh. */
+    waitForAllProcessesReady(): Promise<LogPersistReadySnapshot>;
+
+    /** Immediate readiness snapshot without blocking; `null` when log-persist is disabled. */
+    snapshotProcessesReady(): Promise<LogPersistReadySnapshot | null>;
+
+    /** Flush-queue stats for observability; `null` when log-persist is disabled. */
+    getPersistStats(): LogPersistStats | null;
+
+    /** Flush pending logs and tear down log-persist (call from process shutdown hooks). */
+    shutdownLogPersist(): Promise<void>;
 }
 
 /**
  * Bind service-specific log-persist registry settings (process list, paths, timeouts).
- * Each L3 service keeps one instance in `src/startup/log-persist.ts`.
+ * Each L3 service exports one instance from `src/startup/log-persist.ts`.
  */
 export function createLogPersistCoordinator(options: LogPersistCoordinatorOptions): LogPersistCoordinator {
     const { service, registryFilePath, expectedProcesses, readyTimeoutMs } = options;
 
     return {
-        enabled() {
+        isEnabled() {
             return logPersistEnabledFromEnv();
         },
 
-        registryPath() {
+        getRegistryFilePath() {
             return registryFilePath;
         },
 
-        ensure(process?: string) {
+        registerProcess(process?: string) {
             return ensureLogPersistFromEnv({
                 process,
                 service,
@@ -50,7 +70,7 @@ export function createLogPersistCoordinator(options: LogPersistCoordinatorOption
             });
         },
 
-        waitUntilReady() {
+        waitForAllProcessesReady() {
             return waitForLogPersistReady({
                 registryFilePath,
                 service,
@@ -59,7 +79,7 @@ export function createLogPersistCoordinator(options: LogPersistCoordinatorOption
             });
         },
 
-        async snapshotReady() {
+        async snapshotProcessesReady() {
             if (!logPersistEnabledFromEnv()) {
                 return null;
             }
@@ -70,14 +90,14 @@ export function createLogPersistCoordinator(options: LogPersistCoordinatorOption
             });
         },
 
-        collectStats() {
+        getPersistStats() {
             if (!logPersistEnabledFromEnv()) {
                 return null;
             }
             return getLogPersistStats();
         },
 
-        async shutdown() {
+        async shutdownLogPersist() {
             if (!logPersistEnabledFromEnv()) {
                 return;
             }

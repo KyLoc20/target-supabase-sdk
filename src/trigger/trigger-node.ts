@@ -15,14 +15,20 @@ import { TriggerManager } from "./trigger-manager";
  */
 class TriggerNode extends BaseNodeRuntime {
     private readonly requireRunners: boolean;
+    private readonly loopIntervalMs: number;
 
     constructor(options?: TriggerNodeOptions) {
         super("triggerNode", { beforeProcessExit: options?.beforeProcessExit });
         this.requireRunners = options?.requireRunners ?? false;
+        const loopIntervalMs = options?.loopIntervalMs ?? TRIGGER_LOOP_INTERVAL_MS;
+        if (!Number.isFinite(loopIntervalMs) || loopIntervalMs < 1) {
+            throw new Error(`[TriggerNode] loopIntervalMs must be a positive number, got ${loopIntervalMs}`);
+        }
+        this.loopIntervalMs = loopIntervalMs;
     }
 
     protected getLoopIntervalMs(): number {
-        return TRIGGER_LOOP_INTERVAL_MS;
+        return this.loopIntervalMs;
     }
 
     protected loopLoggerMinLevel(): LogLevel {
@@ -43,13 +49,13 @@ class TriggerNode extends BaseNodeRuntime {
             return;
         }
 
-        for (const { key, intervalMs } of TriggerManager.getRunnersBelowLoopInterval()) {
+        for (const { key, intervalMs } of TriggerManager.getRunnersBelowLoopInterval(this.loopIntervalMs)) {
             logger.warn("Runner interval 小於主循環 tick 間隔，實際觸發精度受限", {
                 topic: LOG_TOPIC_TRIGGER,
                 data: {
                     runnerKey: key,
                     intervalMs,
-                    loopIntervalMs: TRIGGER_LOOP_INTERVAL_MS,
+                    loopIntervalMs: this.loopIntervalMs,
                 },
             });
         }

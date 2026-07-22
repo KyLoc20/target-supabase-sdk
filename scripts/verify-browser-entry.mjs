@@ -8,6 +8,7 @@ const browserBundle = join(ROOT, "dist", "browser.js");
 /** `from "node:…"` in the browser bundle must not appear (Node-only code leaked in). */
 const NODE_BUILTIN_IMPORT_PATTERN = /from\s+["']node:[^"']+["']/g;
 
+console.log("[verify:browser] scanning dist/browser.js for node: imports...");
 const content = readFileSync(browserBundle, "utf8");
 const matches = [...content.matchAll(NODE_BUILTIN_IMPORT_PATTERN)];
 

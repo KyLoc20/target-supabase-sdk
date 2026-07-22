@@ -146,6 +146,7 @@ Do not import `task-manager`, `repo-manager`, `local-task-registry`, `repo.scrip
 |--------|---------|-------|
 | **`task.api.ts`** | `patchClaimTask`, `patchTaskProgress`, … | browser + node |
 | **`task-post.api.ts`** | `postTask`, `postTaskSchema`, `PostTaskPayload`, `createTaskRow` | **browser + node** |
+| **`task-post-retry.api.ts`** | `postTaskWithRetry`, `POST_TASK_DEFAULT_MAX_ATTEMPTS` | **browser + node** |
 | **`task-post-validated.api.ts`** | `postTaskWithValidation` | **node only** |
 
 - **`postTask`** — enqueue only (Zod payload shape); Repo + `taskParamsValidator` run at **`prepareTask`** on the worker.

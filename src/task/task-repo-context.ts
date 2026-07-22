@@ -4,10 +4,17 @@ export interface TaskRunResult {
     extra: unknown;
 }
 
+export interface TaskExecutionContext {
+    taskId: string;
+    taskName: string;
+    taskTypeKey: string;
+    traceId: string;
+}
+
 export interface TaskFn {
     displayName: string;
     taskTypeKey: string;
-    (taskParams: unknown): Promise<TaskRunResult>;
+    (taskParams: unknown, ctx: TaskExecutionContext): Promise<TaskRunResult>;
 }
 
 /** Params already bound — used by node executor after prepareTask */

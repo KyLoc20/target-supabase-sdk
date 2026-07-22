@@ -9,6 +9,24 @@ export type { SupabaseClient } from "@supabase/supabase-js";
 export * from "./core.api";
 export * from "./core.interface";
 export * from "./core.utils";
+export type {
+    GetExtractionPayload,
+    PatchExtractionObjectsPayload,
+    PostExtractionPayload,
+    ScanExtractionListPayload,
+} from "./extraction/extraction.api";
+export {
+    getExtraction,
+    getExtractionSchema,
+    patchExtractionObjects,
+    patchExtractionObjectsSchema,
+    postExtraction,
+    postExtractionSchema,
+    scanExtractionList,
+    scanExtractionListSchema,
+} from "./extraction/extraction.api";
+export type { Extraction, ExtractionDetails } from "./extraction/extraction.interface";
+export { CategoryExtraction } from "./extraction/extraction.interface";
 export * from "./idea/idea.interface";
 export * from "./link/link.api";
 export * from "./link/link.interface";
@@ -99,6 +117,7 @@ export type {
     RegisterServiceInput,
     RegistrySlotGuardResult,
     RegistrySlotRuntimeState,
+    ResetSystemRegistryConfigPayload,
     Service,
     ServiceDetails,
     ServiceNodeSnapshot,
@@ -142,6 +161,8 @@ export {
     registerService,
     registerServiceAtStartup,
     registrySlotRuntimePatchFromGuardResult,
+    resetSystemRegistryConfig,
+    resetSystemRegistryConfigSchema,
     resolveActiveRegistryServiceId,
     runRegistrySlotGuardCheck,
     ServiceLifecycleStatus,
@@ -226,6 +247,8 @@ export {
 } from "./task/task.interface";
 export type { PostTaskPayload } from "./task/task-post.api";
 export { postTask, postTaskSchema } from "./task/task-post.api";
+export type { PostTaskWithRetryOptions, PostTaskWithRetryResult } from "./task/task-post-retry.api";
+export { POST_TASK_DEFAULT_MAX_ATTEMPTS, postTaskWithRetry } from "./task/task-post-retry.api";
 export type { TaskStatusCount } from "./task/task-queue";
 export { countTasksByType, summarizeTaskQueue } from "./task/task-queue";
 export * from "./word/word.interface";

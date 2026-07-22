@@ -47,7 +47,7 @@
     ],
     "scripts": {
         "clean": "node --input-type=module -e \"import fs from 'node:fs'; fs.rmSync('dist', { recursive: true, force: true })\"",
-        "build": "pnpm clean && rollup -c && tsc -p tsconfig.dts.json && node scripts/verify-browser-entry.mjs",
+        "build": "pnpm clean && rollup -c && node --input-type=module -e \"console.log('[build] emitting declarations (tsc)...')\" && tsc -p tsconfig.dts.json && node scripts/verify-browser-entry.mjs",
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "typecheck:scripts": "tsc -p tsconfig.scripts.json",
         "format": "biome check --write .",
@@ -57,6 +57,7 @@
         "post-command": "tsx scripts/post-command.ts",
         "post-trigger": "tsx scripts/post-trigger.ts",
         "seed:system-registry": "tsx scripts/seed-system-registry.ts",
+        "reset:system-registry": "tsx scripts/reset-system-registry.ts",
         "parcel:split": "tsx scripts/parcel-split-local.ts",
         "parcel:restore": "tsx scripts/parcel-restore-local.ts",
         "dev": "rollup -c --watch",

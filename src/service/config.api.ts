@@ -1,5 +1,14 @@
 import { z } from "zod";
-import { createTarget, getPossibleTarget, getTarget, type QueryFilter, validateWithSchema } from "../core.api";
+import {
+    createTarget,
+    getPossibleTarget,
+    getTarget,
+    isOptimisticLockError,
+    type QueryFilter,
+    updateTargetDetails,
+    validateWithSchema,
+} from "../core.api";
+import { generateResponse } from "../core.interface";
 import { CategoryConfig, type Config, type ConfigDetails, TARGET_SYSTEM_REGISTRY_KEY } from "./config.interface";
 import { type ServiceSlot, ServiceSlotStatus } from "./service.interface";
 
@@ -36,6 +45,14 @@ export const postSystemRegistryConfigSchema = z.object({
 
 export type PostSystemRegistryConfigPayload = z.infer<typeof postSystemRegistryConfigSchema>;
 
+/** Same payload shape as {@link postSystemRegistryConfig} — replaces slots with fresh EMPTY rows. */
+export const resetSystemRegistryConfigSchema = postSystemRegistryConfigSchema;
+
+export type ResetSystemRegistryConfigPayload = PostSystemRegistryConfigPayload;
+
+const DEFAULT_RESET_RETRY_ATTEMPTS = 5;
+const RESET_RETRY_DELAY_MS = 50;
+
 /** Default one EMPTY slot per known L3 service (override via payload or seed file). */
 export const DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS: readonly SystemRegistrySeedSlot[] = [
     { serviceValue: "log-service" },
@@ -67,6 +84,20 @@ export function buildEmptyServiceSlots(seedSlots: readonly SystemRegistrySeedSlo
         serviceId: null,
         status: ServiceSlotStatus.EMPTY,
     }));
+}
+
+function parseRegistryRevision(rawMeta: unknown): number {
+    const source = typeof rawMeta === "object" && rawMeta !== null ? (rawMeta as Record<string, unknown>) : null;
+    const revision = source?.revision;
+    return typeof revision === "number" && Number.isFinite(revision) ? revision : 0;
+}
+
+function lockOnRegistryRevision(revision: number): QueryFilter[] {
+    return [{ field: "details->meta->>revision", operator: "eq", value: String(revision) }];
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Build `ConfigDetails` for the globally unique system registry row. */
@@ -140,4 +171,54 @@ export const postSystemRegistryConfig = validateWithSchema(
             details,
         }),
     });
+});
+
+/**
+ * Replace the system registry slot layout with fresh EMPTY rows.
+ * Creates the row when missing (same as {@link postSystemRegistryConfig}).
+ * Clears ACTIVE slot bindings — use for dev recovery after crashes or layout changes.
+ */
+export const resetSystemRegistryConfig = validateWithSchema(
+    resetSystemRegistryConfigSchema,
+    "resetSystemRegistryConfigSchema",
+)(async ({ slots, tagList }) => {
+    const seedSlots = [...(slots ?? DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS)];
+    const serviceSlots = buildEmptyServiceSlots(seedSlots);
+
+    const existing = await getConfig({ value: TARGET_SYSTEM_REGISTRY_KEY });
+    if (existing.data == null) {
+        return postSystemRegistryConfig({ slots: seedSlots, tagList });
+    }
+
+    const configId = existing.data.id;
+
+    for (let attempt = 1; attempt <= DEFAULT_RESET_RETRY_ATTEMPTS; attempt += 1) {
+        try {
+            const fresh = await getConfig({ id: configId });
+            if (fresh.data == null) {
+                throw new Error(`System registry config disappeared during reset (id=${configId})`);
+            }
+
+            const revision = parseRegistryRevision(fresh.data.details.meta);
+            const updated = await updateTargetDetails<Config, ConfigDetails>({
+                id: configId,
+                optimisticLockFilterList: lockOnRegistryRevision(revision),
+                updateFn: (details) => ({
+                    ...details,
+                    meta: { revision: revision + 1 },
+                    objects: serviceSlots,
+                }),
+            });
+
+            return generateResponse.success<Config>(updated);
+        } catch (error) {
+            if (isOptimisticLockError(error) && attempt < DEFAULT_RESET_RETRY_ATTEMPTS) {
+                await sleep(RESET_RETRY_DELAY_MS * attempt);
+                continue;
+            }
+            throw error;
+        }
+    }
+
+    throw new Error("[resetSystemRegistryConfig] Optimistic lock retries exhausted");
 });

@@ -1,6 +1,6 @@
 export const LOG_TOPIC_TRIGGER = "trigger";
 
-/** Fixed main-loop interval for {@link TriggerNode} (ms). */
+/** Default main-loop interval for {@link TriggerNode} when `loopIntervalMs` is omitted (ms). */
 export const TRIGGER_LOOP_INTERVAL_MS = 60_000;
 
 /** Default extra retries after first failure within one runner tick. */
