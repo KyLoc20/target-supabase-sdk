@@ -76,8 +76,11 @@ export function createJsonFileStateStore<T extends object, NK extends keyof T = 
                 const raw = await readFile(filePath, "utf8");
                 const parsed = JSON.parse(raw) as Partial<T>;
                 return mergeWithNested(defaultState, parsed, {}, nestedKeys);
-            } catch {
-                return { ...defaultState };
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                    return mergeWithNested(defaultState, {}, {}, nestedKeys);
+                }
+                throw error;
             }
         },
 

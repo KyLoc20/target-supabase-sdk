@@ -72,7 +72,7 @@ Task type strings stay in each service (L3).
 Keep in the service layer:
 
 - External probes (Telegram, S3, …)
-- Cross-process runtime state (`state.json`)
+- Cross-process runtime state via `readRuntimeState()` (sharded `runtime-state/*.json` — see [json-state-store](../json-state-store/SKILL.md))
 - Composite snapshot shape and `ok` aggregation
 - Express routes
 

@@ -32,6 +32,9 @@ export { CategoryConfig, TARGET_SYSTEM_REGISTRY_KEY } from "./config.interface";
 export type {
     PatchServiceRuntimeInput,
     RegisterServiceInput,
+    ReleasedRegistrySlot,
+    ReleaseSystemRegistrySlotsInput,
+    ReleaseSystemRegistrySlotsOutcome,
     TargetSystemRegistrySlotView,
     TargetSystemRegistryView,
 } from "./registry.service";
@@ -44,6 +47,7 @@ export {
     patchServiceRuntime,
     registerService,
     registerServiceAtStartup,
+    releaseSystemRegistrySlots,
     resolveActiveRegistryServiceId,
     ServiceRegistryError,
     unregisterService,

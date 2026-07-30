@@ -76,6 +76,17 @@ Do **not** use `supervisor` — unified name is `guard`.
 
 Default runner key: `SERVICE_GUARD_RUNNER_KEY` (`"service-guard"`).
 
+## Future plan — task reclaim on node LOST (SDK, not implemented)
+
+Today guard **respawns** worker when TaskNode heartbeat is stale (`taskNodeStaleMs`) but
+does **not** reclaim Tasks still **DOING** under the dead node's `nodeId`.
+
+**Planned (SDK):** when a Node becomes `LOST` — via `patchStopNode` and/or stale-node
+marking — `CANCEL` all `DOING` tasks owned by that `nodeId` back to **TODO**.
+See [task-state-machine § Future plan](../task-state-machine/SKILL.md#future-plan--reclaim-doing-on-node-lost-not-implemented).
+
+L3 consumer services must **not** add global DOING reclaim schedulers; wait for SDK.
+
 ## Related
 
 - [l3-service-host](../l3-service-host/SKILL.md)

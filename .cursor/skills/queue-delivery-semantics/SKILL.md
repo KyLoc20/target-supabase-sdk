@@ -49,7 +49,8 @@ These describe **end-to-end** behavior (queue → business logic), not a single 
 |------------|------------------------------|-------|
 | **`pollTargetList`** / **`getPollCommandList`** | **~at-most-once** (best effort) | SELECT → DELETE by `id`; not atomic; see TODO in `core.api.ts` |
 | **`patchClaimTask`** / optimistic UPDATE | **Toward at-most-once claim** | Lock on `status = TODO`; lost race throws — another node wins |
-| **Task FINISH after claim** | App must handle partial failure | Task claimed (DOING) but crash → needs RESET/TODO recovery |
+| **Task FINISH after claim** | App must handle partial failure | Task claimed (DOING) but process dies → orphan DOING until recovery |
+| **DOING orphan recovery** | **Not implemented** | Planned: on node `LOST`, SDK `CANCEL` DOING → TODO ([task-state-machine](../task-state-machine/SKILL.md#future-plan--reclaim-doing-on-node-lost-not-implemented)) |
 
 Single worker per `nodeId` command queue: races are rare. **Multiple processes** polling the same `filterList`: treat as concurrent consumers.
 
@@ -89,6 +90,7 @@ Upgrade dequeue when **any** of:
 | **DELETE row count check** | 0 rows → do not add to `polled` | Short-term hardening only |
 | **Idempotent handler** | Safe under at-least-once | App layer (`executeCommand`, task plugins) |
 | **Re-post / watchdog** | Recover lost work | Scheduler re-sends command if node still alive |
+| **Node LOST → CANCEL DOING** | Reclaim orphaned claims | SDK: `patchStopNode` / stale node → `CANCEL` by owner `nodeId` ([task-state-machine](../task-state-machine/SKILL.md#future-plan--reclaim-doing-on-node-lost-not-implemented)) |
 
 ---
 

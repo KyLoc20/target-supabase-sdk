@@ -114,10 +114,14 @@ When `LOG_PERSIST_ENABLED=true`, every process calls `ensureLogPersistFromEnv` a
 
 **Do not** store all process records in one JSON file that every child read-modify-writes. `createJsonFileStateStore` uses atomic `rename(temp, target)`; concurrent writers on Windows hit `EPERM` and can lose updates.
 
+**Same rule applies to L3 runtime state** (`readiness`, `guard`, `scheduler`, `worker`, `registry`) — use SDK `createServiceRuntimeStateStore` (sharded under `runtime-state/` since 0.2.5). See [json-state-store](../json-state-store/SKILL.md) for the incident post-mortem.
+
 | Layout | Verdict | Notes |
 |--------|---------|-------|
 | Single `log-persist-registry.json` | ❌ | guard + scheduler register together → EPERM on Windows |
 | Directory + one shard per process | ✅ | `log-persist-registry/main.json`, `guard.json`, … — each process owns its file |
+| Single `state.json` for runtime gate | ❌ | guard/scheduler ticks wipe readiness/worker/registry |
+| `runtime-state/*.json` (one slice per file) | ✅ | SDK 0.2.5+ — each process writes its slice only |
 | Reader | Aggregate | `readLogPersistRegistry(registryDir)` merges `*.json` shards into `LogPersistRegistryState` |
 
 SDK: `defaultLogPersistRegistryPath(registryDir)` → `…/log-persist-registry` (directory). Option `registryFilePath` is the registry **root** (name kept for API stability). Legacy single `.json` path still works if explicitly passed.

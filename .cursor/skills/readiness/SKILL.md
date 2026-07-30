@@ -68,9 +68,12 @@ await waitForServiceReady(gate, { timeoutMs: 180_000, logger });
 
 ## Reference
 
-`storage-service/src/processes/readiness.ts` — L3 checks + gate over `state.json`.
+`storage-service/src/processes/readiness.ts` — L3 checks + gate over sharded runtime state (`readRuntimeState()`).
+
+See [json-state-store](../json-state-store/SKILL.md) — gate reads `readiness` + `worker` slices; monolithic `state.json` caused silent wipes pre-0.2.5.
 
 ## Do not
 
 - Put service-specific checks (Telegram, task paths) in SDK
-- Hard-code `state.json` schema in SDK — implement `ServiceReadyGate` per service
+- Hard-code runtime state schema in SDK — implement `ServiceReadyGate` per service
+- Read `state.json` directly — use `readRuntimeState()` (sharded under `runtime-state/` since SDK 0.2.5)

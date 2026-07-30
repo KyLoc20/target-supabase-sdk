@@ -22,7 +22,7 @@ A: SELECT (no match) ──────────────── INSERT ✓
 B:      SELECT (no match) ─ INSERT ✓  → duplicate rows (TOCTOU)
 ```
 
-Also, `maybeSingle()` on redundancy SELECT fails unpredictably when duplicates already exist in DB.
+Also, `maybeSingle()` / `getPossibleTarget` on redundancy SELECT fails when duplicates already exist (PGRST116 on ≥2 rows) — uniqueness-required, not flaky. See [target-list-query](../target-list-query/SKILL.md) § `getPossibleTarget`.
 
 **Do not reintroduce** pre-check-only redundancy before INSERT.
 

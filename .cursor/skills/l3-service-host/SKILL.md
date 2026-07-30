@@ -112,6 +112,25 @@ export async function bootstrap() {
 
 ## Runtime state
 
+Cross-process gate: **`createServiceRuntimeStateStore`** (SDK 0.2.5+) — **one JSON file per top-level slice** under `data/runtime/runtime-state/`. Legacy `state.json` migrates automatically.
+
+| Slice | Typical writer |
+|-------|----------------|
+| `readiness` | main (readiness runner) |
+| `guard` | guard process |
+| `scheduler` | scheduler (`finishRunnerTick`) |
+| `worker` | worker process |
+| `registry` | main (`onRegistryClaimed`) + guard slot checks |
+| `pipeline` (log-service) | runners via `extraDefaults` |
+
+```typescript
+import { createServiceRuntimeStateStore } from "target-supabase-sdk/node";
+
+const runtimeState = createServiceRuntimeStateStore({
+  filePath: join(runtimeDataDir(), "state.json"), // resolves to runtime-state/
+});
+```
+
 Embed SDK type:
 
 ```typescript
@@ -123,6 +142,8 @@ registry: RegistrySlotRuntimeState; // default { ...EMPTY_REGISTRY_SLOT_RUNTIME_
 
 Guard runner writes `slotOwned` / `lastSlotCheckAt` via `applyRegistrySlotGuardStep`.
 Guard process state lives in the `guard` slice (`lastCheckAt`, `lastDecision`, `lastSpawnAt`, `spawnCount`).
+
+**Do not** use monolithic `state.json` with multi-process RMW — see [json-state-store](../json-state-store/SKILL.md).
 
 ---
 
@@ -137,4 +158,5 @@ Expose top-level `registry` + include `runtime.registry.slotOwned !== false` in 
 - [service-guard](../service-guard/SKILL.md) — guard process API
 - [target-system-registry](../target-system-registry/SKILL.md) — slot semantics
 - [service-preload](../service-preload/SKILL.md) — preload + log-persist registry
+- [json-state-store](../json-state-store/SKILL.md) — sharded runtime state + Windows RMW pitfall
 - [node-service-build](../../../watch-service/.cursor/skills/node-service-build/SKILL.md) — esbuild dist entries

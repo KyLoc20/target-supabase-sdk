@@ -3,8 +3,11 @@
  *
  *   pnpm seed:system-registry
  *   pnpm seed:system-registry -- --file scripts/system-registry.seed.json
+ *   pnpm seed:system-registry -- --release watch-service
+ *   pnpm seed:system-registry -- --release watch-service,log-service --dry-run
  *
- * Idempotent: if the row already exists, exits 0 without modifying it.
+ * Idempotent seed: if the row already exists, exits 0 without modifying it.
+ * Release mode: force ACTIVE slots for given service keys back to EMPTY (crash recovery).
  */
 
 import { readFileSync } from "node:fs";
@@ -19,6 +22,8 @@ import {
     postSystemRegistryConfigSchema,
 } from "../src/service/config.api.js";
 import { TARGET_SYSTEM_REGISTRY_KEY } from "../src/service/config.interface.js";
+import { parseServiceSlots, releaseSystemRegistrySlots } from "../src/service/registry.service.js";
+import { ServiceSlotStatus } from "../src/service/service.interface.js";
 import { initSupabaseFromEnv } from "./init-supabase.js";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -42,18 +47,37 @@ function parseArgs(argv: string[]): Record<string, string> {
     return out;
 }
 
+function parseServiceValueList(raw: string): string[] {
+    return [
+        ...new Set(
+            raw
+                .split(",")
+                .map((value) => value.trim())
+                .filter((value) => value !== ""),
+        ),
+    ];
+}
+
 function printUsage(): void {
     console.log(`Usage: pnpm seed:system-registry [-- options]
 
-Options:
-  --file <path>   JSON payload matching PostSystemRegistryConfigPayload
-  --help          Show this help
+Seed (default):
+  --file <path>       JSON payload matching PostSystemRegistryConfigPayload
+  --help              Show this help
 
-Default slots (when --file omitted):
-  log-service, watch-service, download-service, storage-service — one EMPTY slot each
+  Default slots (when --file omitted):
+    log-service, watch-service, download-service, storage-service — one EMPTY slot each
 
-The Config row is globally unique (category=config, value=${TARGET_SYSTEM_REGISTRY_KEY}).
-Re-running this script is safe: an existing row is left unchanged.
+  The Config row is globally unique (category=config, value=${TARGET_SYSTEM_REGISTRY_KEY}).
+  Re-running seed is safe: an existing row is left unchanged.
+
+Release mode (force ACTIVE → EMPTY for selected services):
+  --release <values>  Comma-separated logical service keys (e.g. watch-service or watch-service,log-service)
+  --dry-run           Show matching ACTIVE slots without writing
+
+Examples:
+  pnpm seed:system-registry -- --release watch-service
+  pnpm seed:system-registry -- --release watch-service --dry-run
 `);
 }
 
@@ -66,15 +90,46 @@ function loadPayload(args: Record<string, string>): PostSystemRegistryConfigPayl
     return postSystemRegistryConfigSchema.parse({});
 }
 
-async function main(): Promise<void> {
-    const args = parseArgs(process.argv.slice(2));
-    if (args.help === "true" || args.h === "true") {
-        printUsage();
+async function releaseSlots(args: Record<string, string>): Promise<void> {
+    const serviceValues = parseServiceValueList(args.release ?? "");
+    if (serviceValues.length === 0) {
+        throw new Error("--release requires at least one serviceValue (comma-separated)");
+    }
+
+    const existing = await getConfig({ value: TARGET_SYSTEM_REGISTRY_KEY });
+    if (existing.data == null) {
+        throw new Error(`System registry config not found (value=${TARGET_SYSTEM_REGISTRY_KEY})`);
+    }
+
+    const slots = parseServiceSlots(existing.data);
+    const activeMatches = slots
+        .map((slot, slotIndex) => ({ slot, slotIndex }))
+        .filter(({ slot }) => serviceValues.includes(slot.serviceValue) && slot.status === ServiceSlotStatus.ACTIVE);
+
+    console.log("[seed-system-registry] release target:", {
+        serviceValues,
+        activeCount: activeMatches.length,
+        active: activeMatches.map(({ slot, slotIndex }) => ({
+            slotIndex,
+            serviceValue: slot.serviceValue,
+            serviceId: slot.serviceId,
+        })),
+    });
+
+    if (args["dry-run"] === "true") {
+        console.log("[seed-system-registry] dry-run — no changes written");
         return;
     }
 
-    await initSupabaseFromEnv(projectRoot);
+    const result = await releaseSystemRegistrySlots({ serviceValues });
+    console.log("[seed-system-registry] released:", {
+        configId: result.config.id,
+        released: result.released,
+        unchangedServiceValues: result.unchangedServiceValues,
+    });
+}
 
+async function seedRegistry(args: Record<string, string>): Promise<void> {
     const existing = await getConfig({ value: TARGET_SYSTEM_REGISTRY_KEY });
     if (existing.data != null) {
         console.log("[seed-system-registry] already exists — skipping insert", {
@@ -110,6 +165,23 @@ async function main(): Promise<void> {
         }
         throw error;
     }
+}
+
+async function main(): Promise<void> {
+    const args = parseArgs(process.argv.slice(2));
+    if (args.help === "true" || args.h === "true") {
+        printUsage();
+        return;
+    }
+
+    await initSupabaseFromEnv(projectRoot);
+
+    if (args.release != null && args.release !== "" && args.release !== "true") {
+        await releaseSlots(args);
+        return;
+    }
+
+    await seedRegistry(args);
 }
 
 main().catch((error: unknown) => {
