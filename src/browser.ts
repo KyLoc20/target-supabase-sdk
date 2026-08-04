@@ -104,6 +104,8 @@ export * from "./repo/repo.interface";
 export type {
     Api,
     ApiDetails,
+    AppendSystemRegistrySlotsInput,
+    AppendSystemRegistrySlotsOutcome,
     ClaimRegistrySlotInput,
     Config,
     ConfigDetails,
@@ -136,6 +138,7 @@ export type {
 export {
     ApiMethod,
     apiDetailsSchema,
+    appendSystemRegistrySlots,
     assertRegistrySlotAvailable,
     assertRegistrySlotOwner,
     buildEmptyServiceSlots,

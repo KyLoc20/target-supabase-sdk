@@ -71,6 +71,21 @@ export interface ReleaseSystemRegistrySlotsOutcome {
     unchangedServiceValues: string[];
 }
 
+export interface AppendSystemRegistrySlotsInput {
+    /** Logical service keys to declare with one new EMPTY slot each when missing. */
+    serviceValues: string[];
+    traceId?: string;
+    maxAttempts?: number;
+}
+
+export interface AppendSystemRegistrySlotsOutcome {
+    config: Config;
+    /** Service keys that received a new EMPTY slot this run. */
+    added: string[];
+    /** Requested keys that already had at least one declared slot — no change. */
+    skipped: string[];
+}
+
 export class ServiceRegistryError extends Error {
     constructor(
         message: string,
@@ -456,6 +471,102 @@ export async function releaseSystemRegistrySlots(
 
     throw new ServiceRegistryError(
         "[releaseSystemRegistrySlots] Optimistic lock retries exhausted",
+        "REGISTRY_UPDATE_FAILED",
+    );
+}
+
+/**
+ * Append EMPTY {@link ServiceSlot} rows for logical service keys not yet declared.
+ * Idempotent — skips keys that already appear in `details.objects`.
+ * Does not modify existing slots or release ACTIVE bindings.
+ */
+export async function appendSystemRegistrySlots(
+    input: AppendSystemRegistrySlotsInput,
+): Promise<AppendSystemRegistrySlotsOutcome> {
+    const serviceValues = [
+        ...new Set(input.serviceValues.map((value) => value.trim()).filter((value) => value !== "")),
+    ];
+    if (serviceValues.length === 0) {
+        throw new Error("[appendSystemRegistrySlots] serviceValues must not be empty");
+    }
+
+    const maxAttempts = input.maxAttempts ?? DEFAULT_REGISTER_RETRY_ATTEMPTS;
+    const logger = createLogger({
+        module: "appendSystemRegistrySlots",
+        traceId: input.traceId,
+        labels: { serviceValues: serviceValues.join(",") },
+    });
+
+    logger.info("开始追加 registry 槽位声明", {
+        topic: LOG_TOPIC_REGISTRY,
+        data: { serviceValues },
+    });
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            const config = await loadSystemRegistryConfig();
+            const revision = parseRegistryRevision(config.details.meta);
+            const slots = parseServiceSlots(config);
+
+            const added: string[] = [];
+            const skipped: string[] = [];
+            const nextSlots = [...slots];
+
+            for (const serviceValue of serviceValues) {
+                if (isServiceValueDeclared(nextSlots, serviceValue)) {
+                    skipped.push(serviceValue);
+                    continue;
+                }
+                nextSlots.push({
+                    serviceValue,
+                    serviceId: null,
+                    status: ServiceSlotStatus.EMPTY,
+                });
+                added.push(serviceValue);
+            }
+
+            if (added.length === 0) {
+                logger.info("所有 service 已声明 — 无需追加", {
+                    topic: LOG_TOPIC_REGISTRY,
+                    data: { serviceValues, skipped },
+                });
+                return { config, added, skipped: serviceValues };
+            }
+
+            await persistSlotClaim({
+                configId: config.id,
+                revision,
+                slots: nextSlots,
+            });
+
+            const updated = await loadSystemRegistryConfig();
+            logger.info("registry 槽位追加成功", {
+                topic: LOG_TOPIC_REGISTRY,
+                data: { added, skipped, attempt, revision: revision + 1 },
+            });
+
+            return { config: updated, added, skipped };
+        } catch (error) {
+            if (isOptimisticLockError(error) && attempt < maxAttempts) {
+                logger.warn("registry 乐观锁冲突，重试", {
+                    topic: LOG_TOPIC_REGISTRY,
+                    data: { serviceValues, attempt, maxAttempts },
+                });
+                await sleep(50 * attempt);
+                continue;
+            }
+
+            const message = error instanceof Error ? error.message : String(error);
+            logger.error("registry 槽位追加失败", {
+                topic: LOG_TOPIC_REGISTRY,
+                data: { serviceValues, attempt, message },
+            });
+            throw new ServiceRegistryError(message, "REGISTRY_UPDATE_FAILED");
+        }
+    }
+
+    throw new ServiceRegistryError(
+        "[appendSystemRegistrySlots] Optimistic lock retries exhausted",
         "REGISTRY_UPDATE_FAILED",
     );
 }

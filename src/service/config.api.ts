@@ -59,6 +59,7 @@ export const DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS: readonly SystemRegistrySeedSlot
     { serviceValue: "watch-service" },
     { serviceValue: "download-service" },
     { serviceValue: "storage-service" },
+    { serviceValue: "gc-service" },
 ] as const;
 
 const configCategoryFilter: QueryFilter = {

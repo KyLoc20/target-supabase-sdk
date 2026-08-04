@@ -65,7 +65,7 @@ Options:
   --help            Show this help
 
 Default slots (when --file omitted):
-  log-service, watch-service, download-service, storage-service — one EMPTY slot each
+  log-service, watch-service, download-service, storage-service, gc-service — one EMPTY slot each
 `);
 }
 

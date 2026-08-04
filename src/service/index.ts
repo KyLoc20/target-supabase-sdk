@@ -30,6 +30,8 @@ export {
 export type { Config, ConfigDetails } from "./config.interface";
 export { CategoryConfig, TARGET_SYSTEM_REGISTRY_KEY } from "./config.interface";
 export type {
+    AppendSystemRegistrySlotsInput,
+    AppendSystemRegistrySlotsOutcome,
     PatchServiceRuntimeInput,
     RegisterServiceInput,
     ReleasedRegistrySlot,
@@ -39,6 +41,7 @@ export type {
     TargetSystemRegistryView,
 } from "./registry.service";
 export {
+    appendSystemRegistrySlots,
     assertRegistrySlotAvailable,
     assertRegistrySlotOwner,
     getTargetSystemRegistry,
