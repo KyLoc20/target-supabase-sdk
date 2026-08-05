@@ -94,7 +94,8 @@ interface ServiceSlot {
 | `registry.service.ts` | Service | `getTargetSystemRegistry`, `claimServiceRegistrySlot`, `assertRegistrySlotAvailable`, `assertRegistrySlotOwner`, `registerService`, `unregisterService`, `patchServiceRuntime`, `parseServiceSlot(s)` |
 | `registry-lifecycle.ts` | Service | `claimServiceRegistrySlot`, `runRegistrySlotGuardCheck`, `RegistrySlotRuntimeState`, `createClaimedRegistrySlotRuntimeState` |
 | `node/service-host/` | Node | `createServiceHost`, `runSingleProcessService`, `applyRegistrySlotGuardStep` |
-| `scripts/seed-system-registry.ts` | CLI | Idempotent seed |
+
+**Ops CLI / Web UI** live in **gc-service** — see `gc-service/.cursor/skills/system-registry-ops/SKILL.md` (`/ui/registry`, `pnpm seed:system-registry`, `pnpm reset:system-registry`).
 
 Public entry: `target-supabase-sdk` (`browser.ts`).
 
@@ -106,21 +107,30 @@ Public entry: `target-supabase-sdk` (`browser.ts`).
 
 - Inserts the registry row once.
 - **Duplicate guard**: `checkRedundancyFilterList` on `category=config` + `value=target-system-registry` ([create-target-redundancy](../create-target-redundancy/SKILL.md)).
-- Default slots: `log-service`, `watch-service`, `download-service`, `storage-service` (one EMPTY each).
+- Default slots: `log-service`, `watch-service`, `download-service`, `storage-service`, `gc-service` (one EMPTY each).
 - Override via payload `slots: [{ serviceValue }]`.
 
 ### `getConfig({ value })`
 
 Generic Config read; registry uses `value: TARGET_SYSTEM_REGISTRY_KEY`.
 
-### Seed script (idempotent)
+### Ops tooling (gc-service, not this repo)
+
+Seed / add / release / reset scripts and Web UI are maintained in **gc-service**:
 
 ```bash
+# gc-service repo
 pnpm seed:system-registry
-pnpm seed:system-registry -- --file scripts/system-registry.seed.json
+pnpm seed:system-registry -- --add gc-service
+pnpm seed:system-registry -- --release watch-service
+pnpm reset:system-registry -- --yes
 ```
 
-1. `getConfig` — if exists, exit 0  
+Web: `http://<gc-service-host>:3400/ui/registry`
+
+Programmatic seed from any consumer:
+
+1. `getConfig` — if exists, skip insert  
 2. else `postSystemRegistryConfig`  
 3. catch `isCreateTargetAlreadyExistsError` on race
 
@@ -278,5 +288,5 @@ Removed: idempotent “already bound, skip register” — each startup must cla
 - `src/service/registry.service.ts` — `getTargetSystemRegistry`, `registerService`, `unregisterService`  
 - `src/service/service.interface.ts` — `ServiceSlot`, `ServiceRuntime`  
 - `src/node/node-runtime.base.ts` — `beforeProcessExit` hook for single-process L3  
-- `scripts/seed-system-registry.ts` — idempotent seed  
-- `scripts/system-registry.seed.json` — example slot list
+- **gc-service** `scripts/system-registry.seed.json` — default slot layout for ops  
+- **gc-service** `.cursor/skills/system-registry-ops/SKILL.md` — CLI + Web UI

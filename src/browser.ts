@@ -263,4 +263,3 @@ export type { PostTaskWithRetryOptions, PostTaskWithRetryResult } from "./task/t
 export { POST_TASK_DEFAULT_MAX_ATTEMPTS, postTaskWithRetry } from "./task/task-post-retry.api";
 export type { TaskStatusCount } from "./task/task-queue";
 export { countTasksByType, summarizeTaskQueue } from "./task/task-queue";
-export * from "./word/word.interface";
