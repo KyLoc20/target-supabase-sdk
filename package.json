@@ -1,6 +1,6 @@
 {
     "name": "target-supabase-sdk",
-    "version": "0.2.5",
+    "version": "0.2.6",
     "description": "Supabase client initializer and data access APIs",
     "license": "MIT",
     "author": "KyLoc20",
