@@ -420,6 +420,15 @@ export interface PatchTargetPayload extends PostTargetPayload {
     id: string;
 }
 
+export const OPTIMISTIC_LOCK_FAILED_MESSAGE =
+    "[updateTargetDetails] Optimistic lock failed: target no longer matches expected state.";
+
+/**
+ * @deprecated Use {@link updateTarget} (narrow RMW + optimistic lock) or {@link updateTargetDetails}.
+ *
+ * Full-row rewrite of create-shaped fields. Forces callers to resupply name/value/category,
+ * has no optimistic lock, and can accidentally mutate identity columns. Unused in-tree.
+ */
 export const patchTarget = async ({ id, ...restPayload }: PatchTargetPayload) => {
     const { data: currentData, error: fetchError } = await supabase.client
         .from("target")
@@ -448,12 +457,121 @@ export const patchTarget = async ({ id, ...restPayload }: PatchTargetPayload) =>
     return generateResponse.success<Target>(data as Target);
 };
 
+/** Mutable Target columns allowed by {@link updateTarget} (identity fields excluded). */
+export interface UpdateTargetRowSnapshot<D> {
+    tagList: string[];
+    details: D;
+    extra?: string;
+}
+
+/**
+ * Narrow patch returned by `updateTarget` updateFn.
+ * Omitted keys are left unchanged on the row.
+ */
+export type UpdateTargetPatch<D> = {
+    tagList?: string[];
+    details?: D;
+    extra?: string;
+};
+
+/**
+ * Read-modify-write mutable Target columns (`tagList` / `details` / `extra`) with optional
+ * DB-level optimistic locking. Does not write `name` / `value` / `category`.
+ *
+ * Prefer this when the update may touch `tagList` (and optionally `details`/`extra`) in one UPDATE.
+ * For details-only flows, {@link updateTargetDetails} remains the thinner API.
+ */
+export interface UpdateTargetParams<D> {
+    /** Target row id. */
+    id: string;
+    /**
+     * Builds a narrow patch from the row fetched immediately before UPDATE.
+     * Only returned keys are written; omit a key to leave that column unchanged.
+     */
+    updateFn: (existing: UpdateTargetRowSnapshot<D>) => UpdateTargetPatch<D>;
+    /**
+     * Optimistic lock conditions applied on UPDATE (not on the prior SELECT).
+     * Same semantics as {@link UpdateTargetDetailsParams.optimisticLockFilterList}.
+     */
+    optimisticLockFilterList?: QueryFilter[];
+}
+
+export const updateTarget = async <T, D>({
+    id,
+    updateFn,
+    optimisticLockFilterList = [],
+}: UpdateTargetParams<D>) => {
+    const { data: currentData, error: fetchError } = await supabase.client
+        .from("target")
+        .select("tagList, details, extra")
+        .eq("id", id)
+        .single();
+
+    if (fetchError) {
+        handleSupabaseError("updateTarget", fetchError, "Failed to fetch target.");
+    }
+    if (!currentData) {
+        const msg = `[updateTarget] Target NOT exists: ${id}`;
+        console.error(msg);
+        throw new Error(msg);
+    }
+
+    const existing: UpdateTargetRowSnapshot<D> = {
+        tagList: Array.isArray(currentData.tagList) ? (currentData.tagList as string[]) : [],
+        details: currentData.details as D,
+        extra: typeof currentData.extra === "string" ? currentData.extra : undefined,
+    };
+
+    const patch = updateFn(existing);
+    const updated: {
+        tagList?: string[];
+        details?: D;
+        extra?: string;
+    } = {};
+
+    if (patch.tagList !== undefined) {
+        updated.tagList = patch.tagList;
+    }
+    if (patch.details !== undefined) {
+        updated.details = patch.details;
+    }
+    if (patch.extra !== undefined) {
+        updated.extra = patch.extra;
+    }
+
+    if (Object.keys(updated).length === 0) {
+        throw new Error("[updateTarget] updateFn returned an empty patch");
+    }
+
+    const updateQuery = applyQueryFilters(
+        supabase.client.from("target").update(updated).eq("id", id),
+        optimisticLockFilterList,
+    );
+
+    const { data, error } = await updateQuery.select().maybeSingle();
+
+    if (error) {
+        handleSupabaseError("updateTarget", error, "Failed to update target.");
+    }
+    if (!data) {
+        const msg =
+            optimisticLockFilterList.length > 0
+                ? OPTIMISTIC_LOCK_FAILED_MESSAGE
+                : "[updateTarget] Target not found or was deleted.";
+        throw new Error(msg);
+    }
+
+    return data as T;
+};
+
 /**
  * Read-modify-write `target.details` with optional DB-level optimistic locking on UPDATE.
  *
  * Do not use application-layer pre-update validators (e.g. checking state after SELECT then
  * UPDATE with only `id`). That pattern is not atomic and loses under concurrency. Pass expected
  * row conditions via `optimisticLockFilterList` so they are applied on the UPDATE statement.
+ *
+ * For updates that also need `tagList`, use {@link updateTarget}.
  */
 export interface UpdateTargetDetailsParams<D> {
     /** Target row id. */
@@ -485,56 +603,21 @@ export const updateTargetDetails = async <T, D>({
     updateExtraFn,
     optimisticLockFilterList = [],
 }: UpdateTargetDetailsParams<D>) => {
-    const { data: currentData, error: fetchError } = await supabase.client
-        .from("target")
-        .select("details")
-        .eq("id", id)
-        .single();
-
-    if (fetchError) {
-        handleSupabaseError("updateTargetDetails", fetchError, "Failed to fetch target.");
-    }
-    if (!currentData) {
-        const msg = `[updateTargetDetails] Target NOT exists: ${id}`;
-        console.error(msg);
-        throw new Error(msg);
-    }
-
-    const currentDetails = currentData.details as D;
-    const updatedDetails: D = updateFn(currentDetails);
-    const updated =
-        updateExtraFn == null
-            ? {
-                  details: updatedDetails,
-              }
-            : {
-                  details: updatedDetails,
-                  extra: updateExtraFn(currentDetails),
-              };
-
-    const updateQuery = applyQueryFilters(
-        supabase.client.from("target").update(updated).eq("id", id),
+    return updateTarget<T, D>({
+        id,
         optimisticLockFilterList,
-    );
-
-    const { data, error } = await updateQuery.select().maybeSingle();
-
-    if (error) {
-        handleSupabaseError("updateTargetDetails", error, "Failed to update target details.");
-    }
-    if (!data) {
-        const msg =
-            optimisticLockFilterList.length > 0
-                ? OPTIMISTIC_LOCK_FAILED_MESSAGE
-                : "[updateTargetDetails] Target not found or was deleted.";
-        throw new Error(msg);
-    }
-
-    return data as T;
+        updateFn: (existing) => {
+            const nextDetails = updateFn(existing.details);
+            if (updateExtraFn == null) {
+                return { details: nextDetails };
+            }
+            return {
+                details: nextDetails,
+                extra: updateExtraFn(existing.details),
+            };
+        },
+    });
 };
-
-export const OPTIMISTIC_LOCK_FAILED_MESSAGE =
-    "[updateTargetDetails] Optimistic lock failed: target no longer matches expected state.";
 
 export const OPTIMISTIC_LOCK_ERROR_CODE = "OPTIMISTIC_LOCK" as const;
 

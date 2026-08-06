@@ -2,7 +2,7 @@
 name: optimistic-lock-update
 description: >-
   Implements DB-level optimistic locking for target-supabase-sdk read-modify-write flows.
-  Use when updating target.details via updateTargetDetails, claiming tasks, or replacing
+  Use when updating via updateTarget / updateTargetDetails, claiming tasks, or replacing
   beforeUpdateValidator / app-layer pre-update checks with UPDATE WHERE conditions.
 ---
 
@@ -16,9 +16,48 @@ For concurrent-sensitive updates, **never** rely on:
 
 That is not atomic. Two writers can both pass validation and overwrite each other.
 
-**Use `updateTargetDetails` with `optimisticLockFilterList`** so expected state is checked in the **UPDATE WHERE clause**.
+**Use `updateTarget` or `updateTargetDetails` with `optimisticLockFilterList`** so expected state is checked in the **UPDATE WHERE clause**.
 
-## API
+## Which API
+
+| Need | API |
+|------|-----|
+| Only `details` (optional `extra`) | `updateTargetDetails` |
+| `tagList` and/or `details` / `extra` in one UPDATE | `updateTarget` |
+| Full-row create-shaped rewrite | **Do not** — `patchTarget` is deprecated |
+
+`updateTargetDetails` is implemented as a thin wrapper over `updateTarget`.
+
+## API — `updateTarget` (narrow patch)
+
+```typescript
+await updateTarget<List, ListDetails>({
+  id: wordId,
+  optimisticLockFilterList: [
+    { field: "details->>loaderKey", operator: "eq", value: "english-word" },
+  ],
+  updateFn: (row) => ({
+    tagList: ["verb", "noun"],
+    details: {
+      ...row.details,
+      meta: { reminder: "書寫" },
+      items: ["write", "writes", "writing", "wrote", "written"],
+    },
+  }),
+});
+```
+
+Omitted patch keys are left unchanged. Identity columns (`name` / `value` / `category`) are not writable.
+
+### Parameters (`UpdateTargetParams`)
+
+| Field | Purpose |
+|-------|---------|
+| `id` | Target row id |
+| `updateFn` | `(existing) => { tagList?, details?, extra? }` — only returned keys are written |
+| `optimisticLockFilterList` | **Lock.** `QueryFilter[]` applied on UPDATE via `applyQueryFilters` |
+
+## API — `updateTargetDetails` (details-only)
 
 ```typescript
 await updateTargetDetails<Task, TaskDetails>({
@@ -61,6 +100,7 @@ JSON details columns: `details->>fieldName`
 
 - `beforeUpdateValidator` on `updateTargetDetails` (removed; use lock filters instead)
 - Stale details from an earlier query passed into UPDATE without lock conditions
+- Using deprecated `patchTarget` for business updates (no lock; forces full create-shaped payload; can mutate identity fields)
 
 ## When lock filters are optional
 
@@ -78,6 +118,6 @@ Callers: `isCreateTargetAlreadyExistsError` — same propagate pattern as UPDATE
 
 ## Reference
 
-Implementation: `src/core.api.ts` — `updateTargetDetails`, `createTarget`, `applyQueryFilters`
+Implementation: `src/core.api.ts` — `updateTarget`, `updateTargetDetails`, `createTarget`, `applyQueryFilters`
 
 Example: `src/task/task.api.ts` — `patchClaimTask`, `patchChangeTaskStatus`, `lockOnDoingOwner`
