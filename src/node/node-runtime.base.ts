@@ -422,7 +422,8 @@ abstract class BaseNodeRuntime {
         }
 
         this.consecutiveHeartbeatFailures = 0;
-        logger.info("心跳更新成功", {
+        // Success is the steady state every loop — do not INFO-spam; failures already warn/critical.
+        logger.debug("心跳更新成功", {
             topic: LOG_TOPIC_NODE,
             data: { lastHeartBeat: formatHeartbeat(lastHeartBeat) },
         });
@@ -441,15 +442,26 @@ abstract class BaseNodeRuntime {
         });
 
         cmdLogger.debug("開始檢查控制指令", { topic: LOG_TOPIC_COMMAND });
-        const { data: commandList = [], error: pollError } = await getPollCommandList({
-            nodeId,
-            traceId: loopTraceId,
-            size: MAX_POLL_TARGET_LIST_SIZE,
-        });
-        if (pollError) {
+        let commandList: Awaited<ReturnType<typeof getPollCommandList>>["data"] = [];
+        try {
+            const polled = await getPollCommandList({
+                nodeId,
+                traceId: loopTraceId,
+                size: MAX_POLL_TARGET_LIST_SIZE,
+            });
+            if (polled.error) {
+                cmdLogger.warn("獲取指令失敗", {
+                    topic: LOG_TOPIC_COMMAND,
+                    data: { error: polled.error.message },
+                });
+                return;
+            }
+            commandList = polled.data ?? [];
+        } catch (error) {
+            // pollTargetList throws on transport/DB failures — treat as soft miss, not loop CRITICAL.
             cmdLogger.warn("獲取指令失敗", {
                 topic: LOG_TOPIC_COMMAND,
-                data: { error: pollError.message },
+                data: { error: getErrorMessage(error) },
             });
             return;
         }
