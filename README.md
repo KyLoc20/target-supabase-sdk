@@ -251,11 +251,15 @@ Detailed conventions: `.cursor/skills/browser-node-exports/SKILL.md` and `.curso
 ```bash
 pnpm install
 pnpm typecheck
+pnpm typecheck:scripts
 pnpm format        # Biome: format + lint + organize imports (write)
 pnpm format:check  # CI gate (read-only)
+pnpm verify        # typecheck + typecheck:scripts + format:check (same as pre-push)
 pnpm build
 pnpm dev
 ```
+
+`pnpm install` sets `core.hooksPath` to `.githooks/`. Every `git push` (including `git push --tags`) runs `pnpm verify` first; fix with `pnpm format` then commit if format fails. Bypass only when intentional: `git push --no-verify`.
 
 Verify the publishable tarball locally (runs `prepack` → full build):
 

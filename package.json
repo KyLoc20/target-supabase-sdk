@@ -53,6 +53,8 @@
         "format": "biome check --write .",
         "format:check": "biome ci",
         "lint": "biome lint .",
+        "verify": "pnpm typecheck && pnpm typecheck:scripts && pnpm format:check",
+        "prepare": "git config core.hooksPath .githooks",
         "worker:trigger": "tsx scripts/run-trigger-node.ts",
         "post-command": "tsx scripts/post-command.ts",
         "post-trigger": "tsx scripts/post-trigger.ts",

@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# Block `git push` when local quality gates fail (aligned with CI, without full build).
+# Installed via: package.json "prepare" → git config core.hooksPath .githooks
+set -e
+
+root="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+cd "$root"
+
+echo "[pre-push] pnpm verify (typecheck + format:check)"
+pnpm verify
+echo "[pre-push] ok"
