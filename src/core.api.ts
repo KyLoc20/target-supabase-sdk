@@ -423,6 +423,9 @@ export interface PatchTargetPayload extends PostTargetPayload {
 export const OPTIMISTIC_LOCK_FAILED_MESSAGE =
     "[updateTargetDetails] Optimistic lock failed: target no longer matches expected state.";
 
+/** Thrown when UPDATE matched no row and the target id is gone (or no locks were used). */
+export const UPDATE_TARGET_NOT_FOUND_MESSAGE = "[updateTarget] Target not found or was deleted.";
+
 /**
  * @deprecated Use {@link updateTarget} (narrow RMW + optimistic lock) or {@link updateTargetDetails}.
  *
@@ -496,11 +499,7 @@ export interface UpdateTargetParams<D> {
     optimisticLockFilterList?: QueryFilter[];
 }
 
-export const updateTarget = async <T, D>({
-    id,
-    updateFn,
-    optimisticLockFilterList = [],
-}: UpdateTargetParams<D>) => {
+export const updateTarget = async <T, D>({ id, updateFn, optimisticLockFilterList = [] }: UpdateTargetParams<D>) => {
     const { data: currentData, error: fetchError } = await supabase.client
         .from("target")
         .select("tagList, details, extra")
@@ -554,11 +553,23 @@ export const updateTarget = async <T, D>({
         handleSupabaseError("updateTarget", error, "Failed to update target.");
     }
     if (!data) {
-        const msg =
-            optimisticLockFilterList.length > 0
-                ? OPTIMISTIC_LOCK_FAILED_MESSAGE
-                : "[updateTarget] Target not found or was deleted.";
-        throw new Error(msg);
+        if (optimisticLockFilterList.length === 0) {
+            throw new Error(UPDATE_TARGET_NOT_FOUND_MESSAGE);
+        }
+        // Empty UPDATE with locks is ambiguous: concurrent delete vs lock predicate miss.
+        // Re-SELECT by id only to disambiguate (same id, no lock filters).
+        const { data: stillThere, error: recheckError } = await supabase.client
+            .from("target")
+            .select("id")
+            .eq("id", id)
+            .maybeSingle();
+        if (recheckError) {
+            handleSupabaseError("updateTarget", recheckError, "Failed to recheck target after lock miss.");
+        }
+        if (!stillThere) {
+            throw new Error(UPDATE_TARGET_NOT_FOUND_MESSAGE);
+        }
+        throw new Error(OPTIMISTIC_LOCK_FAILED_MESSAGE);
     }
 
     return data as T;
@@ -592,7 +603,10 @@ export interface UpdateTargetDetailsParams<D> {
      * write and could not prevent concurrent overwrites. These filters become part of the UPDATE
      * WHERE clause (via `applyQueryFilters`), e.g. `{ field: "details->>status", operator: "eq", value: "TODO" }`.
      *
-     * If no row matches after UPDATE, throws "Optimistic lock failed". Empty array = update by id only.
+     * If no row matches after UPDATE:
+     * - empty locks → not-found (`UPDATE_TARGET_NOT_FOUND_MESSAGE`)
+     * - non-empty locks → re-SELECT by id; gone → not-found, still present → `OPTIMISTIC_LOCK_FAILED_MESSAGE`
+     * Empty array = update by id only.
      */
     optimisticLockFilterList?: QueryFilter[];
 }
