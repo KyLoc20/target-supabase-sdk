@@ -129,6 +129,10 @@ When heartbeat fails, the whole runner tick round is skipped (~60s per failure).
 
 All due runners failed → `warn` with `runnerKeys`. Any success → `info` with `due` / `executed`.
 
+### Parallel due runners + runtime state
+
+Due runners in one tick run concurrently (`Promise.all`). If multiple runners call `finishRunnerTick` (or any RMW on the same JSON shard), the SDK must serialize writes — see [json-state-store](../json-state-store/SKILL.md) (0.2.10+). Do **not** add per-service `finishRunnerTick` wrappers; bump SDK instead.
+
 ---
 
 ## Operations

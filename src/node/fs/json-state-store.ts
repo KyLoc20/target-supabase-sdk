@@ -1,5 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { withSerializedFileWrites } from "./file-write-queue";
 
 export type JsonStatePatch<T extends object, NK extends keyof T> = Partial<Omit<T, NK>> & {
     [K in NK]?: T[K] extends object ? Partial<T[K]> : T[K];
@@ -49,9 +51,15 @@ function mergeWithNested<T extends object>(
 async function atomicWriteJson(filePath: string, data: unknown): Promise<void> {
     await mkdir(dirname(filePath), { recursive: true });
     const content = `${JSON.stringify(data, null, 2)}\n`;
-    const tempPath = `${filePath}.${process.pid}.tmp`;
-    await writeFile(tempPath, content, "utf8");
-    await rename(tempPath, filePath);
+    JSON.parse(content);
+    const tempPath = `${filePath}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+    try {
+        await writeFile(tempPath, content, "utf8");
+        await rename(tempPath, filePath);
+    } catch (error) {
+        await unlink(tempPath).catch(() => undefined);
+        throw error;
+    }
 }
 
 /** JSON file-backed state with optional nested key merge and atomic writes. */
@@ -70,31 +78,43 @@ export function createJsonFileStateStore<T extends object, NK extends keyof T = 
         };
     }
 
-    return {
-        async read(): Promise<T> {
-            try {
-                const raw = await readFile(filePath, "utf8");
-                const parsed = JSON.parse(raw) as Partial<T>;
-                return mergeWithNested(defaultState, parsed, {}, nestedKeys);
-            } catch (error) {
-                if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-                    return mergeWithNested(defaultState, {}, {}, nestedKeys);
-                }
-                throw error;
+    async function readFromDisk(): Promise<T> {
+        try {
+            const raw = await readFile(filePath, "utf8");
+            const parsed = JSON.parse(raw) as Partial<T>;
+            return mergeWithNested(defaultState, parsed, {}, nestedKeys);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                return mergeWithNested(defaultState, {}, {}, nestedKeys);
             }
+            if (error instanceof SyntaxError) {
+                await unlink(filePath).catch(() => undefined);
+                return mergeWithNested(defaultState, {}, {}, nestedKeys);
+            }
+            throw error;
+        }
+    }
+
+    return {
+        read(): Promise<T> {
+            return readFromDisk();
         },
 
-        async write(patch: JsonStatePatch<T, NK>): Promise<T> {
-            const current = await this.read();
-            const next = touchUpdatedAt(mergeWithNested(defaultState, current, patch as Partial<T>, nestedKeys));
-            await atomicWriteJson(filePath, next);
-            return next;
+        write(patch: JsonStatePatch<T, NK>): Promise<T> {
+            return withSerializedFileWrites(filePath, async () => {
+                const current = await readFromDisk();
+                const next = touchUpdatedAt(mergeWithNested(defaultState, current, patch as Partial<T>, nestedKeys));
+                await atomicWriteJson(filePath, next);
+                return next;
+            });
         },
 
-        async reset(): Promise<T> {
-            const next = touchUpdatedAt({ ...defaultState });
-            await atomicWriteJson(filePath, next);
-            return next;
+        reset(): Promise<T> {
+            return withSerializedFileWrites(filePath, async () => {
+                const next = touchUpdatedAt({ ...defaultState });
+                await atomicWriteJson(filePath, next);
+                return next;
+            });
         },
     };
 }

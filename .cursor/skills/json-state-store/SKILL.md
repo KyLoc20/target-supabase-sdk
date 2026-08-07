@@ -83,6 +83,62 @@ data/runtime/
 
 ---
 
+## Incident: `scheduler.json` corrupted by same-slice concurrent writes (SDK ≥0.2.10 fix)
+
+### Symptoms
+
+| Signal | Typical value |
+|--------|---------------|
+| Multiple schedule runners fail same tick | `Runner 重試用盡仍失敗` |
+| Error message | `Unexpected non-whitespace character after JSON at position … (line 13 column 3)` |
+| Affected shard | `data/runtime/runtime-state/scheduler.json` only |
+| Other shards | `guard.json`, `worker.json`, etc. still valid |
+
+`readRuntimeState()` fails for every runner that reads state at tick start — error text identical across unrelated runner keys (`stat-kpi`, `scan-common:*`, `service-guard`).
+
+### Root cause chain
+
+1. **Sharding fixed cross-slice clobber (0.2.5)** — guard/worker/scheduler no longer overwrite each other's slices.
+2. **Same slice, same process, still parallel** — `TriggerManager.tick` runs all due runners via `Promise.all`. Multiple schedule runners can call `finishRunnerTick` concurrently in one scheduler process.
+3. **Unserialized RMW on one file** — each `finishRunnerTick` read-modify-writes `scheduler.json` through `createJsonFileStateStore.write()` with no per-file queue.
+4. **Shared temp path** — atomic write used `${filePath}.${process.pid}.tmp`; concurrent writers in the **same process** collide on the same temp file.
+5. **Corrupt JSON on disk** — e.g. valid object followed by stray `}\n}`; subsequent `JSON.parse` in `read()` throws and all runners fail until the shard is repaired.
+
+Sharding ≠ serialization. **One file per slice** removes cross-process cross-slice races; it does **not** remove same-process concurrent writes to the **same** shard.
+
+### Solution (SDK 0.2.10+)
+
+In `createJsonFileStateStore`:
+
+| Change | Why |
+|--------|-----|
+| **Per-`filePath` write queue** (`withSerializedFileWrites`) | Concurrent `write`/`reset` in one process run sequentially |
+| **Unique temp suffix** (`pid` + random hex) | No temp-file stomping if a queue bug regresses |
+| **Pre-rename `JSON.parse` on content** | Fail before touching target if stringify output is invalid |
+| **`SyntaxError` on read → unlink shard + defaults** | Self-heal already-corrupt shards from pre-0.2.10 races |
+
+Callers keep the same API. **Remove per-service `finishRunnerTick` wrappers** after bumping to `0.2.10+`.
+
+### Lessons learned
+
+1. **One writer per file per critical section** — cross-process sharding is necessary but not sufficient when one process parallelizes work (`Promise.all` in TriggerManager).
+2. **Do not wrap SDK fixes in each L3 service** — fix belongs in `createJsonFileStateStore`; all consumers inherit it.
+3. **Temp files must be unique per in-flight write** — `process.pid` alone is not enough inside one Node process.
+4. **Parallel due runners are intentional** — see [trigger-local-runners](../trigger-local-runners/SKILL.md); schedule runners must tolerate shared state writes via SDK serialization.
+5. **Symptom: identical JSON parse error across runner keys** — suspect a shared runtime-state shard, not individual runner business logic.
+
+### Consumer impact after 0.2.10
+
+| Service | Uses `finishRunnerTick` / scheduler shard | Fixed by SDK bump alone? |
+|---------|-------------------------------------------|---------------------------|
+| **watch-service** | Yes — many parallel schedule runners | ✅ bump + remove local wrapper |
+| **log-service** | Yes — multiple schedule runners | ✅ bump only |
+| **download-service** | Exports API; no schedule `finishRunnerTick` ticks | ✅ bump for consistency; not the primary failure mode |
+
+Any service on `createJsonFileStateStore` / `createServiceRuntimeStateStore` benefits from per-file write serialization and corrupt-shard self-heal.
+
+---
+
 ## Single-file store
 
 Use for **one writer** or custom shapes. Do **not** use one monolithic file for multi-process L3 runtime state (guard/scheduler/worker concurrent RMW).
@@ -145,6 +201,7 @@ Pair with `ServiceReadyGate` + `waitForServiceReady` — see [readiness](../read
 
 - Put multi-process L3 runtime state in one JSON file
 - Add per-service file-lock wrappers when SDK sharding exists — bump SDK instead
+- Wrap `finishRunnerTick` in service repos for concurrency — SDK 0.2.10+ serializes shard writes
 - Add a shared `_meta.json` (or any hot shared file) updated on every slice write
 - Catch all `read()` errors and return full `defaultState` on shared cross-process files
 - Read `state.json` directly from scripts — use `readRuntimeState()` or read `runtime-state/*.json`
