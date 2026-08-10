@@ -41,6 +41,12 @@ export interface LogPersistConfig {
     postTimeoutMs: number;
     /** Graceful shutdown drain ceiling */
     shutdownDrainTimeoutMs: number;
+    /** Delay before medium/slow lane flush retries after failure (fast lane uses the same interval). */
+    laneRetryIntervalMs: number;
+    /** Suppress duplicate persistLogger warn/error lines with the same message within this window. */
+    errorLogRateLimitMs: number;
+    /** Disable log-persist after this many consecutive permanent flush errors. */
+    circuitBreakerPermanentFailureThreshold: number;
 }
 
 export interface EnableLogPersistOptions {
@@ -89,6 +95,8 @@ export interface LogPersistQueueBytesStats {
 export interface LogPersistStats {
     enabled: boolean;
     draining: boolean;
+    circuitBreakerTripped: boolean;
+    permanentFailureCount: number;
     service: string | null;
     process: string | null;
     queues: LogPersistQueueStats;

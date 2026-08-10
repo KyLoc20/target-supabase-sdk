@@ -7,12 +7,17 @@ import type {
     LogPersistStats,
 } from "./log-persist.interface";
 import { computeLogBatchIdempotencyKey } from "./log-persist-batch-id";
+import { formatLogPersistError, isPermanentLogPersistError } from "./log-persist-errors";
 import { buildLogListDraft, estimateEntriesBytes, postLogBatch, takeEntriesWithinBytes } from "./log-persist-flush";
 import { registerLogPersistOffer } from "./log-persist-hook";
-import { isLogPersistInternalTopic, patchPersistLoggerScope, persistLogger } from "./log-persist-logger";
+import {
+    configurePersistLoggerRateLimit,
+    isLogPersistInternalTopic,
+    patchPersistLoggerScope,
+    persistLogger,
+} from "./log-persist-logger";
 import { heartbeatLogPersistProcess } from "./log-persist-registry";
 
-const FAST_RETRY_INTERVAL_MS = 5_000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
 function routeLane(level: LogLevel): LogPersistLane {
@@ -43,8 +48,12 @@ class LogPersist {
     private mediumDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     private slowQueueStartedAt: number | null = null;
     private fastRetryTimer: ReturnType<typeof setTimeout> | null = null;
+    private mediumRetryTimer: ReturnType<typeof setTimeout> | null = null;
+    private slowRetryTimer: ReturnType<typeof setTimeout> | null = null;
     private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private lastHeartbeatAt = 0;
+    private permanentFailureCount = 0;
+    private circuitBreakerTripped = false;
 
     private laneFlushing: Record<LogPersistLane, boolean> = {
         fast: false,
@@ -87,9 +96,12 @@ class LogPersist {
         this.processName = options.process;
         this.registryFilePath = options.registryFilePath ?? null;
         this.config = resolveLogPersistConfig(options.config);
+        configurePersistLoggerRateLimit(this.config.errorLogRateLimitMs);
         this.draining = false;
         this.shutdownPromise = null;
         this.consecutiveFailures = { fast: 0, medium: 0, slow: 0 };
+        this.permanentFailureCount = 0;
+        this.circuitBreakerTripped = false;
         this.lastError = null;
         this.lastErrorAt = null;
         this.enabled = true;
@@ -132,6 +144,7 @@ class LogPersist {
 
         persistLogger.info("log persist core disabling", this.queueSnapshot());
         this.cancelMediumDebounce();
+        this.cancelLaneRetryTimers();
         this.stopHeartbeat();
         await this.shutdown();
         persistLogger.info("log persist core disabled");
@@ -176,6 +189,8 @@ class LogPersist {
         return {
             enabled: this.enabled,
             draining: this.draining,
+            circuitBreakerTripped: this.circuitBreakerTripped,
+            permanentFailureCount: this.permanentFailureCount,
             service: this.service,
             process: this.processName,
             queues: {
@@ -274,6 +289,108 @@ class LogPersist {
     private recordLaneSuccess(lane: LogPersistLane): void {
         this.lastError = null;
         this.consecutiveFailures[lane] = 0;
+        this.permanentFailureCount = 0;
+    }
+
+    private handleLaneFlushFailure(
+        lane: LogPersistLane,
+        error: unknown,
+        scheduleRetry: () => void,
+        logMessage: string,
+        context: Record<string, unknown>,
+    ): void {
+        this.recordLaneError(lane, error);
+        const message = this.lastError ?? formatLogPersistError(error);
+
+        if (isPermanentLogPersistError(error)) {
+            this.permanentFailureCount += 1;
+            if (this.permanentFailureCount >= this.config.circuitBreakerPermanentFailureThreshold) {
+                this.tripCircuitBreaker(message);
+                return;
+            }
+        }
+
+        persistLogger.error(logMessage, {
+            ...context,
+            error: message,
+            retryInMs: this.config.laneRetryIntervalMs,
+            permanentFailureCount: this.permanentFailureCount,
+        });
+        scheduleRetry();
+    }
+
+    private tripCircuitBreaker(reason: string): void {
+        if (this.circuitBreakerTripped) {
+            return;
+        }
+        this.circuitBreakerTripped = true;
+
+        this.cancelMediumDebounce();
+        this.cancelLaneRetryTimers();
+        this.stopHeartbeat();
+
+        const dropped = this.queueSnapshot();
+        this.fastQueue = [];
+        this.fastRetryQueue = [];
+        this.mediumQueue = [];
+        this.slowQueue = [];
+        this.slowQueueStartedAt = null;
+
+        this.enabled = false;
+        registerLogPersistOffer(null);
+
+        persistLogger.error("circuit breaker tripped — log persist disabled", {
+            reason,
+            permanentFailureCount: this.permanentFailureCount,
+            threshold: this.config.circuitBreakerPermanentFailureThreshold,
+            dropped,
+        });
+    }
+
+    private cancelLaneRetryTimers(): void {
+        if (this.fastRetryTimer != null) {
+            clearTimeout(this.fastRetryTimer);
+            this.fastRetryTimer = null;
+        }
+        if (this.mediumRetryTimer != null) {
+            clearTimeout(this.mediumRetryTimer);
+            this.mediumRetryTimer = null;
+        }
+        if (this.slowRetryTimer != null) {
+            clearTimeout(this.slowRetryTimer);
+            this.slowRetryTimer = null;
+        }
+    }
+
+    private scheduleLaneRetry(lane: "fast" | "medium" | "slow", flush: () => void): void {
+        const retryMs = this.config.laneRetryIntervalMs;
+        const existing =
+            lane === "fast" ? this.fastRetryTimer : lane === "medium" ? this.mediumRetryTimer : this.slowRetryTimer;
+        if (existing != null) {
+            return;
+        }
+
+        persistLogger.warn(`${lane} flush retry scheduled`, { retryInMs: retryMs });
+        const timer = setTimeout(() => {
+            if (lane === "fast") {
+                this.fastRetryTimer = null;
+            } else if (lane === "medium") {
+                this.mediumRetryTimer = null;
+            } else {
+                this.slowRetryTimer = null;
+            }
+            persistLogger.debug(`${lane} flush retry timer fired`);
+            flush();
+        }, retryMs);
+        timer.unref?.();
+
+        if (lane === "fast") {
+            this.fastRetryTimer = timer;
+        } else if (lane === "medium") {
+            this.mediumRetryTimer = timer;
+        } else {
+            this.slowRetryTimer = timer;
+        }
     }
 
     private queueSnapshot(): Record<string, unknown> {
@@ -341,6 +458,9 @@ class LogPersist {
     }
 
     private scheduleMediumFlush(): void {
+        if (this.mediumRetryTimer != null) {
+            return;
+        }
         const { debounceMs, maxEntries, maxBytes } = this.config.medium;
         const queueBytes = estimateEntriesBytes(this.mediumQueue);
         if (this.mediumQueue.length >= maxEntries || queueBytes >= maxBytes) {
@@ -380,6 +500,9 @@ class LogPersist {
     }
 
     private scheduleSlowFlush(): void {
+        if (this.slowRetryTimer != null) {
+            return;
+        }
         const { maxEntries, maxBytes, maxAgeMs } = this.config.slow;
         const queueBytes = estimateEntriesBytes(this.slowQueue);
         const ageMs = this.slowQueueStartedAt != null ? Date.now() - this.slowQueueStartedAt : 0;
@@ -518,34 +641,23 @@ class LogPersist {
                         fastRetryRemaining: this.fastRetryQueue.length,
                     });
                 } catch (error) {
-                    this.recordLaneError("fast", error);
                     this.fastRetryQueue.push(entry);
-                    persistLogger.error("fast flush failed — queued for retry", {
-                        idempotencyKey,
-                        error: this.lastError,
-                        retryInMs: FAST_RETRY_INTERVAL_MS,
-                        fastRetryQueue: this.fastRetryQueue.length,
-                    });
-                    this.scheduleFastRetry();
+                    this.handleLaneFlushFailure(
+                        "fast",
+                        error,
+                        () => this.scheduleLaneRetry("fast", () => void this.flushFast()),
+                        "fast flush failed — queued for retry",
+                        {
+                            idempotencyKey,
+                            fastRetryQueue: this.fastRetryQueue.length,
+                        },
+                    );
                     break;
                 }
             }
         } finally {
             this.laneFlushing.fast = false;
         }
-    }
-
-    private scheduleFastRetry(): void {
-        if (this.fastRetryTimer != null) {
-            return;
-        }
-        persistLogger.warn("fast flush retry scheduled", { retryInMs: FAST_RETRY_INTERVAL_MS });
-        this.fastRetryTimer = setTimeout(() => {
-            this.fastRetryTimer = null;
-            persistLogger.debug("fast flush retry timer fired");
-            void this.flushFast();
-        }, FAST_RETRY_INTERVAL_MS);
-        this.fastRetryTimer.unref?.();
     }
 
     private async flushMedium(): Promise<void> {
@@ -601,15 +713,18 @@ class LogPersist {
                         queueRemaining: this.mediumQueue.length,
                     });
                 } catch (error) {
-                    this.recordLaneError("medium", error);
-                    persistLogger.error("medium flush failed — entries retained", {
-                        idempotencyKey,
-                        batchSize: batch.length,
-                        batchBytes,
-                        error: this.lastError,
-                        queueRemaining: this.mediumQueue.length,
-                    });
-                    this.scheduleMediumFlush();
+                    this.handleLaneFlushFailure(
+                        "medium",
+                        error,
+                        () => this.scheduleLaneRetry("medium", () => void this.flushMedium()),
+                        "medium flush failed — entries retained",
+                        {
+                            idempotencyKey,
+                            batchSize: batch.length,
+                            batchBytes,
+                            queueRemaining: this.mediumQueue.length,
+                        },
+                    );
                     break;
                 }
             }
@@ -617,7 +732,7 @@ class LogPersist {
             this.laneFlushing.medium = false;
         }
 
-        if (this.mediumQueue.length > 0 && !this.laneFlushing.medium) {
+        if (this.mediumQueue.length > 0 && !this.laneFlushing.medium && this.mediumRetryTimer == null) {
             this.scheduleMediumFlush();
         }
     }
@@ -675,15 +790,18 @@ class LogPersist {
                         queueRemaining: this.slowQueue.length,
                     });
                 } catch (error) {
-                    this.recordLaneError("slow", error);
-                    persistLogger.error("slow flush failed — entries retained", {
-                        idempotencyKey,
-                        batchSize: batch.length,
-                        batchBytes,
-                        error: this.lastError,
-                        queueRemaining: this.slowQueue.length,
-                    });
-                    this.scheduleSlowFlush();
+                    this.handleLaneFlushFailure(
+                        "slow",
+                        error,
+                        () => this.scheduleLaneRetry("slow", () => void this.flushSlow()),
+                        "slow flush failed — entries retained",
+                        {
+                            idempotencyKey,
+                            batchSize: batch.length,
+                            batchBytes,
+                            queueRemaining: this.slowQueue.length,
+                        },
+                    );
                     break;
                 }
             }
@@ -695,7 +813,7 @@ class LogPersist {
             this.laneFlushing.slow = false;
         }
 
-        if (this.slowQueue.length > 0 && !this.laneFlushing.slow) {
+        if (this.slowQueue.length > 0 && !this.laneFlushing.slow && this.slowRetryTimer == null) {
             this.scheduleSlowFlush();
         }
     }

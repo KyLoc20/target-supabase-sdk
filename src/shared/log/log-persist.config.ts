@@ -19,6 +19,9 @@ export const DEFAULT_LOG_PERSIST_CONFIG: LogPersistConfig = {
     },
     postTimeoutMs: 30_000,
     shutdownDrainTimeoutMs: 15_000,
+    laneRetryIntervalMs: 5_000,
+    errorLogRateLimitMs: 5_000,
+    circuitBreakerPermanentFailureThreshold: 3,
 };
 
 export function resolveLogPersistConfig(partial?: Partial<LogPersistConfig>): LogPersistConfig {
@@ -29,6 +32,10 @@ export function resolveLogPersistConfig(partial?: Partial<LogPersistConfig>): Lo
         slow: { ...defaults.slow, ...partial?.slow },
         postTimeoutMs: partial?.postTimeoutMs ?? defaults.postTimeoutMs,
         shutdownDrainTimeoutMs: partial?.shutdownDrainTimeoutMs ?? defaults.shutdownDrainTimeoutMs,
+        laneRetryIntervalMs: partial?.laneRetryIntervalMs ?? defaults.laneRetryIntervalMs,
+        errorLogRateLimitMs: partial?.errorLogRateLimitMs ?? defaults.errorLogRateLimitMs,
+        circuitBreakerPermanentFailureThreshold:
+            partial?.circuitBreakerPermanentFailureThreshold ?? defaults.circuitBreakerPermanentFailureThreshold,
     };
 }
 
@@ -90,6 +97,21 @@ export function logPersistConfigFromEnv(env: NodeJS.ProcessEnv = process.env): L
             "LOG_PERSIST_SHUTDOWN_DRAIN_MS",
             DEFAULT_LOG_PERSIST_CONFIG.shutdownDrainTimeoutMs,
             { env },
+        ),
+        laneRetryIntervalMs: envMs(
+            "LOG_PERSIST_LANE_RETRY_MS",
+            DEFAULT_LOG_PERSIST_CONFIG.laneRetryIntervalMs,
+            { env },
+        ),
+        errorLogRateLimitMs: envMs(
+            "LOG_PERSIST_ERROR_LOG_RATE_LIMIT_MS",
+            DEFAULT_LOG_PERSIST_CONFIG.errorLogRateLimitMs,
+            { env },
+        ),
+        circuitBreakerPermanentFailureThreshold: envInt(
+            "LOG_PERSIST_CIRCUIT_BREAKER_THRESHOLD",
+            DEFAULT_LOG_PERSIST_CONFIG.circuitBreakerPermanentFailureThreshold,
+            { env, min: 1 },
         ),
     });
 }
