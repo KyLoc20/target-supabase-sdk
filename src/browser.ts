@@ -28,7 +28,6 @@ export {
 } from "./extraction/extraction.api";
 export type { Extraction, ExtractionDetails } from "./extraction/extraction.interface";
 export { CategoryExtraction } from "./extraction/extraction.interface";
-export * from "./idea/idea.interface";
 export * from "./link/index";
 export * from "./list/index";
 export * from "./node/node.api";
