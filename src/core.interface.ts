@@ -14,6 +14,12 @@ export interface Target {
 /** Target row before persistence — no `id` or `created_at`. */
 export type TargetDraft<T extends Target> = Omit<T, "id" | "created_at">;
 
+export interface QueryFilter {
+    field: string;
+    operator: "eq" | "neq" | "in";
+    value: unknown;
+}
+
 export enum StatusCode {
     SUCCESS = 200,
     ERROR = 400,

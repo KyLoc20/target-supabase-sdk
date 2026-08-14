@@ -210,6 +210,7 @@ Build: Rollup bundles + `tsc --emitDeclarationOnly` — [rollup-library-build](.
 | `*.api.ts` | ✅ explicit | `patchClaimTask`, schemas |
 | `*-manager.ts` | ✅ curated | `TaskManager` + option/result types |
 | Infra | root `index.ts` | `supabase`, `SupabaseHolder`, `SupabaseInitializerParams` |
+| `core.schema.ts` | ✅ via `browser.ts` | `queryFilterSchema`, `postTargetPayloadSchema`, `targetDraftSchema`, `safeParseWithSchema` — see [core-schema](../core-schema/SKILL.md) |
 | `*.script-loader.ts`, `*-registry.ts`, `*.utils.ts` | ❌ | unless deliberate extension point |
 
 ---
@@ -268,6 +269,7 @@ Root `export * from "./task"` is safe **because** `task/index.ts` is already cur
 
 - [barrel-import-cycles](../barrel-import-cycles/SKILL.md) — never `import from "."` inside `src/`
 - [sdk-error-handling](../sdk-error-handling/SKILL.md) — `*.api.ts` envelope
+- [core-schema](../core-schema/SKILL.md) — `targetDraftSchema`, `safeParseWithSchema`
 - [target-draft-build](../target-draft-build/SKILL.md) — `*.build.ts` draft assembly (link/list)
 - [task-local-discovery](../task-local-discovery/SKILL.md) — task internals not in public index
 - [library-dev-scripts](../library-dev-scripts/SKILL.md) — scripts not published

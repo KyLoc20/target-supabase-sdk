@@ -8,6 +8,7 @@
 export type { SupabaseClient } from "@supabase/supabase-js";
 export * from "./core.api";
 export * from "./core.interface";
+export * from "./core.schema";
 export * from "./core.utils";
 export type {
     GetExtractionPayload,

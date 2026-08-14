@@ -98,11 +98,9 @@ export function logPersistConfigFromEnv(env: NodeJS.ProcessEnv = process.env): L
             DEFAULT_LOG_PERSIST_CONFIG.shutdownDrainTimeoutMs,
             { env },
         ),
-        laneRetryIntervalMs: envMs(
-            "LOG_PERSIST_LANE_RETRY_MS",
-            DEFAULT_LOG_PERSIST_CONFIG.laneRetryIntervalMs,
-            { env },
-        ),
+        laneRetryIntervalMs: envMs("LOG_PERSIST_LANE_RETRY_MS", DEFAULT_LOG_PERSIST_CONFIG.laneRetryIntervalMs, {
+            env,
+        }),
         errorLogRateLimitMs: envMs(
             "LOG_PERSIST_ERROR_LOG_RATE_LIMIT_MS",
             DEFAULT_LOG_PERSIST_CONFIG.errorLogRateLimitMs,

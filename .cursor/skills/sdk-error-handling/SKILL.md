@@ -64,7 +64,7 @@ const getScanRemoteRepoValuesValidated = validateWithSchema(
 )(async (payload) => { /* ... */ });
 ```
 
-Future: optional `validateWithSchemaSafe` in core that returns `{ ok, data } | { ok: false, message }` to avoid outer try/catch for Zod only.
+Future: prefer **`safeParseWithSchema`** from [core-schema](../core-schema/SKILL.md) when the caller needs `{ ok, data } | { ok: false, error }` without throw. `validateWithSchema` remains the default for `*.api.ts` envelope wrappers.
 
 ### 2. Core composition → catch → envelope
 

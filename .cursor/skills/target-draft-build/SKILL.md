@@ -114,7 +114,7 @@ Single `buildListTargetDraft(input)` — no overloads.
 | Matches `linkTargetDraftBuildInputSchema` | `buildLinkTargetDraft(item)` → Link draft in `items` |
 | Anything else | Stored in `details.items` unchanged |
 
-Schema: `linkTargetDraftBuildInputSchema` in `link.build.ts` (`.strict()` — extra keys such as `category` fail the check, so pre-built link drafts and custom shapes stay distinct when callers include `category`).
+Schema: `linkTargetDraftBuildInputSchema` in `link.build.ts` (`.strict()` — extra keys such as `category` fail the check). Cross-cutting Target/QueryFilter schemas: [core-schema](../core-schema/SKILL.md).
 
 ### Item handling
 

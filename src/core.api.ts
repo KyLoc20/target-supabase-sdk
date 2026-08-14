@@ -1,14 +1,19 @@
 import type { PostgrestFilterBuilder } from "@supabase/postgrest-js";
 import type { ZodError, ZodType } from "zod";
-import { generateResponse, type Target, type TargetDraft } from "./core.interface";
-import { BaseValidator, handleSupabaseError } from "./core.utils";
+import { generateResponse, type QueryFilter, type Target, type TargetDraft } from "./core.interface";
+import { type PostTargetPayload, postTargetPayloadSchema } from "./core.schema";
+import { type BaseValidator, handleSupabaseError } from "./core.utils";
 import { supabase } from "./supabase";
 
-export interface QueryFilter {
-    field: string;
-    operator: "eq" | "neq" | "in";
-    value: unknown;
-}
+export type { QueryFilter } from "./core.interface";
+export type { PostTargetPayload } from "./core.schema";
+export {
+    formatZodError,
+    postTargetPayloadSchema,
+    queryFilterSchema,
+    safeParseWithSchema,
+    targetDraftSchema,
+} from "./core.schema";
 
 export const MAX_TARGET_LIST_PAGE_SIZE = 100;
 
@@ -379,30 +384,16 @@ export const deleteTarget = async ({ id, filterList }: { id: string; filterList?
     return generateResponse.success();
 };
 
-export interface PostTargetPayload {
-    name: Target["name"];
-    category: Target["category"];
-    value: Target["value"];
-    tagList: Target["tagList"];
-    extra?: Target["extra"];
-    details?: Target["details"];
-}
-
-class PostTargetPayloadValidator extends BaseValidator<PostTargetPayload> {
-    protected requiredFields: (keyof PostTargetPayload)[] = ["category", "name", "value", "tagList"];
-    protected optionalFields: (keyof PostTargetPayload)[] = ["extra", "details"];
-
-    constructor() {
-        super();
-        // Add custom
-        this.addCustomValidator((_val) => {
-            return true;
-        });
+function parsePostTargetPayload(payload: unknown): PostTargetPayload {
+    const result = postTargetPayloadSchema.safeParse(payload);
+    if (!result.success) {
+        throw formatZodValidationError("PostTargetPayload", result.error);
     }
+    return result.data;
 }
 
 export const postTarget = async (payload: PostTargetPayload) => {
-    const validPayload = new PostTargetPayloadValidator().validate(payload);
+    const validPayload = parsePostTargetPayload(payload);
 
     const { data, error } = await supabase.client
         .from("target")
@@ -443,7 +434,7 @@ export const patchTarget = async ({ id, ...restPayload }: PatchTargetPayload) =>
     }
     if (fetchError) handleSupabaseError("patchTarget", fetchError, "Failed to fetch target.");
 
-    const updatedTarget = new PostTargetPayloadValidator().validate(restPayload);
+    const updatedTarget = parsePostTargetPayload(restPayload);
 
     const { data, error } = await supabase.client
         .from("target")
