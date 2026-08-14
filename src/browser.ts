@@ -28,10 +28,8 @@ export {
 export type { Extraction, ExtractionDetails } from "./extraction/extraction.interface";
 export { CategoryExtraction } from "./extraction/extraction.interface";
 export * from "./idea/idea.interface";
-export * from "./link/link.api";
-export * from "./link/link.interface";
-export * from "./list/list.api";
-export * from "./list/list.interface";
+export * from "./link/index";
+export * from "./list/index";
 export * from "./node/node.api";
 export * from "./node/node.interface";
 export type {

@@ -87,7 +87,7 @@ interface  ←  manager  ←  service  →  api  →  core.api
 | `PostParcelPayload` / `PostTargetPayload` | API | Zod-validated request body |
 | `Parcel` / `Target` | After `post*` / `get*` | Persisted row with `id`, `created_at` |
 
-Do not reintroduce per-domain `*Draft` type aliases when `TargetDraft<T>` suffices.
+Do not reintroduce per-domain `*Draft` type aliases when `TargetDraft<T>` suffices. For `link` / `list` draft **assembly** (convenience inputs → `TargetDraft`), use `*.build.ts` — see [target-draft-build](../target-draft-build/SKILL.md).
 
 ## Reference: Parcel
 
