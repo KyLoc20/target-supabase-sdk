@@ -2,7 +2,8 @@
 name: auto-chrome-task
 description: >-
   auto-chrome task and chrome-sidecar — moved to download-service. Use when implementing
-  or reviewing auto-chrome, chrome-ws-client, hub.pingBridge, or Chrome bridge issues.
+  or reviewing auto-chrome, chrome-ws-client, hub.pingBridge, openTab active retry,
+  empty prepare, or Chrome bridge issues.
   See D:/download-service/.cursor/skills/auto-chrome-task/SKILL.md for full documentation.
 ---
 

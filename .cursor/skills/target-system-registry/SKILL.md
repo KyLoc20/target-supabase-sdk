@@ -245,7 +245,7 @@ Removed: idempotent “already bound, skip register” — each startup must cla
 
 ## Checklist (new L3 service)
 
-- [ ] Add `{ serviceValue: "<name>" }` to seed slots (or ops updates Config `objects`) — e.g. `upload-service` in `DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS` + `gc-service` `system-registry.seed.json`; on live Config use `appendSystemRegistrySlots` instead of full reset  
+- [ ] Add `{ serviceValue: "<name>" }` to seed slots (or ops updates Config `objects`) — e.g. `upload-service` / `cv-service` in `DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS` + `gc-service` `system-registry.seed.json`; on live Config use `appendSystemRegistrySlots` instead of full reset  
 - [ ] Use **`createServiceHost`** or **`runSingleProcessService`**  
 - [ ] `bootstrap.ts`: **`postService` new instance** every startup  
 - [ ] **`ManagedChildProcesses`** + **`criticalSupervisors`**  
