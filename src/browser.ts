@@ -213,10 +213,13 @@ export {
     isLogBatchList,
     isLogEntry,
     LOG_BATCH_LOADER_KEY,
+    LOG_MIN_LEVEL_ENV_KEY,
     LOG_PERSIST_LOADER_KEY,
     LogLevel,
     logManager,
+    logMinLevelFromEnv,
     parseLogBatchMeta,
+    resolveLogMinLevel,
 } from "./shared/log";
 export { isHttpUrl, resolveFetchUrl } from "./shared/utils/fetch-url";
 export { getValueAtPath } from "./shared/utils/get-value-at-path";

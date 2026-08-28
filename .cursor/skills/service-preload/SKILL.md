@@ -57,6 +57,12 @@ Phase 3 — Service env defaults (SDK helpers + L3 hook)
     • RUNTIME_DATA_DIR ← options.runtimeDataDirRelative ?? "data/runtime"
   options.applyEnvDefaults?.(projectRoot)   // L3: legacy aliases, domain keys
 
+Phase 3½ — Global log min level (after env load)
+  resolveLogMinLevel({ defaultLevel: options.defaultLogMinLevel })
+  logManager.setOptions({ minLevel }) when applyLogMinLevel !== false
+    • LOG_MIN_LEVEL env: DEBUG | INFO | SUCCESS | WARN | ERROR | CRITICAL
+    • unset → options.defaultLogMinLevel ?? (DEBUG in dev, INFO in prod)
+
 Phase 4 — Cross-cutting validation
   validateLogPersistPreloadEnv() when LOG_PERSIST_ENABLED
 
@@ -74,6 +80,7 @@ Phase 5 — Process diagnostics
 ### Required: `scripts/preload.mjs`
 
 ```javascript
+import { LogLevel } from "target-supabase-sdk";
 import { runServicePreload } from "target-supabase-sdk/preload";
 
 runServicePreload({
@@ -81,6 +88,8 @@ runServicePreload({
     packageName: "watch-service",
     serviceValue: "watch-service",
     runtimeDataDirRelative: "data/runtime",
+    // optional: service-specific default when LOG_MIN_LEVEL unset
+    // defaultLogMinLevel: LogLevel.WARN,
     // optional L3:
     // afterLoadEnv: () => { ... },
     // applyEnvDefaults: (projectRoot) => { ... },
@@ -142,6 +151,7 @@ Main readiness gate unchanged: `waitForLogPersistReady({ registryFilePath, expec
 |-------------|--------|------|
 | `target-supabase-sdk/preload` | `runServicePreload` | Main entry — runs all sync phases |
 | `target-supabase-sdk/preload` | `ServicePreloadOptions` | Type (re-export or `.d.ts`) |
+| `target-supabase-sdk` | `resolveLogMinLevel`, `LOG_MIN_LEVEL_ENV_KEY` | Parse `LOG_MIN_LEVEL` (also applied in preload) |
 | `target-supabase-sdk/node` | existing env/log APIs | Used by runner implementation |
 
 ### `ServicePreloadOptions`
@@ -160,8 +170,25 @@ interface ServicePreloadOptions {
     afterLoadEnv?: () => void;
     /** L3 hook after SDK defaults (legacy aliases, etc.) */
     applyEnvDefaults?: (projectRoot: string) => void;
+    /** Default when LOG_MIN_LEVEL unset; SDK default DEBUG in dev / INFO in prod */
+    defaultLogMinLevel?: LogLevel;
+    /** Apply logManager.setOptions from env (default true) */
+    applyLogMinLevel?: boolean;
 }
 ```
+
+### `LOG_MIN_LEVEL` (.env)
+
+See SDK `.env.example`. Applied in Phase 3½ — affects **this process** console output and log-persist offers (not inbound LogBatch from other services).
+
+| Value | Rank |
+|-------|------|
+| DEBUG | lowest |
+| INFO / SUCCESS | |
+| WARN | |
+| ERROR / CRITICAL | highest |
+
+Unset: `defaultLogMinLevel` option, else DEBUG when `NODE_ENV !== production`, else INFO.
 
 ## Build layout (SDK)
 
@@ -193,6 +220,7 @@ supabase-sdk/
 | `preload-env.mjs` | Phase 2 |
 | `preload-log-persist.mjs` | Phase 3–4 |
 | `preload-diagnostics.mjs` | Phase 5 TODO (removed) |
+| manual `logManager.setOptions` in preload.mjs | Phase 3½ |
 
 ## Do not
 

@@ -1,3 +1,5 @@
+import type { LogLevel } from "../../shared/log/log-manager";
+
 export interface ServicePreloadOptions {
     /** `import.meta.url` from the service `scripts/preload.mjs`. */
     callerImportMetaUrl: string;
@@ -11,4 +13,8 @@ export interface ServicePreloadOptions {
     afterLoadEnv?: () => void;
     /** L3 hook after SDK defaults (legacy aliases, etc.). */
     applyEnvDefaults?: (projectRoot: string) => void;
+    /** Default when `LOG_MIN_LEVEL` unset; SDK default is DEBUG in dev, INFO in prod. */
+    defaultLogMinLevel?: LogLevel;
+    /** Apply `logManager.setOptions({ minLevel })` from env (default true). */
+    applyLogMinLevel?: boolean;
 }

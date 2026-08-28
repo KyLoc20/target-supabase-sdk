@@ -23,6 +23,13 @@ export {
 export type { LogEntry, LoggerWithScope, LogOptions, LogRestParams, WithScopeOptions } from "./log-manager";
 // log-manager
 export { LogLevel, LogManager, logManager } from "./log-manager";
+export type { ResolveLogMinLevelOptions } from "./log-min-level";
+// log-min-level
+export {
+    LOG_MIN_LEVEL_ENV_KEY,
+    logMinLevelFromEnv,
+    resolveLogMinLevel,
+} from "./log-min-level";
 export type { LogBatchMeta, LogPersistLane } from "./log-persist.interface";
 export { LOG_BATCH_LOADER_KEY, LOG_PERSIST_LOADER_KEY } from "./log-persist.interface";
 export type {
