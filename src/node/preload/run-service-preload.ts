@@ -1,14 +1,15 @@
 import { resolve } from "node:path";
-import { validateLogPersistPreloadEnv } from "../../shared/log/enable-log-persist";
-import { logManager } from "../../shared/log/log-manager";
-import { resolveLogMinLevel } from "../../shared/log/log-min-level";
-import { logPersistEnabledFromEnv } from "../../shared/log/log-persist.config";
+import { logManager } from "../../shared/log/core/log-manager";
+import { resolveLogMinLevel } from "../../shared/log/core/log-min-level";
+import { validateLogSpoolPreloadEnv } from "../../shared/log/spool/enable";
+import { mergeLogSpoolExtraProcessRolesEnv } from "../../shared/log/spool/process-roles";
+import { logSpoolEnabledFromEnv } from "../../shared/log/upload/env";
 import { loadEnvFiles, pinEnvProfileFromArgv } from "../env/load-env";
 import { resolveProjectRootByPackageName } from "../env/project-root";
 import type { ServicePreloadOptions } from "./service-preload.interface";
 
 function applyServiceEnvDefaults(projectRoot: string, options: ServicePreloadOptions): void {
-    if (!logPersistEnabledFromEnv()) {
+    if (!logSpoolEnabledFromEnv()) {
         return;
     }
 
@@ -21,6 +22,10 @@ function applyServiceEnvDefaults(projectRoot: string, options: ServicePreloadOpt
     if (runtimeDir == null || runtimeDir === "") {
         const relative = options.runtimeDataDirRelative ?? "data/runtime";
         process.env.RUNTIME_DATA_DIR = resolve(projectRoot, relative);
+    }
+
+    if (options.logSpoolExtraProcessRoles != null && options.logSpoolExtraProcessRoles.length > 0) {
+        mergeLogSpoolExtraProcessRolesEnv(process.env, options.logSpoolExtraProcessRoles);
     }
 }
 
@@ -56,7 +61,7 @@ export function runServicePreload(options: ServicePreloadOptions): void {
 
     applyLogMinLevelFromEnv(options);
 
-    validateLogPersistPreloadEnv();
+    validateLogSpoolPreloadEnv();
 
     // TODO: Phase 5 — optional unhandledRejection / uncaughtException formatters
     // (formerly watch-service preload-diagnostics.mjs)

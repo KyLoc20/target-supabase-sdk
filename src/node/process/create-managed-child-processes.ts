@@ -1,4 +1,4 @@
-import { createLogger } from "../../shared/log/create-logger";
+import { createLogger } from "../../shared/log/core/create-logger";
 import type { ManagedChildProcessesOptions } from "./managed-child-processes";
 import { ManagedChildProcesses } from "./managed-child-processes";
 

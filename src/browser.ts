@@ -171,6 +171,7 @@ export {
     registerServiceAtStartup,
     registrySlotRuntimePatchFromGuardResult,
     releaseSystemRegistrySlots,
+    releaseSystemRegistrySlotsByServiceId,
     resetSystemRegistryConfig,
     resetSystemRegistryConfigSchema,
     resolveActiveRegistryServiceId,

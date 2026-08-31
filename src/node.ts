@@ -122,9 +122,11 @@ export type {
 } from "./node/service-host";
 export {
     applyRegistrySlotGuardStep,
+    COLLECT_LOG_RUNNER_KEY,
     createServiceHost,
     getWorkerSpawnCooldownLastAt,
     markWorkerSpawned,
+    registerCollectLogRunner,
     registerServiceGuardRunner,
     runReadinessGate,
     runServiceGuardTick,
@@ -133,27 +135,32 @@ export {
     ServiceGuardNode,
 } from "./node/service-host";
 export { RepoManager } from "./repo/repo-manager";
+export { runCollectLogTick } from "./shared/log/spool/collector";
+export { LOG_SPOOL_SERVICE_ID_ENV } from "./shared/log/spool/config";
+export type { LogSpoolCoordinator, LogSpoolCoordinatorOptions } from "./shared/log/spool/coordinator";
+export { createLogSpoolCoordinator } from "./shared/log/spool/coordinator";
 export {
-    disableLogPersist,
-    enableLogPersist,
-    ensureLogPersistFromEnv,
-    getLogPersistStats,
-    logPersistEnabledFromEnv,
-    resolveLogPersistRegistryPath,
-    snapshotLogPersistReady,
-    validateLogPersistPreloadEnv,
-    waitForLogPersistReady,
-} from "./shared/log/enable-log-persist";
+    buildLogSpoolSpawnEnv,
+    ensureLogSpoolFromEnv,
+    getLogSpoolStats,
+    logSpoolEnabledFromEnv,
+    shutdownLogSpoolFromEnv,
+    validateLogSpoolPreloadEnv,
+} from "./shared/log/spool/enable";
 export type {
-    EnableLogPersistOptions,
-    EnsureLogPersistFromEnvOptions,
-    LogPersistLane,
-    LogPersistReadySnapshot,
-    LogPersistStats,
-    WaitForLogPersistReadyOptions,
-} from "./shared/log/log-persist.interface";
-export type { LogPersistCoordinator, LogPersistCoordinatorOptions } from "./shared/log/log-persist-coordinator";
-export { createLogPersistCoordinator } from "./shared/log/log-persist-coordinator";
+    EnableLogSpoolOptions,
+    LogSpoolCoreProcessRole,
+    LogSpoolProcessRole,
+    LogSpoolWriterStats,
+} from "./shared/log/spool/interface";
+export { resolveLogSpoolRoot } from "./shared/log/spool/paths";
+export {
+    enableLogSpoolFromEnvInChild,
+    getMainLogSpoolWriterStats,
+    isLogSpoolEnabled,
+    shutdownLogSpool,
+} from "./shared/log/spool/service-lifecycle";
+export type { LogBatchMeta, LogPersistLane } from "./shared/log/upload/interface";
 export type {
     ConfigSchema,
     LoadCachedJsConfigOptions,

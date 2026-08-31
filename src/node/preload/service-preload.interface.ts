@@ -1,4 +1,4 @@
-import type { LogLevel } from "../../shared/log/log-manager";
+import type { LogLevel } from "../../shared/log/core/log-manager";
 
 export interface ServicePreloadOptions {
     /** `import.meta.url` from the service `scripts/preload.mjs`. */
@@ -17,4 +17,6 @@ export interface ServicePreloadOptions {
     defaultLogMinLevel?: LogLevel;
     /** Apply `logManager.setOptions({ minLevel })` from env (default true). */
     applyLogMinLevel?: boolean;
+    /** Extra spool roles beyond main|guard|scheduler|worker (e.g. `chrome-sidecar`). Merged into `LOG_SPOOL_EXTRA_PROCESS_ROLES`. */
+    logSpoolExtraProcessRoles?: readonly string[];
 }

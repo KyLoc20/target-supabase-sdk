@@ -1,4 +1,4 @@
-import { isDevEnvironment } from "../../core.utils";
+import { isDevEnvironment } from "../../../core.utils";
 import { LogLevel } from "./log-manager";
 
 /** Env key for global {@link LogManager} min level (console + log-persist when enabled). */

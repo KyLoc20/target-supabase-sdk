@@ -1,3 +1,7 @@
+export {
+    COLLECT_LOG_RUNNER_KEY,
+    registerCollectLogRunner,
+} from "../../shared/log/spool/register-collect-log-runner";
 export type {
     RegisterServiceGuardRunnerOptions,
     RunReadinessGateInput,

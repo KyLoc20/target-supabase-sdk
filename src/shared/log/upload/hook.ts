@@ -1,4 +1,4 @@
-import type { LogEntry } from "./log-manager";
+import type { LogEntry } from "../core/log-manager";
 
 type LogPersistOfferFn = (entry: LogEntry) => void;
 

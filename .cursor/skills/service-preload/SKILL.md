@@ -28,11 +28,11 @@ node --import ./scripts/preload.mjs dist/index.js
 | Item | Verdict | Notes |
 |------|---------|-------|
 | Single `--import` per process | ✅ | Node supports one or more; one relative path is enough if SDK orchestrates internally |
-| Logic in SDK | ✅ | `loadEnvFiles`, `validateLogPersistPreloadEnv`, root resolve already in `/node` |
+| Logic in SDK | ✅ | `loadEnvFiles`, `validateLogSpoolPreloadEnv`, root resolve already in `/node` |
 | Service-only `preload.mjs` | ✅ | Pass `packageName` + `serviceValue` (+ optional hooks) |
 | Replace 3-file chain | ✅ | `preload-env` + `preload-log-persist` merge into SDK runner |
 | `preload-diagnostics` | ⏸️ | No active task today — **remove** from chain; leave TODO in SDK runner |
-| Async work in preload | ❌ | `initSupabaseFromStandardEnv`, `ensureLogPersistFromEnv` stay in app `main()` |
+| Async work in preload | ❌ | `initSupabaseFromStandardEnv`, `ensureLogSpoolFromEnv` stay in app `main()` |
 | Windows `--import` paths | ✅ | Service preload stays **relative** (`./scripts/preload.mjs`); SDK resolved via package exports |
 | Child spawn | ✅ | `spawnTsxChild({ preloadModules: ["./scripts/preload.mjs"] })` |
 
@@ -64,7 +64,7 @@ Phase 3½ — Global log min level (after env load)
     • unset → options.defaultLogMinLevel ?? (DEBUG in dev, INFO in prod)
 
 Phase 4 — Cross-cutting validation
-  validateLogPersistPreloadEnv() when LOG_PERSIST_ENABLED
+  validateLogSpoolPreloadEnv() when LOG_PERSIST_ENABLED
 
 Phase 5 — Process diagnostics
   // TODO: optional unhandledRejection / uncaughtException formatters
@@ -72,7 +72,7 @@ Phase 5 — Process diagnostics
 
 ─── NOT in preload (app entry, async) ───
   await initSupabaseFromStandardEnv({ root })
-  await ensureLogPersistFromEnv({ process, service, registryFilePath })
+  await ensureLogSpoolFromEnv()   // guard / scheduler / worker; main via createServiceHost after claim
 ```
 
 ## Service contract
@@ -113,37 +113,23 @@ spawnTsxChild({
 
 ### Child process env
 
-Launcher sets `LOG_PERSIST_PROCESS` per child (`guard` | `scheduler` | `worker`). Main passes `process: "main"` in `ensureLogPersistFromEnv`.
+Launcher sets `LOG_PERSIST_PROCESS` per child (`guard` | `scheduler` | `worker`). Main spool is enabled by `createServiceHost` after registry claim (`processRole: "main"`).
 
-## Log-persist registry (multi-process)
+## Log file spool (multi-process)
 
-When `LOG_PERSIST_ENABLED=true`, every process calls `ensureLogPersistFromEnv` and registers in a **shared registry directory** (default `<RUNTIME_DATA_DIR>/log-persist-registry/`). Main uses `waitForLogPersistReady` to poll until all expected processes have fresh heartbeats.
+When `LOG_PERSIST_ENABLED=true`, each process enables a **file spool writer** (`ensureLogSpoolFromEnv`). Logs buffer in memory, flush to `{RUNTIME_DATA_DIR}/log-spool/{serviceId}/{role}/*.tmp`. The **guard** uploads batches via `registerCollectLogRunner` — no cross-process registry heartbeat.
 
-### Use per-process shard files (required on Windows)
+See [log-spool](../log-spool/SKILL.md) and [`src/shared/log/README.md`](../../src/shared/log/README.md).
 
-**Do not** store all process records in one JSON file that every child read-modify-writes. `createJsonFileStateStore` uses atomic `rename(temp, target)`; concurrent writers on Windows hit `EPERM` and can lose updates.
+| Concern | Approach |
+|---------|----------|
+| Producer write | Per-process `.tmp` files (atomic `.part` → rename) |
+| Upload | Guard-only `collect-log` runner |
+| Sync tracking | `.tmp` / `.json` suffix per batch file (no central index) |
+| Child `serviceId` | `ManagedChildProcesses.spawn` auto-injects `LOG_SPOOL_SERVICE_ID` |
+| Extra roles (e.g. `chrome-sidecar`) | `runServicePreload({ logSpoolExtraProcessRoles: [...] })` or env |
 
-**Same rule applies to L3 runtime state** (`readiness`, `guard`, `scheduler`, `worker`, `registry`) — use SDK `createServiceRuntimeStateStore` (sharded under `runtime-state/` since 0.2.5). See [json-state-store](../json-state-store/SKILL.md) for the incident post-mortem.
-
-| Layout | Verdict | Notes |
-|--------|---------|-------|
-| Single `log-persist-registry.json` | ❌ | guard + scheduler register together → EPERM on Windows |
-| Directory + one shard per process | ✅ | `log-persist-registry/main.json`, `guard.json`, … — each process owns its file |
-| Single `state.json` for runtime gate | ❌ | guard/scheduler ticks wipe readiness/worker/registry |
-| `runtime-state/*.json` (one slice per file) | ✅ | SDK 0.2.5+ — each process writes its slice only |
-| Reader | Aggregate | `readLogPersistRegistry(registryDir)` merges `*.json` shards into `LogPersistRegistryState` |
-
-SDK: `defaultLogPersistRegistryPath(registryDir)` → `…/log-persist-registry` (directory). Option `registryFilePath` is the registry **root** (name kept for API stability). Legacy single `.json` path still works if explicitly passed.
-
-```text
-data/runtime/log-persist-registry/
-  main.json        ← main only writes
-  guard.json       ← guard only writes
-  scheduler.json
-  worker.json
-```
-
-Main readiness gate unchanged: `waitForLogPersistReady({ registryFilePath, expectedProcesses })`.
+**Do not** use a shared JSON registry file that all processes read-modify-write — same Windows `EPERM` lessons as [json-state-store](../json-state-store/SKILL.md). Runtime gate state uses `createServiceRuntimeStateStore` (sharded `runtime-state/*.json`).
 
 ## SDK surface (planned)
 
@@ -225,14 +211,14 @@ supabase-sdk/
 ## Do not
 
 - Put `await initSupabaseFromStandardEnv()` in preload
-- Put `await ensureLogPersistFromEnv()` in preload
+- Put `await ensureLogSpoolFromEnv()` in preload
 - Use absolute paths in `--import` on Windows
 - Duplicate `.env` parsing in service `env.ts` and preload (preload loads; app reads `process.env`)
 - Reintroduce multi-file preload chains in new services
-- Use a single shared JSON registry file for multi-process log-persist registration (use per-process shards under `log-persist-registry/` instead)
+- Use a shared JSON registry for log readiness — file spool uses per-process `.tmp` / `.json` instead
 
 ## Related skills
 
 - [env-config](../env-config/SKILL.md) — Phase 2 parsers, Phase 2b Supabase init in app
+- [log-spool](../log-spool/SKILL.md) — file spool layout and L3 integration
 - [process-spawn](../process-spawn/SKILL.md) — `preloadModules` single path
-- watch-service [node-service-build](../../../watch-service/.cursor/skills/node-service-build/SKILL.md) — esbuild + `node dist`

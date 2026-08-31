@@ -47,7 +47,7 @@ export function createServiceGuardNode(): ServiceGuardNode {
 ```typescript
 // src/processes/guard.ts
 await initSupabaseFromEnv();
-await ensureLogPersist();
+await ensureLogSpoolFromEnv();
 await createServiceGuardNode().start();
 ```
 

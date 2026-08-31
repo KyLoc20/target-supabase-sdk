@@ -1,12 +1,12 @@
 /**
  * Read side of the log-persist pipeline: decode persisted `LogBatch` Lists into
  * structured batches and flat entries. Pure and defensive — malformed rows are
- * skipped rather than thrown. Mirrors the write side in `log-persist-flush.ts`.
+ * skipped rather than thrown. Mirrors the write side in `upload/flush.ts`.
  */
 
-import type { List } from "../../list/list.interface";
-import type { LogEntry } from "./log-manager";
-import { LOG_PERSIST_LOADER_KEY, type LogBatchMeta, type LogPersistLane } from "./log-persist.interface";
+import type { List } from "../../../list/list.interface";
+import type { LogEntry } from "../core/log-manager";
+import { LOG_PERSIST_LOADER_KEY, type LogBatchMeta, type LogPersistLane } from "../upload/interface";
 
 const LANES: ReadonlySet<string> = new Set<LogPersistLane>(["fast", "medium", "slow"]);
 

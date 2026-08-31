@@ -1,6 +1,7 @@
 import type { ChildProcess } from "node:child_process";
 import { resolve } from "node:path";
 import type { LoggerWithScope } from "../../shared/log";
+import { resolveLogSpoolSpawnEnvForLabel } from "../../shared/log/spool/enable";
 import { isChildProcessRunning, spawnTsxChild } from "./process-spawn";
 
 export interface ManagedChildProcessesOptions {
@@ -80,12 +81,18 @@ export class ManagedChildProcesses {
             return { child: existing, created: false };
         }
 
+        const logSpoolEnv = resolveLogSpoolSpawnEnvForLabel(label);
+        const childEnv =
+            spawnOptions?.env != null
+                ? { ...process.env, ...logSpoolEnv, ...spawnOptions.env }
+                : { ...process.env, ...logSpoolEnv };
+
         const child = spawnTsxChild({
             projectRoot: this.projectRoot,
             entryScript,
             preloadModules: this.preloadModules,
             useTsx: spawnOptions?.useTsx ?? this.defaultUseTsx,
-            env: spawnOptions?.env != null ? { ...process.env, ...spawnOptions.env } : process.env,
+            env: childEnv,
         });
 
         child.on("exit", (code: number | null, signal: NodeJS.Signals | null) => {

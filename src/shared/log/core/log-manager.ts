@@ -1,6 +1,6 @@
-import { isDevEnvironment } from "../../core.utils";
-import { generateUniqueId } from "../utils/id.utils";
-import { offerToLogPersist } from "./log-persist-hook";
+import { isDevEnvironment } from "../../../core.utils";
+import { generateUniqueId } from "../../utils/id.utils";
+import { offerToLogPersist } from "../upload/hook";
 import { formatScopeLabels, type LoggerResetScopePatch, type LogScope, patchScope, resolveLogData } from "./log-scope";
 
 /**

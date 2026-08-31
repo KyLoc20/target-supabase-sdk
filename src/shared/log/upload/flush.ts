@@ -1,10 +1,10 @@
-import { isCreateTargetAlreadyExistsError } from "../../core.api";
-import { postLogListCreate } from "../../list/list.api";
-import { CategoryList } from "../../list/list.interface";
-import type { LogEntry } from "./log-manager";
-import type { BuildLogListDraftInput, LogListDraft } from "./log-persist.interface";
-import { LOG_PERSIST_LOADER_KEY } from "./log-persist.interface";
-import { persistLogger } from "./log-persist-logger";
+import { isCreateTargetAlreadyExistsError } from "../../../core.api";
+import { postLogListCreate } from "../../../list/list.api";
+import { CategoryList } from "../../../list/list.interface";
+import type { LogEntry } from "../core/log-manager";
+import type { BuildLogListDraftInput, LogListDraft } from "./interface";
+import { LOG_PERSIST_LOADER_KEY } from "./interface";
+import { persistLogger } from "./logger";
 
 export function estimateEntriesBytes(entries: LogEntry[]): number {
     if (entries.length === 0) {
@@ -19,6 +19,7 @@ export function estimateEntriesBytes(entries: LogEntry[]): number {
 
 export function buildLogListDraft(input: BuildLogListDraftInput): LogListDraft {
     const { service, process, lane, idempotencyKey, entries } = input;
+    // TODO: `lane` is legacy transport metadata — scheduled for removal; callers still pass a fixed value for decode compatibility.
     const first = entries[0];
     const last = entries[entries.length - 1];
 

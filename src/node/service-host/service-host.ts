@@ -1,6 +1,9 @@
 import { createLogger, type Service, ServiceRegistryError } from "../../browser";
 import { claimServiceRegistrySlot, type ServiceRegistrySession } from "../../service/registry-lifecycle";
 import type { LoggerWithScope } from "../../shared/log";
+import { LOG_SPOOL_SERVICE_ID_ENV } from "../../shared/log/spool/config";
+import { ensureLogSpoolFromEnv } from "../../shared/log/spool/enable";
+import { logSpoolEnabledFromEnv } from "../../shared/log/upload/env";
 import type { ManagedChildProcesses } from "../process/managed-child-processes";
 
 export interface ServiceHostClosable {
@@ -10,6 +13,8 @@ export interface ServiceHostClosable {
 export interface ServiceHostContext {
     service: Service;
     session: ServiceRegistrySession;
+    /** Registry instance id — same as `service.id`; children inherit via spawn env injection. */
+    serviceId: string;
 }
 
 export interface ServiceHostOptions {
@@ -23,9 +28,11 @@ export interface ServiceHostOptions {
     prepare?: () => Promise<void>;
     createInstance: () => Promise<Service | { service: Service; baseUrl?: string }>;
     onRegistryClaimed?: (ctx: ServiceHostContext) => Promise<void>;
-    startSupervisors?: () => void | Promise<void>;
+    startSupervisors?: (ctx: ServiceHostContext) => void | Promise<void>;
     waitUntilReady?: () => Promise<void>;
     startServer?: () => Promise<ServiceHostClosable>;
+    /** When true (default), enable file log spool for main after registry claim. */
+    enableLogSpoolAfterClaim?: boolean;
     /** Stop child processes and other local resources (not registry release). */
     onShutdown?: (signal: string) => Promise<void>;
 }
@@ -121,12 +128,24 @@ export function createServiceHost(options: ServiceHostOptions): ServiceHost {
             throw error;
         }
 
+        const hostCtx: ServiceHostContext = { service: session.service, session, serviceId: session.service.id };
+
         if (options.onRegistryClaimed != null) {
-            await options.onRegistryClaimed({ service: session.service, session });
+            await options.onRegistryClaimed(hostCtx);
+        }
+
+        const enableSpool = options.enableLogSpoolAfterClaim ?? true;
+        if (enableSpool && logSpoolEnabledFromEnv()) {
+            process.env[LOG_SPOOL_SERVICE_ID_ENV] = session.service.id;
+            await ensureLogSpoolFromEnv({
+                serviceId: session.service.id,
+                serviceValue: options.serviceValue,
+                processRole: "main",
+            });
         }
 
         if (options.startSupervisors != null) {
-            await options.startSupervisors();
+            await options.startSupervisors(hostCtx);
         }
 
         if (options.waitUntilReady != null) {

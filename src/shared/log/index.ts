@@ -1,16 +1,14 @@
 /**
- * Log domain public API — curated re-exports only.
+ * Log domain public API — curated re-exports only (browser-safe).
  */
 
 export type {
     CreateLoggerFromModuleInput,
     CreateLoggerFromScopeInput,
     CreateLoggerInput,
-} from "./create-logger";
-// create-logger
-export { createLogger } from "./create-logger";
-export type { DecodedLogBatch, FlatLogEntry } from "./log-batch";
-// log-batch (persisted LogBatch decode — read side of log-persist)
+} from "./core/create-logger";
+export { createLogger } from "./core/create-logger";
+export type { DecodedLogBatch, FlatLogEntry } from "./core/log-batch";
 export {
     decodeLogBatch,
     decodeLogBatchList,
@@ -19,19 +17,15 @@ export {
     isLogBatchList,
     isLogEntry,
     parseLogBatchMeta,
-} from "./log-batch";
-export type { LogEntry, LoggerWithScope, LogOptions, LogRestParams, WithScopeOptions } from "./log-manager";
-// log-manager
-export { LogLevel, LogManager, logManager } from "./log-manager";
-export type { ResolveLogMinLevelOptions } from "./log-min-level";
-// log-min-level
+} from "./core/log-batch";
+export type { LogEntry, LoggerWithScope, LogOptions, LogRestParams, WithScopeOptions } from "./core/log-manager";
+export { LogLevel, LogManager, logManager } from "./core/log-manager";
+export type { ResolveLogMinLevelOptions } from "./core/log-min-level";
 export {
     LOG_MIN_LEVEL_ENV_KEY,
     logMinLevelFromEnv,
     resolveLogMinLevel,
-} from "./log-min-level";
-export type { LogBatchMeta, LogPersistLane } from "./log-persist.interface";
-export { LOG_BATCH_LOADER_KEY, LOG_PERSIST_LOADER_KEY } from "./log-persist.interface";
+} from "./core/log-min-level";
 export type {
     CreateScopeInput,
     LoggerResetScopePatch,
@@ -39,8 +33,7 @@ export type {
     LogScopeInput,
     LogScopePatch,
     PatchScopeInput,
-} from "./log-scope";
-// log-scope
+} from "./core/log-scope";
 export {
     createScope,
     formatScopeLabels,
@@ -48,4 +41,6 @@ export {
     patchScope,
     resolveLogData,
     withModule,
-} from "./log-scope";
+} from "./core/log-scope";
+export type { LogBatchMeta, LogPersistLane } from "./upload/interface";
+export { LOG_BATCH_LOADER_KEY, LOG_PERSIST_LOADER_KEY } from "./upload/interface";

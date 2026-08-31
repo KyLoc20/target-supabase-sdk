@@ -1,4 +1,4 @@
-import { generateUniqueId } from "../utils/id.utils";
+import { generateUniqueId } from "../../utils/id.utils";
 
 /** Logger-bound scope: module + trace chain + optional labels. */
 export interface LogScope {

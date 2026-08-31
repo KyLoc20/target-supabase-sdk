@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import type { LogEntry } from "./log-manager";
-import type { LogPersistLane } from "./log-persist.interface";
+import type { LogEntry } from "../core/log-manager";
+import type { LogPersistLane } from "./interface";
 
 const BATCH_ID_VERSION = 1;
 

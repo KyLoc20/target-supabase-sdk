@@ -24,7 +24,7 @@ description: >-
 | Single-process | `runSingleProcessService` | node — log-service (TriggerNode only) |
 | Guard step | `ServiceGuardNode`, `applyRegistrySlotGuardStep` | node — guard process |
 | Child spawn | `ManagedChildProcesses`, `createManagedChildProcesses` | node — spawn/stop + critical label exit → host shutdown |
-| Log-persist gate | `createLogPersistCoordinator` | node — bind service + process list + registry path |
+| Log-persist gate | `createLogSpoolCoordinator` (optional) | node — file spool; **no** `waitForAllProcessesReady` |
 
 ---
 
@@ -41,7 +41,7 @@ createServiceHost({
   childProcesses,
   criticalSupervisors: ["guard"],
 
-  prepare: async () => { /* reset state, initSupabase, log-persist */ },
+  prepare: async () => { /* reset state, initSupabase */ },
   createInstance: async () => {
     bootstrapResult = await bootstrap(port);
     return bootstrapResult; // { service, baseUrl, ... }
@@ -52,7 +52,7 @@ createServiceHost({
   startSupervisors: () => { spawnGuard(); spawnScheduler(); },
   waitUntilReady: async () => { await waitForServiceReady(...); },
   startServer: async () => { /* express listen → { close } */ },
-  onShutdown: async () => { await stopChildProcesses(); await shutdownLogPersist(); },
+  onShutdown: async () => { await stopChildProcesses(); await shutdownLogSpoolFromEnv(); },
 }).run();
 ```
 
@@ -65,7 +65,7 @@ import { projectRoot } from "../env";
 export const childProcesses = createManagedChildProcesses({ projectRoot });
 ```
 
-Launcher spawns via `childProcesses.spawn(label, script, { env: { LOG_PERSIST_PROCESS: label } })`.
+Launcher spawns via `childProcesses.spawn(label, script)` — when main has set `LOG_SPOOL_SERVICE_ID` after registry claim, spawn **auto-injects** `LOG_SPOOL_SERVICE_ID` + `LOG_PERSIST_PROCESS` for labels `main|guard|scheduler|worker`. Explicit `buildLogSpoolSpawnEnv` is optional.
 
 ---
 
@@ -157,6 +157,6 @@ Expose top-level `registry` + include `runtime.registry.slotOwned !== false` in 
 
 - [service-guard](../service-guard/SKILL.md) — guard process API
 - [target-system-registry](../target-system-registry/SKILL.md) — slot semantics
-- [service-preload](../service-preload/SKILL.md) — preload + log-persist registry
+- [log-spool](../log-spool/SKILL.md) — file spool + guard collect-log
 - [json-state-store](../json-state-store/SKILL.md) — sharded runtime state + Windows RMW pitfall
 - [node-service-build](../../../watch-service/.cursor/skills/node-service-build/SKILL.md) — esbuild dist entries

@@ -122,11 +122,15 @@ Seed / add / release / reset scripts and Web UI are maintained in **gc-service**
 # gc-service repo
 pnpm seed:system-registry
 pnpm seed:system-registry -- --add gc-service
-pnpm seed:system-registry -- --release watch-service
+pnpm seed:system-registry -- --release <serviceId-uuid>
 pnpm reset:system-registry -- --yes
 ```
 
-Web: `http://<gc-service-host>:3400/ui/registry`
+Web: `http://<gc-service-host>:3400/ui/gc/registry`
+
+Release uses **`serviceId`** (runtime Service row UUID), not `serviceValue` — supports multiple slots with the same logical name.
+
+SDK API: `releaseSystemRegistrySlotsByServiceId({ serviceIds })`.
 
 Programmatic seed from any consumer:
 
@@ -186,7 +190,7 @@ unregisterServiceAtShutdown({ service })  // best-effort; never throws — use i
 | Single-process TriggerNode (log-service) | `TriggerNode({ beforeProcessExit })` | hook → `unregisterServiceAtShutdown` |
 | Startup failure after claim | `main().catch` when register succeeded | `unregisterServiceAtShutdown` |
 
-Shutdown order (multi-process): `server.close` → stop children → **unregister** → log-persist shutdown → `process.exit`.
+Shutdown order (multi-process): `server.close` → stop children → **unregister** → `shutdownLogSpool()` → `process.exit`.
 
 ---
 
