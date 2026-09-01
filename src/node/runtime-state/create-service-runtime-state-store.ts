@@ -58,11 +58,22 @@ function createDefaultServiceRuntimeState<TExtraSlices extends Record<string, ob
         lastDecision: null,
         lastSpawnAt: null,
         spawnCount: 0,
+        mode: "healthy",
+        silentEnteredAt: null,
+        silentLastHeartbeatAt: null,
+        silentBackoffMs: 0,
+        silentConsecutiveFailures: 0,
+        silentRecoveryAttempt: 0,
+        silentEvents: [],
     };
     const scheduler: SchedulerRuntimeSlice = {
         lastTickAt: null,
         lastPostedCount: 0,
         lastFired: {},
+        pid: null,
+        spawnedAt: null,
+        ready: false,
+        readyAt: null,
     };
     const worker: WorkerRuntimeSlice = {
         pid: null,

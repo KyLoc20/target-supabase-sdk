@@ -15,12 +15,24 @@ export interface GuardRuntimeSlice {
     lastDecision: string | null;
     lastSpawnAt: string | null;
     spawnCount: number;
+    /** `healthy` when omitted (legacy shards). Silent: heartbeat-only wait. Recovering: respawn business nodes. */
+    mode: "healthy" | "silent" | "recovering";
+    silentEnteredAt: string | null;
+    silentLastHeartbeatAt: string | null;
+    silentBackoffMs: number;
+    silentConsecutiveFailures: number;
+    silentRecoveryAttempt: number;
+    silentEvents: { at: string; type: string; detail?: string }[];
 }
 
 export interface SchedulerRuntimeSlice {
     lastTickAt: string | null;
     lastPostedCount: number;
     lastFired: Record<string, string>;
+    pid: number | null;
+    spawnedAt: string | null;
+    ready: boolean;
+    readyAt: string | null;
 }
 
 export interface WorkerRuntimeSlice {

@@ -1,9 +1,10 @@
 ---
 name: process-spawn
 description: >-
-  Node child-process spawn utilities in target-supabase-sdk/node: buildNodeImportArgs,
-  spawnTsxChild, ManagedChildProcesses. Use when implementing service main/supervisor/worker
-  launchers, Windows-safe --import paths, or graceful SIGTERM/SIGKILL shutdown.
+  Node child-process spawn utilities in target-supabase-sdk/node: createL3ChildLauncher,
+  ManagedChildProcesses, buildNodeImportArgs, spawnTsxChild. Use when implementing
+  L3 launchers (main→guard; guard→scheduler+worker), Windows-safe --import paths,
+  extraPids shutdown, or graceful SIGTERM/SIGKILL.
 ---
 
 # Process spawn (target-supabase-sdk/node)
@@ -12,6 +13,8 @@ description: >-
 
 ```typescript
 import {
+  createL3ChildLauncher,
+  createManagedChildProcesses,
   buildNodeImportArgs,
   spawnTsxChild,
   isChildProcessRunning,
@@ -25,7 +28,7 @@ import {
 |-------|----------|----------|
 | **L1** | SDK `process-spawn.ts` | `--import` argv, `spawnTsxChild` |
 | **L2** | SDK `ManagedChildProcesses` | label registry, dedupe, `stopAll` |
-| **L3** | Each service `launcher.ts` | script paths, `writeRuntimeState`, spawn-owner rules |
+| **L3** | SDK `createL3ChildLauncher` + each service `launcher.ts` | Guard-owned scheduler+worker; main-owned Guard; service extras (chrome-sidecar) stay local |
 
 ## Windows `--import` rule
 
@@ -56,13 +59,30 @@ await children.stopAll({ extraPids: [orphanWorkerPid] });
 | `getRunning(label)` | Running child or null |
 | `stopAll({ extraPids })` | SIGTERM tracked children → grace → SIGKILL; then SIGTERM extra PIDs |
 
-## Reference implementation
+## L3 launcher (`createL3ChildLauncher`)
 
-`storage-service/src/processes/launcher.ts` — L3 wrapper over SDK.
+```typescript
+import { createL3ChildLauncher } from "target-supabase-sdk/node";
+
+export const {
+  spawnGuard,
+  spawnBusinessNodes,
+  stopBusinessNodes,
+  isBusinessReady,
+  stopChildProcesses,
+} = createL3ChildLauncher({
+  childProcesses,
+  readRuntimeState,
+  writeRuntimeState,
+  // spawnEnv: optional; default sets LOG_PERSIST_PROCESS from the spawn label
+});
+```
+
+`stopBusinessNodes` runs in the **Guard** process. `stopChildProcesses` is main shutdown (`extraPids` for Guard-spawned PIDs). download-service keeps `spawnChromeSidecar` in `launcher.ts` (main-owned).
 
 ## Do not
 
 - Share one `ManagedChildProcesses` across main and supervisor processes
 - Put service-specific `state.json` schema inside SDK
-- Spawn worker from main when supervisor owns spawn (storage-service rule)
-- Forget `extraPids` from cross-process state on shutdown — see storage-service skill `process-ipc`
+- Spawn worker from main when Guard owns spawn
+- Forget `extraPids` on main shutdown for Guard-spawned scheduler/worker PIDs (read from runtime-state)

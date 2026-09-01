@@ -2,10 +2,10 @@ import { z } from "zod";
 import { createTarget, type QueryFilter, updateTargetDetails, validateWithSchema } from "../core.api";
 import { generateResponse } from "../core.interface";
 import { createLogger } from "../shared/log";
+import { LOG_TOPIC_NODE } from "./node.constant";
 import { CategoryNode, type Node, type NodeDetails, NodeStatus } from "./node.interface";
 
 const NODE_STATUS_FIELD = "details->>status" as const;
-const LOG_TOPIC_NODE = "node";
 
 const nodeIdSchema = z.string().trim().min(1);
 const traceIdSchema = z.string().trim().min(1).optional();

@@ -1,10 +1,12 @@
-import { createLogger, type Service, ServiceRegistryError } from "../../browser";
-import { claimServiceRegistrySlot, type ServiceRegistrySession } from "../../service/registry-lifecycle";
-import type { LoggerWithScope } from "../../shared/log";
+import { ServiceRegistryError } from "../../service/registry.service";
+import type { ServiceRegistrySession } from "../../service/registry-lifecycle";
+import type { Service } from "../../service/service.interface";
+import { createLogger, type LoggerWithScope } from "../../shared/log";
 import { LOG_SPOOL_SERVICE_ID_ENV } from "../../shared/log/spool/config";
 import { ensureLogSpoolFromEnv } from "../../shared/log/spool/enable";
 import { logSpoolEnabledFromEnv } from "../../shared/log/upload/env";
 import type { ManagedChildProcesses } from "../process/managed-child-processes";
+import { claimRegistrySlotOrExit } from "./claim-registry-slot";
 
 export interface ServiceHostClosable {
     close: () => Promise<void>;
@@ -112,21 +114,12 @@ export function createServiceHost(options: ServiceHostOptions): ServiceHost {
             await options.prepare();
         }
 
-        try {
-            session = await claimServiceRegistrySlot({
-                serviceValue: options.serviceValue,
-                createInstance: async () => unwrapService(await options.createInstance()),
-            });
-        } catch (error) {
-            if (error instanceof ServiceRegistryError && error.code === "SERVICE_SLOTS_FULL") {
-                logger.critical("No EMPTY registry slot — refusing to start", {
-                    topic: logTopic,
-                    data: { serviceValue: options.serviceValue, code: error.code },
-                });
-                process.exit(1);
-            }
-            throw error;
-        }
+        session = await claimRegistrySlotOrExit({
+            serviceValue: options.serviceValue,
+            createInstance: async () => unwrapService(await options.createInstance()),
+            logger,
+            logTopic,
+        });
 
         const hostCtx: ServiceHostContext = { service: session.service, session, serviceId: session.service.id };
 

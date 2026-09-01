@@ -70,7 +70,7 @@ await waitForServiceReady(gate, { timeoutMs: 180_000, logger });
 
 `storage-service/src/processes/readiness.ts` — L3 checks + gate over sharded runtime state (`readRuntimeState()`).
 
-See [json-state-store](../json-state-store/SKILL.md) — gate reads `readiness` + `worker` slices; monolithic `state.json` caused silent wipes pre-0.2.5.
+See [json-state-store](../json-state-store/SKILL.md) — L3 `ServiceReadyGate` is `readiness.passed && worker.ready && scheduler.ready`. Do not omit `scheduler.ready` (all six L3 services have a scheduler process, including noop). Monolithic `state.json` caused silent wipes pre-0.2.5.
 
 ## Do not
 

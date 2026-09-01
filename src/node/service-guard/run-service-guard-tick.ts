@@ -1,5 +1,8 @@
-import { CategoryNode, evaluateBusyNodeLiveness, type Node, patchServiceRuntime, scanTargetList } from "../../browser";
-import { applyRegistrySlotGuardStep } from "../service-host/registry-slot-guard-step";
+import { scanTargetList } from "../../core.api";
+import { patchServiceRuntime } from "../../service/registry.service";
+import { CategoryNode, type Node } from "../node.interface";
+import { evaluateBusyNodeLiveness } from "../node-liveness";
+import { applyRegistrySlotGuardStep } from "./registry-slot-guard-step";
 import type { ServiceGuardTickInput, ServiceGuardTickResult } from "./service-guard.interface";
 import { getWorkerSpawnCooldownLastAt, markWorkerSpawned } from "./worker-spawn-cooldown";
 

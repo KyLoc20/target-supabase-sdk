@@ -4,8 +4,8 @@ description: >-
   JSON file-backed cross-process state for target-supabase-sdk/node:
   createJsonFileStateStore with nested key merge and atomic writes;
   createServiceRuntimeStateStore with per-slice sharding for L3 services.
-  Use when implementing runtime state, diagnosing readiness/worker gate failures,
-  or choosing shard vs monolithic JSON layout for multi-process Node services.
+  Use when implementing runtime state, diagnosing readiness/worker/scheduler gate failures,
+  Guard silent `mode` shards, or choosing shard vs monolithic JSON layout for multi-process Node services.
 ---
 
 # JSON state store (target-supabase-sdk/node)

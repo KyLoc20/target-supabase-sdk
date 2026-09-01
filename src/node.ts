@@ -25,9 +25,6 @@ export {
     envProfileFromProcess,
     initSupabaseFromStandardEnv,
     loadEnvFiles,
-    parseEnvFile,
-    parseEnvLine,
-    pinEnvProfileFromArgv,
     publicBaseUrlFromEnv,
     readEnv,
     requireEnv,
@@ -77,6 +74,7 @@ export type {
     ReadinessCheckResult,
     ReadinessReport,
     RequiredEnvCheckOptions,
+    RunReadinessGateInput,
     ServiceReadyGate,
     ServiceReadySnapshot,
     SupabaseReachableCheckOptions,
@@ -88,6 +86,7 @@ export {
     createSupabaseReachableCheck,
     pollUntil,
     runReadinessChecks,
+    runReadinessGate,
     waitForServiceReady,
 } from "./node/readiness";
 export type {
@@ -109,10 +108,24 @@ export type {
     ApplyRegistrySlotGuardInput,
     ApplyRegistrySlotGuardResult,
     RegisterServiceGuardRunnerOptions,
-    RunReadinessGateInput,
     ServiceGuardNodeOptions,
     ServiceGuardTickInput,
     ServiceGuardTickResult,
+} from "./node/service-guard";
+export {
+    applyRegistrySlotGuardStep,
+    guardRetryAfterSec,
+    isGuardAvailable,
+    markWorkerSpawned,
+    registerServiceGuardRunner,
+    runServiceGuardTick,
+    SERVICE_GUARD_RUNNER_KEY,
+    ServiceGuardNode,
+} from "./node/service-guard";
+export type {
+    CreateL3ChildLauncherOptions,
+    L3ChildLauncher,
+    L3ChildLauncherRuntimeStore,
     ServiceHost,
     ServiceHostClosable,
     ServiceHostContext,
@@ -120,20 +133,7 @@ export type {
     SingleProcessServiceContext,
     SingleProcessServiceOptions,
 } from "./node/service-host";
-export {
-    applyRegistrySlotGuardStep,
-    COLLECT_LOG_RUNNER_KEY,
-    createServiceHost,
-    getWorkerSpawnCooldownLastAt,
-    markWorkerSpawned,
-    registerCollectLogRunner,
-    registerServiceGuardRunner,
-    runReadinessGate,
-    runServiceGuardTick,
-    runSingleProcessService,
-    SERVICE_GUARD_RUNNER_KEY,
-    ServiceGuardNode,
-} from "./node/service-host";
+export { createL3ChildLauncher, createServiceHost, runSingleProcessService } from "./node/service-host";
 export { RepoManager } from "./repo/repo-manager";
 export { runCollectLogTick } from "./shared/log/spool/collector";
 export { LOG_SPOOL_SERVICE_ID_ENV } from "./shared/log/spool/config";
@@ -154,6 +154,10 @@ export type {
     LogSpoolWriterStats,
 } from "./shared/log/spool/interface";
 export { resolveLogSpoolRoot } from "./shared/log/spool/paths";
+export {
+    COLLECT_LOG_RUNNER_KEY,
+    registerCollectLogRunner,
+} from "./shared/log/spool/register-collect-log-runner";
 export {
     enableLogSpoolFromEnvInChild,
     getMainLogSpoolWriterStats,
@@ -177,7 +181,6 @@ export {
     resolvePathFromCwd,
     toFileImportHref,
 } from "./shared/utils/config-path.utils";
-export { getValueAtPath } from "./shared/utils/get-value-at-path";
 export type {
     BootstrapLocalTasksResult,
     BootstrapLocalTasksStatus,

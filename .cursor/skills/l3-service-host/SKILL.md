@@ -1,17 +1,18 @@
 ---
 name: l3-service-host
 description: >-
-  Reusable L3 service startup via target-supabase-sdk: claimServiceRegistrySlot,
-  createServiceHost (multi-process), runSingleProcessService (log-service style),
-  ManagedChildProcesses + critical supervisor exit, applyRegistrySlotGuardStep.
-  Use when adding or migrating watch/download/storage/log services off duplicated index.ts boilerplate.
+  Reusable L3 service startup via target-supabase-sdk: createServiceHost,
+  createL3ChildLauncher (main→guard; guard→scheduler+worker), claimServiceRegistrySlot,
+  ManagedChildProcesses + criticalSupervisors ["guard"], applyRegistrySlotGuardStep.
+  Blueprint: watch-service. Use when adding or migrating L3 services, wiring spawn/stop,
+  or reviewing runSingleProcessService (non-L3 one-process tools only).
 ---
 
 # L3 service host (target-supabase-sdk)
 
 ## One-line rule
 
-**Registry claim/release lives in the SDK; each L3 service only supplies bootstrap, guard/scheduler/worker processes, readiness, and Express routes.**
+**Registry claim/release and child spawn live in the SDK; each L3 service supplies bootstrap, Guard/scheduler/worker entries, readiness, and Express routes.**
 
 ---
 
@@ -20,11 +21,11 @@ description: >-
 | Layer | Export | Role |
 |-------|--------|------|
 | Registry lifecycle | `claimServiceRegistrySlot`, `runRegistrySlotGuardCheck`, `RegistrySlotRuntimeState` | browser — preflight, claim, orphan cleanup |
-| Multi-process host | `createServiceHost` | node — main index.ts for watch / download / storage |
-| Single-process | `runSingleProcessService` | node — log-service (TriggerNode only) |
-| Guard step | `ServiceGuardNode`, `applyRegistrySlotGuardStep` | node — guard process |
-| Child spawn | `ManagedChildProcesses`, `createManagedChildProcesses` | node — spawn/stop + critical label exit → host shutdown |
-| Log-persist gate | `createLogSpoolCoordinator` (optional) | node — file spool; **no** `waitForAllProcessesReady` |
+| Multi-process host | `createServiceHost` | node — main `index.ts` for all L3 services (watch/log/upload/gc/cv/download) |
+| Child launcher | `createL3ChildLauncher`, `ManagedChildProcesses` | node — main→guard; Guard→scheduler+worker; extras (chrome-sidecar) stay local |
+| Single-process | `runSingleProcessService` | node — optional non-L3 one-process tools (**not** log-service; log is four-process) |
+| Guard step | `ServiceGuardNode`, `applyRegistrySlotGuardStep` | node — guard process; silent on heartbeat loss |
+| Log spool | `enableLogSpoolFromEnvInChild`, `shutdownLogSpool` | node — file spool; **no** `waitForAllProcessesReady` |
 
 ---
 
@@ -49,7 +50,7 @@ createServiceHost({
   onRegistryClaimed: async ({ service }) => {
     await writeRuntimeState({ registry: createClaimedRegistrySlotRuntimeState(service) });
   },
-  startSupervisors: () => { spawnGuard(); spawnScheduler(); },
+  startSupervisors: () => { spawnGuard(); },
   waitUntilReady: async () => { await waitForServiceReady(...); },
   startServer: async () => { /* express listen → { close } */ },
   onShutdown: async () => { await stopChildProcesses(); await shutdownLogSpoolFromEnv(); },
@@ -65,11 +66,30 @@ import { projectRoot } from "../env";
 export const childProcesses = createManagedChildProcesses({ projectRoot });
 ```
 
+```typescript
+// src/processes/launcher.ts
+import { createL3ChildLauncher } from "target-supabase-sdk/node";
+
+export const {
+  spawnGuard,
+  spawnBusinessNodes,
+  stopBusinessNodes,
+  isBusinessReady,
+  stopChildProcesses,
+} = createL3ChildLauncher({ childProcesses, readRuntimeState, writeRuntimeState });
+```
+
 Launcher spawns via `childProcesses.spawn(label, script)` — when main has set `LOG_SPOOL_SERVICE_ID` after registry claim, spawn **auto-injects** `LOG_SPOOL_SERVICE_ID` + `LOG_PERSIST_PROCESS` for labels `main|guard|scheduler|worker`. Explicit `buildLogSpoolSpawnEnv` is optional.
 
 ---
 
+L3 services always use **`createServiceHost` + `createL3ChildLauncher`**. Blueprint: [watch-service](../../../watch-service/.cursor/skills/watch-service/SKILL.md).
+
+---
+
 ## Single-process template (`runSingleProcessService`)
+
+Not the L3 default. Use only for a one-process tool that still needs a registry slot. **log-service is multi-process** (`createServiceHost`).
 
 ```typescript
 runSingleProcessService({
@@ -116,9 +136,9 @@ Cross-process gate: **`createServiceRuntimeStateStore`** (SDK 0.2.5+) — **one 
 
 | Slice | Typical writer |
 |-------|----------------|
-| `readiness` | main (readiness runner) |
-| `guard` | guard process |
-| `scheduler` | scheduler (`finishRunnerTick`) |
+| `readiness` | guard (`runReadinessGate` before spawn) |
+| `guard` | Guard process (`mode` / `silent*` included) |
+| `scheduler` | launcher pid + scheduler `ready` / `finishRunnerTick` |
 | `worker` | worker process |
 | `registry` | main (`onRegistryClaimed`) + guard slot checks |
 | `pipeline` (log-service) | runners via `extraDefaults` |
@@ -141,7 +161,8 @@ registry: RegistrySlotRuntimeState; // default { ...EMPTY_REGISTRY_SLOT_RUNTIME_
 ```
 
 Guard runner writes `slotOwned` / `lastSlotCheckAt` via `applyRegistrySlotGuardStep`.
-Guard process state lives in the `guard` slice (`lastCheckAt`, `lastDecision`, `lastSpawnAt`, `spawnCount`).
+Guard process state lives in the `guard` slice (`lastCheckAt`, `lastDecision`, `lastSpawnAt`, `spawnCount`, `mode` / `silent*`).
+Scheduler slice includes `pid` / `ready` / `readyAt` (written by the scheduler process).
 
 **Do not** use monolithic `state.json` with multi-process RMW — see [json-state-store](../json-state-store/SKILL.md).
 
@@ -149,14 +170,20 @@ Guard process state lives in the `guard` slice (`lastCheckAt`, `lastDecision`, `
 
 ## Observability
 
-Expose top-level `registry` + include `runtime.registry.slotOwned !== false` in `ok`.
+- Docker **`/health*`**: local process liveness (`readiness.passed` + registry). Stay **200** in silent mode so the container is not restarted.
+- **`/observability`**: include `isGuardAvailable(runtime.guard)` in `ok`; tolerate scan failure when offline.
+- Business routes: **503** + `Retry-After` from `guardRetryAfterSec` while silent.
+
+See [guard-silent-mode](../guard-silent-mode/SKILL.md).
 
 ---
 
 ## Related skills
 
 - [service-guard](../service-guard/SKILL.md) — guard process API
+- [guard-silent-mode](../guard-silent-mode/SKILL.md) — silent mode + spawn ownership
 - [target-system-registry](../target-system-registry/SKILL.md) — slot semantics
 - [log-spool](../log-spool/SKILL.md) — file spool + guard collect-log
+- [process-spawn](../process-spawn/SKILL.md) — `ManagedChildProcesses`, extraPids
 - [json-state-store](../json-state-store/SKILL.md) — sharded runtime state + Windows RMW pitfall
 - [node-service-build](../../../watch-service/.cursor/skills/node-service-build/SKILL.md) — esbuild dist entries

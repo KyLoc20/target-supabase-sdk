@@ -12,6 +12,8 @@ export {
     createSupabaseReachableCheck,
 } from "./readiness-checks";
 export { runReadinessChecks } from "./run-readiness-checks";
+export type { RunReadinessGateInput } from "./run-readiness-gate";
+export { runReadinessGate } from "./run-readiness-gate";
 export type {
     ServiceReadyGate,
     ServiceReadySnapshot,

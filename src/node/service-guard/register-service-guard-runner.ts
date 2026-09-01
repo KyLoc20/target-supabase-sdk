@@ -60,5 +60,3 @@ export function registerServiceGuardRunner(options: RegisterServiceGuardRunnerOp
         fn: (ctx) => runServiceGuardRunner(ctx, options),
     });
 }
-
-export { SERVICE_GUARD_RUNNER_KEY };

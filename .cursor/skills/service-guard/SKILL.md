@@ -1,7 +1,16 @@
+---
+name: service-guard
+description: >-
+  ServiceGuardNode for L3 services on target-supabase-sdk: readiness gate,
+  spawnBusinessNodes (scheduler+worker), registry slot, TaskNode liveness,
+  silent mode, isGuardAvailable / guardRetryAfterSec. Blueprint: watch-service.
+  Use when wiring src/processes/service-guard.ts or reviewing guard ticks.
+---
+
 # ServiceGuardNode (target-supabase-sdk/node)
 
-Reusable L3 **guard process** — readiness gate, TaskNode spawn owner, registry slot
-check, TaskNode liveness, Service runtime heartbeat.
+Reusable L3 **guard process** — readiness gate, business-node spawn owner, registry slot
+check, TaskNode liveness, Service runtime heartbeat, silent mode on network loss.
 
 ## Import
 
@@ -11,12 +20,24 @@ import {
   registerServiceGuardRunner,
   runServiceGuardTick,
   runReadinessGate,
+  isGuardAvailable,
+  guardRetryAfterSec,
   SERVICE_GUARD_RUNNER_KEY,
-  markWorkerSpawned,
 } from "target-supabase-sdk/node";
 ```
 
-Location: `src/node/service-guard/`
+Location: `src/node/service-guard/` (`runReadinessGate` lives in `src/node/readiness/`).
+
+`ServiceGuardNode.create` registers the guard + collect-log runners, then on bootstrap runs the readiness gate and **`spawnBusinessNodes`**. Worker spawn cooldown is recorded automatically — do not pass `spawnWorker` inside `guardRunner`.
+
+```typescript
+import { createL3ChildLauncher } from "target-supabase-sdk/node";
+```
+
+`spawnBusinessNodes` / `stopBusinessNodes` / `isBusinessReady` come from `createL3ChildLauncher` — do not hand-roll in the service.
+
+Silent mode, spawn ownership, and HTTP liveness vs readiness: [guard-silent-mode](../guard-silent-mode/SKILL.md).
+Blueprint: [watch-service](../../../watch-service/.cursor/skills/watch-service/SKILL.md).
 
 ## Per-service wiring (blueprint)
 
@@ -28,15 +49,16 @@ export function createServiceGuardNode(): ServiceGuardNode {
     logTopic: "guard",
     readinessChecks: guardReadinessChecks,
     onReadinessReport: persistReadinessReport,
-    spawnWorker: spawnTaskWorker,
-    onWorkerSpawned: markWorkerSpawned,
+    spawnBusinessNodes,
+    stopBusinessNodes,
+    isBusinessReady,
+    businessReadyTimeoutMs: startupReadyTimeoutMs(),
     guardRunner: {
       getServiceId: async () => (await readRuntimeState()).registry.serviceId,
       intervalMs: guardCheckIntervalMs(),
       initialDelayMs: guardStartupGraceMs(),
       taskNodeStaleMs: taskNodeStaleMs(),
       workerSpawnCooldownMs: workerSpawnCooldownMs(),
-      spawnWorker: spawnTaskWorker,
       onRegistryPatch: (patch) => writeRuntimeState({ registry: patch }),
       onGuardPatch: (patch) => writeRuntimeState({ guard: patch }),
     },
@@ -47,7 +69,7 @@ export function createServiceGuardNode(): ServiceGuardNode {
 ```typescript
 // src/processes/guard.ts
 await initSupabaseFromEnv();
-await ensureLogSpoolFromEnv();
+await enableLogSpoolFromEnvInChild();
 await createServiceGuardNode().start();
 ```
 
@@ -59,11 +81,13 @@ Reference implementations: **watch-service**, **log-service** (`src/processes/se
 |-------|--------|
 | `nodeId` | service-guard runner |
 | `lastCheckAt` | service-guard runner |
-| `lastDecision` | service-guard runner (`idle`, `slot_ok`, `healthy`, `spawn_worker`, …) |
+| `lastDecision` | service-guard runner (`idle`, `slot_ok`, `healthy`, `spawn_worker`, `silent:…`, `recover_ok`, …) |
 | `lastSpawnAt` | launcher on worker spawn |
 | `spawnCount` | launcher on worker spawn |
+| `mode` | Guard (`healthy` / `silent` / `recovering`) |
+| `silent*` | Guard while unavailable (backoff, events) |
 
-Do **not** use `supervisor` — unified name is `guard`.
+Scheduler slice also has `pid` / `ready` / `readyAt` (worker-shaped). Do **not** use `supervisor` — unified name is `guard`.
 
 ## API layers
 
@@ -72,7 +96,8 @@ Do **not** use `supervisor` — unified name is `guard`.
 | `runReadinessGate` | checks → callback → fail-fast |
 | `runServiceGuardTick` | one runner tick (slot + liveness + heartbeat) |
 | `registerServiceGuardRunner` | TriggerManager registration |
-| `ServiceGuardNode.create` | readiness + spawn worker + registered runner |
+| `ServiceGuardNode.create` | readiness + spawn business nodes + registered runner |
+| `isGuardAvailable` / `guardRetryAfterSec` | HTTP availability |
 
 Default runner key: `SERVICE_GUARD_RUNNER_KEY` (`"service-guard"`).
 
@@ -89,5 +114,6 @@ L3 consumer services must **not** add global DOING reclaim schedulers; wait for 
 
 ## Related
 
+- [guard-silent-mode](../guard-silent-mode/SKILL.md) — silent + spawn ownership
 - [l3-service-host](../l3-service-host/SKILL.md)
 - [watch-service](../../../watch-service/.cursor/skills/watch-service/SKILL.md) — blueprint service

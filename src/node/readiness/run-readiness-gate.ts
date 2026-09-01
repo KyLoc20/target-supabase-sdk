@@ -1,6 +1,6 @@
 import type { LoggerWithScope } from "../../shared/log";
-import type { ReadinessCheck, ReadinessReport } from "../readiness/readiness.types";
-import { runReadinessChecks } from "../readiness/run-readiness-checks";
+import type { ReadinessCheck, ReadinessReport } from "./readiness.types";
+import { runReadinessChecks } from "./run-readiness-checks";
 
 export interface RunReadinessGateInput {
     checks: ReadinessCheck[];

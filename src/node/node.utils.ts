@@ -1,4 +1,4 @@
-export const formatTimestamp = (timestamp: number): string => {
+const formatTimestamp = (timestamp: number): string => {
     return new Intl.DateTimeFormat("zh-CN", {
         year: "numeric",
         month: "2-digit",
@@ -11,7 +11,7 @@ export const formatTimestamp = (timestamp: number): string => {
     }).format(timestamp);
 };
 
-export const formatRelativeTime = (timestamp: number): string => {
+const formatRelativeTime = (timestamp: number): string => {
     const now = Date.now();
     const diff = now - timestamp;
 

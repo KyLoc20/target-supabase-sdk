@@ -12,8 +12,11 @@ import {
 } from "../shared/log";
 import { getErrorMessage } from "../shared/utils/error.utils";
 import { patchChangeNodeStatus, patchNodeHeartBeat, patchStopNode, postRegisterNode } from "./node.api";
+import { LOG_TOPIC_NODE } from "./node.constant";
 import { NodeStatus } from "./node.interface";
 import { formatHeartbeat, getRandomInterval } from "./node.utils";
+
+export { LOG_TOPIC_NODE };
 
 /** 主循环单轮运行时上下文 — 由 start() 创建并向下传递 */
 export interface NodeLoopContext {
@@ -31,7 +34,6 @@ export interface BaseNodeRuntimeOptions {
     beforeProcessExit?: () => void | Promise<void>;
 }
 
-export const LOG_TOPIC_NODE = "node";
 const LOG_TOPIC_COMMAND = "command";
 const LOG_TOPIC_PROCESS = "process";
 
@@ -117,6 +119,25 @@ abstract class BaseNodeRuntime {
     protected getLoopIntervalMs(): number {
         return getRandomInterval();
     }
+
+    /**
+     * When true, the main loop skips commands and {@link runLoopSteps} (heartbeat only).
+     * Used by the L3 guard process while waiting for connectivity to recover.
+     */
+    protected isSilenced(): boolean {
+        return false;
+    }
+
+    /**
+     * Consecutive heartbeat failures reached {@link HEARTBEAT_FAILURE_THRESHOLD}.
+     * Default: shut down the node. Override to wait for recovery instead of exiting.
+     */
+    protected async onHealthCheckFailed(_ctx: NodeLoopContext): Promise<void> {
+        this.requestShutdown("heartbeat:consecutive-failures");
+    }
+
+    /** Heartbeat succeeded while {@link isSilenced} is true. Default: no-op. */
+    protected async onHeartbeatRecovered(_ctx: NodeLoopContext): Promise<void> {}
 
     private getLogNodeId(): string {
         return this.localNodeId ?? BaseNodeRuntime.NODE_ID_PENDING_ASSIGNMENT;
@@ -284,7 +305,9 @@ abstract class BaseNodeRuntime {
                 data: { nodeId, loopCount: this.loopCount },
             });
             try {
-                await this.batchCommand(loopCtx);
+                if (!this.isSilenced()) {
+                    await this.batchCommand(loopCtx);
+                }
                 if (this.isShuttingDown()) {
                     iterLogger.debug("節點關閉中，跳過本輪剩餘步驟", { topic: LOG_TOPIC_NODE });
                     break;
@@ -294,7 +317,9 @@ abstract class BaseNodeRuntime {
                     iterLogger.debug("節點關閉中，跳過本輪剩餘步驟", { topic: LOG_TOPIC_NODE });
                     break;
                 }
-                await this.runLoopSteps(loopCtx, heartbeatOk);
+                if (!this.isSilenced()) {
+                    await this.runLoopSteps(loopCtx, heartbeatOk);
+                }
             } catch (error) {
                 iterLogger.critical(`主循環第 ${this.loopCount} 輪遇到未知錯誤`, {
                     topic: LOG_TOPIC_NODE,
@@ -410,11 +435,11 @@ abstract class BaseNodeRuntime {
                 threshold: BaseNodeRuntime.HEARTBEAT_FAILURE_THRESHOLD,
             };
             if (failureCount >= BaseNodeRuntime.HEARTBEAT_FAILURE_THRESHOLD) {
-                logger.critical("連續心跳失敗達上限，準備關閉節點", {
+                logger.critical("連續心跳失敗達上限", {
                     topic: LOG_TOPIC_NODE,
                     data: logData,
                 });
-                this.requestShutdown("heartbeat:consecutive-failures");
+                await this.onHealthCheckFailed(ctx);
             } else {
                 logger.warn("心跳更新失敗", { topic: LOG_TOPIC_NODE, data: logData });
             }
@@ -422,6 +447,9 @@ abstract class BaseNodeRuntime {
         }
 
         this.consecutiveHeartbeatFailures = 0;
+        if (this.isSilenced()) {
+            await this.onHeartbeatRecovered(ctx);
+        }
         // Success is the steady state every loop — do not INFO-spam; failures already warn/critical.
         logger.debug("心跳更新成功", {
             topic: LOG_TOPIC_NODE,

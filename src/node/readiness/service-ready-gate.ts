@@ -1,8 +1,5 @@
 import type { LoggerWithScope } from "../../shared/log";
-
-function sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { pollUntil } from "./poll-until";
 
 export interface ServiceReadySnapshot {
     failed: boolean;
@@ -36,30 +33,37 @@ export async function waitForServiceReady(
 ): Promise<ServiceReadySnapshot> {
     const pollMs = options.pollMs ?? 500;
     const defaultFailureMessage = options.failureMessage ?? "Readiness checks failed";
-    const deadline = Date.now() + options.timeoutMs;
     let last: ServiceReadySnapshot = { failed: false, ready: false };
 
-    while (Date.now() < deadline) {
-        last = await gate.read();
-
+    try {
+        await pollUntil({
+            timeoutMs: options.timeoutMs,
+            intervalMs: pollMs,
+            until: async () => {
+                last = await gate.read();
+                if (last.failed) {
+                    throw new Error(last.failureMessage ?? defaultFailureMessage);
+                }
+                return last.ready;
+            },
+        });
+    } catch (error) {
         if (last.failed) {
-            throw new Error(last.failureMessage ?? defaultFailureMessage);
+            throw error instanceof Error ? error : new Error(defaultFailureMessage);
         }
-
-        if (last.ready) {
-            options.logger?.info("service ready", {
-                topic: "readiness",
-                data: last.readyDetail ?? {},
-            });
-            return last;
+        const isPollTimeout = error instanceof Error && error.message.startsWith("pollUntil timeout after");
+        if (!isPollTimeout) {
+            throw error;
         }
-
-        await sleep(pollMs);
+        const message =
+            options.formatTimeoutError?.(last, options.timeoutMs) ??
+            `Service ready timeout after ${options.timeoutMs}ms (failed=${last.failed}, ready=${last.ready})`;
+        throw new Error(message);
     }
 
-    const message =
-        options.formatTimeoutError?.(last, options.timeoutMs) ??
-        `Service ready timeout after ${options.timeoutMs}ms (failed=${last.failed}, ready=${last.ready})`;
-
-    throw new Error(message);
+    options.logger?.info("service ready", {
+        topic: "readiness",
+        data: last.readyDetail ?? {},
+    });
+    return last;
 }

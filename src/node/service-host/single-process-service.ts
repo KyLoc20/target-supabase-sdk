@@ -1,6 +1,7 @@
-import { createLogger, type Service, ServiceRegistryError } from "../../browser";
-import { claimServiceRegistrySlot, type ServiceRegistrySession } from "../../service/registry-lifecycle";
-import type { LoggerWithScope } from "../../shared/log";
+import type { ServiceRegistrySession } from "../../service/registry-lifecycle";
+import type { Service } from "../../service/service.interface";
+import { createLogger, type LoggerWithScope } from "../../shared/log";
+import { claimRegistrySlotOrExit } from "./claim-registry-slot";
 
 export interface SingleProcessServiceContext {
     service: Service;
@@ -29,23 +30,12 @@ export async function runSingleProcessService(options: SingleProcessServiceOptio
         await options.prepare();
     }
 
-    let session: ServiceRegistrySession | null = null;
-
-    try {
-        session = await claimServiceRegistrySlot({
-            serviceValue: options.serviceValue,
-            createInstance: options.createInstance,
-        });
-    } catch (error) {
-        if (error instanceof ServiceRegistryError && error.code === "SERVICE_SLOTS_FULL") {
-            logger.critical("No EMPTY registry slot — refusing to start", {
-                topic: logTopic,
-                data: { serviceValue: options.serviceValue, code: error.code },
-            });
-            process.exit(1);
-        }
-        throw error;
-    }
+    const session = await claimRegistrySlotOrExit({
+        serviceValue: options.serviceValue,
+        createInstance: options.createInstance,
+        logger,
+        logTopic,
+    });
 
     try {
         await options.run({ service: session.service, session });
