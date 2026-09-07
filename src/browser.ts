@@ -233,6 +233,7 @@ export {
     classifyNetworkError,
     formatNetworkError,
 } from "./shared/utils/network-error";
+export { escapeIlikePattern, toPostgrestTextArrayLiteral } from "./shared/utils/postgrest.utils";
 export type { SanitizeFileNameOptions } from "./shared/utils/safe-file-name";
 export { sanitizeFileName, sanitizeParcelFileName } from "./shared/utils/safe-file-name";
 export { sha256Hex } from "./shared/utils/sha256";

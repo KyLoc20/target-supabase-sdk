@@ -246,6 +246,17 @@ Node entry (`/node`) is bundled by the same Rollup build (peers and `node:*` sta
 
 Detailed conventions: `.cursor/skills/browser-node-exports/SKILL.md` and `.cursor/skills/library-exports/SKILL.md`.
 
+### PostgREST filter helpers (0.2.15+)
+
+When using `supabase.client` directly (e.g. `ilike` search or `text[]` tag filters):
+
+| Export | Use |
+|--------|-----|
+| `escapeIlikePattern` | User input for `.ilike()` / `.or("col.ilike.%…%")` — escapes `%` `_` `\` and strips `,` |
+| `toPostgrestTextArrayLiteral` | `.overlaps("tagList", …)` and `.filter("tagList", "not.ov", …)` — **never** `.not("tagList", "ov", jsArray)` |
+
+Pitfalls and examples: `.cursor/skills/postgrest-query-filters/SKILL.md`.
+
 ## Development
 
 ```bash
