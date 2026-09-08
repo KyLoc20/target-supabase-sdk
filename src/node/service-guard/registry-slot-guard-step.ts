@@ -1,4 +1,7 @@
-import { registrySlotRuntimePatchFromGuardResult, runRegistrySlotGuardCheck } from "../../service/registry-lifecycle";
+import {
+    registrySlotRuntimePatchFromGuardResult,
+    runRegistrySlotGuardCheck,
+} from "../../service/registry/registry-lifecycle";
 import type { LoggerWithScope } from "../../shared/log";
 
 export interface ApplyRegistrySlotGuardInput {

@@ -1,4 +1,4 @@
-import type { ServiceRegistrySession } from "../../service/registry-lifecycle";
+import type { ServiceRegistrySession } from "../../service/registry/registry-lifecycle";
 import type { Service } from "../../service/service.interface";
 import { createLogger, type LoggerWithScope } from "../../shared/log";
 import { claimRegistrySlotOrExit } from "./claim-registry-slot";

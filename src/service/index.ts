@@ -1,5 +1,6 @@
 /**
  * Service domain public API — curated re-exports only.
+ * System registry: `./registry/` (seed, claim, slot views).
  */
 
 export type {
@@ -10,68 +11,58 @@ export type {
 } from "./base.interface";
 export { ServiceLifecycleStatus } from "./base.interface";
 export type {
-    GetConfigPayload,
-    PostSystemRegistryConfigPayload,
-    ResetSystemRegistryConfigPayload,
-    SystemRegistrySeedSlot,
-} from "./config.api";
-export {
-    buildEmptyServiceSlots,
-    buildSystemRegistryConfigDetails,
-    DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS,
-    getConfig,
-    getConfigSchema,
-    postSystemRegistryConfig,
-    postSystemRegistryConfigSchema,
-    resetSystemRegistryConfig,
-    resetSystemRegistryConfigSchema,
-    systemRegistrySeedSlotSchema,
-} from "./config.api";
-export type { Config, ConfigDetails } from "./config.interface";
-export { CategoryConfig, TARGET_SYSTEM_REGISTRY_KEY } from "./config.interface";
-export type {
-    AppendSystemRegistrySlotsInput,
-    AppendSystemRegistrySlotsOutcome,
+    AppendSystemRegistryEmptySlotsInput,
+    AppendSystemRegistryEmptySlotsOutcome,
+    ClaimRegistrySlotInput,
     PatchServiceRuntimeInput,
+    PostSystemRegistryConfigPayload,
     RegisterServiceInput,
+    RegistrySlotGuardResult,
+    RegistrySlotRuntimeState,
     ReleasedRegistrySlot,
     ReleaseSystemRegistrySlotsByServiceIdInput,
     ReleaseSystemRegistrySlotsByServiceIdOutcome,
     ReleaseSystemRegistrySlotsInput,
     ReleaseSystemRegistrySlotsOutcome,
+    ResetSystemRegistryConfigPayload,
+    ServiceRegistrySession,
+    ServiceSlot,
+    SystemRegistrySeedSlot,
     TargetSystemRegistrySlotView,
     TargetSystemRegistryView,
-} from "./registry.service";
+} from "./registry/index";
 export {
-    appendSystemRegistrySlots,
+    appendSystemRegistryEmptySlots,
     assertRegistrySlotAvailable,
     assertRegistrySlotOwner,
+    buildEmptyServiceSlots,
+    buildSystemRegistryConfigDetails,
+    claimServiceRegistrySlot,
+    createClaimedRegistrySlotRuntimeState,
+    DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS,
+    EMPTY_REGISTRY_SLOT_RUNTIME_STATE,
     getTargetSystemRegistry,
     parseServiceSlot,
     parseServiceSlots,
     patchServiceRuntime,
+    postSystemRegistryConfig,
+    postSystemRegistryConfigSchema,
     registerService,
     registerServiceAtStartup,
+    registrySlotRuntimePatchFromGuardResult,
     releaseSystemRegistrySlots,
     releaseSystemRegistrySlotsByServiceId,
+    resetSystemRegistryConfig,
+    resetSystemRegistryConfigSchema,
     resolveActiveRegistryServiceId,
+    runRegistrySlotGuardCheck,
     ServiceRegistryError,
+    ServiceSlotStatus,
+    systemRegistrySeedSlotSchema,
+    TARGET_SYSTEM_REGISTRY_KEY,
     unregisterService,
     unregisterServiceAtShutdown,
-} from "./registry.service";
-export type {
-    ClaimRegistrySlotInput,
-    RegistrySlotGuardResult,
-    RegistrySlotRuntimeState,
-    ServiceRegistrySession,
-} from "./registry-lifecycle";
-export {
-    claimServiceRegistrySlot,
-    createClaimedRegistrySlotRuntimeState,
-    EMPTY_REGISTRY_SLOT_RUNTIME_STATE,
-    registrySlotRuntimePatchFromGuardResult,
-    runRegistrySlotGuardCheck,
-} from "./registry-lifecycle";
+} from "./registry/index";
 export type { GetApiPayload, GetServicePayload, PostApiPayload, PostServicePayload } from "./service.api";
 export {
     apiDetailsSchema,
@@ -97,9 +88,8 @@ export type {
     ServiceDetails,
     ServiceNodeSnapshot,
     ServiceRuntime,
-    ServiceSlot,
 } from "./service.interface";
-export { ApiMethod, CategoryApi, CategoryService, ServiceSlotStatus } from "./service.interface";
+export { ApiMethod, CategoryApi, CategoryService } from "./service.interface";
 export type { PostServiceInstanceOptions, ServiceBootstrapResult } from "./service-bootstrap";
 export {
     createActiveServiceLifecycle,

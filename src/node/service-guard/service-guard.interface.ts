@@ -1,4 +1,4 @@
-import type { RegistrySlotRuntimeState } from "../../service/registry-lifecycle";
+import type { RegistrySlotRuntimeState } from "../../service/registry/registry-lifecycle";
 import type { LoggerWithScope } from "../../shared/log";
 import type { Node } from "../node.interface";
 import type { ReadinessCheck, ReadinessReport } from "../readiness/readiness.types";

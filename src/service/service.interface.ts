@@ -45,18 +45,6 @@ export interface ServiceRuntime {
     nodes: ServiceNodeSnapshot[];
 }
 
-export enum ServiceSlotStatus {
-    EMPTY = "EMPTY",
-    ACTIVE = "ACTIVE",
-}
-
-export interface ServiceSlot {
-    serviceValue: string;
-    /** Bound {@link Service.id} when {@link ServiceSlotStatus.ACTIVE}; null when EMPTY. */
-    serviceId: string | null;
-    status: ServiceSlotStatus;
-}
-
 export interface Api extends Target {
     /** "core.post.target.0" 唯一键 领域 + METHOD + content + VERSION */
     value: string;

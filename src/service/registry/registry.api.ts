@@ -1,34 +1,16 @@
 import { z } from "zod";
+import { getConfig } from "../../config/config.api";
+import { CategoryConfig, type Config, type ConfigDetails } from "../../config/config.interface";
 import {
     createTarget,
-    getPossibleTarget,
-    getTarget,
     isOptimisticLockError,
     type QueryFilter,
     updateTargetDetails,
     validateWithSchema,
-} from "../core.api";
-import { generateResponse } from "../core.interface";
-import { CategoryConfig, type Config, type ConfigDetails, TARGET_SYSTEM_REGISTRY_KEY } from "./config.interface";
-import { type ServiceSlot, ServiceSlotStatus } from "./service.interface";
-
-const targetIdSchema = z.string().trim().min(1);
-
-export const getConfigSchema = z
-    .object({
-        id: targetIdSchema.optional(),
-        value: z.string().trim().min(1).optional(),
-    })
-    .refine(
-        (payload) => {
-            const hasId = payload.id != null && payload.id !== "";
-            const hasValue = payload.value != null && payload.value !== "";
-            return hasId !== hasValue;
-        },
-        { message: "Provide exactly one of id or value" },
-    );
-
-export type GetConfigPayload = z.infer<typeof getConfigSchema>;
+} from "../../core.api";
+import { generateResponse } from "../../core.interface";
+import { DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS, TARGET_SYSTEM_REGISTRY_KEY } from "./registry.constant";
+import { type ServiceSlot, ServiceSlotStatus } from "./registry.interface";
 
 /** One declarative EMPTY slot entry for seeding the system registry. */
 export const systemRegistrySeedSlotSchema = z.object({
@@ -53,32 +35,11 @@ export type ResetSystemRegistryConfigPayload = PostSystemRegistryConfigPayload;
 const DEFAULT_RESET_RETRY_ATTEMPTS = 5;
 const RESET_RETRY_DELAY_MS = 50;
 
-/** Default one EMPTY slot per known L3 service (override via payload or seed file). */
-export const DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS: readonly SystemRegistrySeedSlot[] = [
-    { serviceValue: "log-service" },
-    { serviceValue: "watch-service" },
-    { serviceValue: "download-service" },
-    { serviceValue: "storage-service" },
-    { serviceValue: "gc-service" },
-    { serviceValue: "upload-service" },
-    { serviceValue: "cv-service" },
-] as const;
-
 const configCategoryFilter: QueryFilter = {
     field: "category",
     operator: "eq",
     value: CategoryConfig.CONFIG,
 };
-
-function buildConfigLookupFilters(payload: GetConfigPayload): QueryFilter[] {
-    const filters: QueryFilter[] = [configCategoryFilter];
-
-    if (payload.id == null || payload.id === "") {
-        filters.push({ field: "value", operator: "eq", value: payload.value! });
-    }
-
-    return filters;
-}
 
 /** Build EMPTY {@link ServiceSlot} rows from seed entries (one slot per array item). */
 export function buildEmptyServiceSlots(seedSlots: readonly SystemRegistrySeedSlot[]): ServiceSlot[] {
@@ -112,41 +73,6 @@ export function buildSystemRegistryConfigDetails(slots: readonly ServiceSlot[]):
         objects: [...slots],
     };
 }
-
-/** Fetch a Config by id or by {@link Config.value} key (`category=config`). */
-export const getConfig = validateWithSchema(
-    getConfigSchema,
-    "getConfigSchema",
-)(async (payload) => {
-    const filterList = buildConfigLookupFilters(payload);
-
-    if (payload.id != null && payload.id !== "") {
-        const result = await getTarget({
-            id: payload.id,
-            filterList,
-        });
-        return {
-            ...result,
-            data: result.data as Config,
-        };
-    }
-
-    const result = await getPossibleTarget({
-        filterList,
-    });
-
-    if (result.data == null) {
-        return {
-            ...result,
-            data: undefined,
-        };
-    }
-
-    return {
-        ...result,
-        data: result.data as Config,
-    };
-});
 
 /**
  * Insert the globally unique system registry Config (`category=config`,

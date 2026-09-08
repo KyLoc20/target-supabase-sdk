@@ -3,7 +3,7 @@ import type { Target } from "../core.interface";
 export interface Config extends Target {
     /** Human readable name */
     name: string;
-    /** Unique key, like TARGET_SYSTEM_REGISTRY_KEY */
+    /** Unique key (e.g. system registry Config value) */
     value: string;
     category: CategoryConfig;
     details: ConfigDetails;
@@ -12,9 +12,6 @@ export interface Config extends Target {
 export enum CategoryConfig {
     CONFIG = "config",
 }
-
-/** Globally unique Config key for the declarative system service registry. */
-export const TARGET_SYSTEM_REGISTRY_KEY = "target-system-registry";
 
 export interface ConfigDetails {
     manifestVersion: number;

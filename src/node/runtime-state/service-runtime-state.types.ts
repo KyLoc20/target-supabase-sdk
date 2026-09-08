@@ -1,4 +1,4 @@
-import type { RegistrySlotRuntimeState } from "../../service/registry-lifecycle";
+import type { RegistrySlotRuntimeState } from "../../service/registry/registry-lifecycle";
 
 export type ReadinessStatus = "pending" | "passed" | "failed";
 

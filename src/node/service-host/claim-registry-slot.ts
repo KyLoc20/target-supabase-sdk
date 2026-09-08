@@ -1,5 +1,5 @@
-import { ServiceRegistryError } from "../../service/registry.service";
-import { claimServiceRegistrySlot, type ServiceRegistrySession } from "../../service/registry-lifecycle";
+import { ServiceRegistryError } from "../../service/registry/registry.service";
+import { claimServiceRegistrySlot, type ServiceRegistrySession } from "../../service/registry/registry-lifecycle";
 import type { Service } from "../../service/service.interface";
 import type { LoggerWithScope } from "../../shared/log";
 

@@ -1,5 +1,5 @@
-import { ServiceRegistryError } from "../../service/registry.service";
-import type { ServiceRegistrySession } from "../../service/registry-lifecycle";
+import { ServiceRegistryError } from "../../service/registry/registry.service";
+import type { ServiceRegistrySession } from "../../service/registry/registry-lifecycle";
 import type { Service } from "../../service/service.interface";
 import { createLogger, type LoggerWithScope } from "../../shared/log";
 import { LOG_SPOOL_SERVICE_ID_ENV } from "../../shared/log/spool/config";

@@ -1,5 +1,5 @@
 import { scanTargetList } from "../../core.api";
-import { patchServiceRuntime } from "../../service/registry.service";
+import { patchServiceRuntime } from "../../service/registry/registry.service";
 import { CategoryNode, type Node } from "../node.interface";
 import { evaluateBusyNodeLiveness } from "../node-liveness";
 import { applyRegistrySlotGuardStep } from "./registry-slot-guard-step";

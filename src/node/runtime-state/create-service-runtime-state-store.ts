@@ -1,4 +1,4 @@
-import { EMPTY_REGISTRY_SLOT_RUNTIME_STATE } from "../../service/registry-lifecycle";
+import { EMPTY_REGISTRY_SLOT_RUNTIME_STATE } from "../../service/registry/registry-lifecycle";
 import type { JsonStatePatch } from "../fs/json-state-store";
 import { createShardedJsonFileStateStore } from "../fs/sharded-json-state-store";
 import type {

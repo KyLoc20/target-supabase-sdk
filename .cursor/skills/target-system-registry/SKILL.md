@@ -52,7 +52,7 @@ Globally **unique**: `category=config` + `value=target-system-registry`.
 | `details.meta` | `{ revision: number }` — optimistic-lock token for slot writes |
 | `details.objects` | `ServiceSlot[]` (flat array) |
 
-Constant: `TARGET_SYSTEM_REGISTRY_KEY` in `src/service/config.interface.ts`.
+Constant: `TARGET_SYSTEM_REGISTRY_KEY` in `src/service/registry/registry.constant.ts`.
 
 **Replica count** = number of `ServiceSlot` rows with the same `serviceValue` (not a separate `maxInstances` field).
 
@@ -68,7 +68,7 @@ Example (two `watch-service` slots):
 
 ---
 
-## ServiceSlot (`service.interface.ts`)
+## ServiceSlot (`service/registry/registry.interface.ts`)
 
 ```typescript
 interface ServiceSlot {
@@ -88,11 +88,14 @@ interface ServiceSlot {
 
 | File | Layer | Exports |
 |------|-------|---------|
-| `config.interface.ts` | types | `Config`, `ConfigDetails`, `CategoryConfig`, `TARGET_SYSTEM_REGISTRY_KEY` |
-| `service.interface.ts` | types | `ServiceSlot`, `ServiceSlotStatus`, `ServiceDetails.runtime` |
-| `config.api.ts` | API | `getConfig`, `postSystemRegistryConfig`, `buildEmptyServiceSlots`, `buildSystemRegistryConfigDetails` |
-| `registry.service.ts` | Service | `getTargetSystemRegistry`, `claimServiceRegistrySlot`, `assertRegistrySlotAvailable`, `assertRegistrySlotOwner`, `registerService`, `unregisterService`, `patchServiceRuntime`, `parseServiceSlot(s)` |
-| `registry-lifecycle.ts` | Service | `claimServiceRegistrySlot`, `runRegistrySlotGuardCheck`, `RegistrySlotRuntimeState`, `createClaimedRegistrySlotRuntimeState` |
+| `config/config.interface.ts` | types | `Config`, `ConfigDetails`, `CategoryConfig` |
+| `config/config.api.ts` | API | `getConfig` (generic Config read) |
+| `service/registry/registry.constant.ts` | const | `TARGET_SYSTEM_REGISTRY_KEY`, `DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS` |
+| `service/registry/registry.interface.ts` | types | `ServiceSlot`, `ServiceSlotStatus` |
+| `service/registry/registry.api.ts` | API | `postSystemRegistryConfig`, `resetSystemRegistryConfig`, `buildEmptyServiceSlots`, `buildSystemRegistryConfigDetails` |
+| `service/registry/registry.service.ts` | Service | `getTargetSystemRegistry`, `registerService`, `unregisterService`, `appendSystemRegistryEmptySlots`, `patchServiceRuntime`, `parseServiceSlot(s)`, asserts |
+| `service/registry/registry-lifecycle.ts` | Service | `claimServiceRegistrySlot`, `runRegistrySlotGuardCheck`, `RegistrySlotRuntimeState` |
+| `service/service.interface.ts` | types | `Service`, `ServiceDetails.runtime`, `Api*` |
 | `node/service-host/` | Node | `createServiceHost`, `runSingleProcessService`, `applyRegistrySlotGuardStep` |
 
 **Ops CLI / Web UI** live in **gc-service** — see `gc-service/.cursor/skills/system-registry-ops/SKILL.md` (`/ui/registry`, `pnpm seed:system-registry`, `pnpm reset:system-registry`).
@@ -116,27 +119,48 @@ Generic Config read; registry uses `value: TARGET_SYSTEM_REGISTRY_KEY`.
 
 ### Ops tooling (gc-service, not this repo)
 
-Seed / add / release / reset scripts and Web UI are maintained in **gc-service**:
+Seed / add / expand / release / reset scripts and Web UI are maintained in **gc-service**:
 
 ```bash
 # gc-service repo
 pnpm seed:system-registry
-pnpm seed:system-registry -- --add gc-service
+pnpm expand:system-registry -- --service download-service --count 1
 pnpm seed:system-registry -- --release <serviceId-uuid>
 pnpm reset:system-registry -- --yes
 ```
 
 Web: `http://<gc-service-host>:3400/ui/gc/registry`
 
+| Ops action | Meaning |
+|------------|---------|
+| **Expand** | Always append N EMPTY slots for a given `serviceValue` (replica scale-out or first declaration) |
+| **Seed / Reset** | Danger-zone UI ops (confirm required); CLI seed insert-if-missing / reset with `--yes` |
+
 Release uses **`serviceId`** (runtime Service row UUID), not `serviceValue` — supports multiple slots with the same logical name.
 
-SDK API: `releaseSystemRegistrySlotsByServiceId({ serviceIds })`.
+SDK APIs: `appendSystemRegistryEmptySlots({ serviceValue, count? })`, `releaseSystemRegistrySlotsByServiceId({ serviceIds })`.
+
+**Removed:** `appendSystemRegistrySlots` and gc-service Add (`--add` / Add UI) — use `appendSystemRegistryEmptySlots` / Expand for capacity and undeclared keys.
 
 Programmatic seed from any consumer:
 
 1. `getConfig` — if exists, skip insert  
 2. else `postSystemRegistryConfig`  
 3. catch `isCreateTargetAlreadyExistsError` on race
+
+---
+
+## Service: `appendSystemRegistryEmptySlots`
+
+Always grows capacity for one logical key (optimistic-lock Config update):
+
+```typescript
+appendSystemRegistryEmptySlots({ serviceValue: "download-service", count?: 1 })
+```
+
+- Works whether or not the key already has slots.
+- Seed defaults stay at **one EMPTY per service**; scale-out is ops-driven.
+- Prefer this over full `resetSystemRegistryConfig` when you only need more replicas.
 
 ---
 
@@ -249,7 +273,7 @@ Removed: idempotent “already bound, skip register” — each startup must cla
 
 ## Checklist (new L3 service)
 
-- [ ] Add `{ serviceValue: "<name>" }` to seed slots (or ops updates Config `objects`) — e.g. `upload-service` / `cv-service` in `DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS` + `gc-service` `system-registry.seed.json`; on live Config use `appendSystemRegistrySlots` instead of full reset  
+- [ ] Add `{ serviceValue: "<name>" }` to seed slots (or ops updates Config `objects`) — e.g. `upload-service` / `cv-service` in `DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS` + `gc-service` `system-registry.seed.json`; on live Config use `appendSystemRegistryEmptySlots` (or gc-service Add / Expand) instead of full reset  
 - [ ] Use **`createServiceHost`** or **`runSingleProcessService`**  
 - [ ] `bootstrap.ts`: **`postService` new instance** every startup  
 - [ ] **`ManagedChildProcesses`** + **`criticalSupervisors`**  
@@ -279,18 +303,21 @@ Removed: idempotent “already bound, skip register” — each startup must cla
 
 ## Related skills
 
-- [manager-api-service](../manager-api-service/SKILL.md) — `config.api` vs `registry.service`  
-- [create-target-redundancy](../create-target-redundancy/SKILL.md) — `postSystemRegistryConfig` dedupe  
-- [optimistic-lock-update](../optimistic-lock-update/SKILL.md) — slot claim updates  
-- [config-file-relative-paths](../config-file-relative-paths/SKILL.md) — local JS config (different concern)  
+- [manager-api-service](../manager-api-service/SKILL.md) — `registry.api` vs `registry.service`
+- [create-target-redundancy](../create-target-redundancy/SKILL.md) — `postSystemRegistryConfig` dedupe
+- [optimistic-lock-update](../optimistic-lock-update/SKILL.md) — slot claim updates
+- [config-file-relative-paths](../config-file-relative-paths/SKILL.md) — local JS config (different concern)
 - [service-preload](../service-preload/SKILL.md) — L3 env bootstrap (orthogonal to DB registry)
 
 ## Key files
 
-- `src/service/config.interface.ts` — `Config`, `TARGET_SYSTEM_REGISTRY_KEY`  
-- `src/service/config.api.ts` — `getConfig`, `postSystemRegistryConfig`  
-- `src/service/registry.service.ts` — `getTargetSystemRegistry`, `registerService`, `unregisterService`  
-- `src/service/service.interface.ts` — `ServiceSlot`, `ServiceRuntime`  
-- `src/node/node-runtime.base.ts` — `beforeProcessExit` hook for single-process L3  
-- **gc-service** `scripts/system-registry.seed.json` — default slot layout for ops  
+- `src/config/config.interface.ts` — `Config`, `ConfigDetails`
+- `src/config/config.api.ts` — `getConfig`
+- `src/service/registry/registry.constant.ts` — `TARGET_SYSTEM_REGISTRY_KEY`, `DEFAULT_SYSTEM_REGISTRY_SEED_SLOTS`
+- `src/service/registry/registry.api.ts` — `postSystemRegistryConfig`, `resetSystemRegistryConfig`
+- `src/service/registry/registry.service.ts` — `getTargetSystemRegistry`, `registerService`, `unregisterService`, `appendSystemRegistryEmptySlots`
+- `src/service/registry/registry.interface.ts` — `ServiceSlot`, `ServiceSlotStatus`
+- `src/service/service.interface.ts` — `Service`, `ServiceRuntime`
+- `src/node/node-runtime.base.ts` — `beforeProcessExit` hook for single-process L3
+- **gc-service** `scripts/system-registry.seed.json` — default slot layout for ops
 - **gc-service** `.cursor/skills/system-registry-ops/SKILL.md` — CLI + Web UI

@@ -1,5 +1,6 @@
-import { deleteTarget } from "../core.api";
-import { createLogger } from "../shared/log";
+import { deleteTarget } from "../../core.api";
+import { createLogger } from "../../shared/log";
+import type { Service } from "../service.interface";
 import {
     assertRegistrySlotAvailable,
     assertRegistrySlotOwner,
@@ -7,7 +8,6 @@ import {
     ServiceRegistryError,
     unregisterServiceAtShutdown,
 } from "./registry.service";
-import type { Service } from "./service.interface";
 
 const LOG_TOPIC = "service-registry-lifecycle";
 

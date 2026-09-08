@@ -6,6 +6,12 @@
  */
 
 export type { SupabaseClient } from "@supabase/supabase-js";
+export type {
+    Config,
+    ConfigDetails,
+    GetConfigPayload,
+} from "./config/index";
+export { CategoryConfig, getConfig, getConfigSchema } from "./config/index";
 export * from "./core.api";
 export * from "./core.interface";
 export * from "./core.schema";
@@ -102,13 +108,10 @@ export * from "./repo/repo.interface";
 export type {
     Api,
     ApiDetails,
-    AppendSystemRegistrySlotsInput,
-    AppendSystemRegistrySlotsOutcome,
+    AppendSystemRegistryEmptySlotsInput,
+    AppendSystemRegistryEmptySlotsOutcome,
     ClaimRegistrySlotInput,
-    Config,
-    ConfigDetails,
     GetApiPayload,
-    GetConfigPayload,
     GetServicePayload,
     PatchServiceRuntimeInput,
     PostApiPayload,
@@ -136,12 +139,11 @@ export type {
 export {
     ApiMethod,
     apiDetailsSchema,
-    appendSystemRegistrySlots,
+    appendSystemRegistryEmptySlots,
     assertRegistrySlotAvailable,
     assertRegistrySlotOwner,
     buildEmptyServiceSlots,
     buildSystemRegistryConfigDetails,
-    CategoryConfig,
     CategoryService,
     claimServiceRegistrySlot,
     createActiveServiceLifecycle,
@@ -152,8 +154,6 @@ export {
     fieldDefinitionSchema,
     getApi,
     getApiSchema,
-    getConfig,
-    getConfigSchema,
     getService,
     getServiceSchema,
     getTargetSystemRegistry,
@@ -189,6 +189,7 @@ export {
     unregisterService,
     unregisterServiceAtShutdown,
 } from "./service/index";
+
 export type { FetchInitFactory, FetchRetryOptions } from "./shared/http/fetch-retry";
 export {
     fetchBinaryWithRetry,
