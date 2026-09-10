@@ -223,6 +223,17 @@ export {
     parseLogBatchMeta,
     resolveLogMinLevel,
 } from "./shared/log";
+export type { BuildMediaLinkDraftInput, MediaOriginal, MediaValue } from "./shared/media";
+export {
+    buildMediaLinkDraft,
+    buildMediaNameFromLocator,
+    guessMediaMime,
+    isMediaValue,
+    MEDIA_CONTENT_HASH_ALGORITHM,
+    MEDIA_CONTENT_HASH_PREFIX_LENGTH,
+    MEDIA_VALUES,
+    mediaLinkDedupFilters,
+} from "./shared/media";
 export { isHttpUrl, resolveFetchUrl } from "./shared/utils/fetch-url";
 export { getValueAtPath } from "./shared/utils/get-value-at-path";
 export type {

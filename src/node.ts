@@ -166,6 +166,19 @@ export {
 } from "./shared/log/spool/service-lifecycle";
 export type { LogBatchMeta, LogPersistLane } from "./shared/log/upload/interface";
 export type {
+    CheckMediaAvailabilityInput,
+    FindMediaLinkInput,
+    MediaAvailabilityResult,
+    RegisterMediaLinkInput,
+    RegisterMediaLinkResult,
+} from "./shared/media/node";
+export {
+    checkMediaAvailability,
+    findMediaLink,
+    probeMediaOriginal,
+    registerMediaLink,
+} from "./shared/media/node";
+export type {
     ConfigSchema,
     LoadCachedJsConfigOptions,
     ResolveFirstExistingPathOptions,

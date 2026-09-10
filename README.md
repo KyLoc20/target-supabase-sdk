@@ -246,6 +246,26 @@ Node entry (`/node`) is bundled by the same Rollup build (peers and `node:*` sta
 
 Detailed conventions: `.cursor/skills/browser-node-exports/SKILL.md` and `.cursor/skills/library-exports/SKILL.md`.
 
+### Media Links (`video` / `audio` / `image` / `image-list`)
+
+Convention on `Link` (same `category=link`): `value === details.loaderKey`. Browser-safe draft/mime helpers on the default entry; **register / availability** on `/node` only.
+
+```typescript
+import { buildMediaLinkDraft, buildMediaNameFromLocator } from "target-supabase-sdk";
+import { registerMediaLink } from "target-supabase-sdk/node";
+
+await registerMediaLink({
+  value: "video",
+  name: "my-key",
+  storageProvider: process.env.LOCAL_STORAGE_PROVIDER!,
+  locator: "D:\\\\data\\\\clip.mp4",
+  localStorageProvider: process.env.LOCAL_STORAGE_PROVIDER!,
+  tagList: ["cv-service", "media-asr"],
+});
+```
+
+Details: `src/shared/media/README.md` and `.cursor/skills/media-link/SKILL.md`.
+
 ### PostgREST filter helpers (0.2.15+)
 
 When using `supabase.client` directly (e.g. `ilike` search or `text[]` tag filters):
