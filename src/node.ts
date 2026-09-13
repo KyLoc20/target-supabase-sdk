@@ -134,6 +134,29 @@ export type {
     SingleProcessServiceOptions,
 } from "./node/service-host";
 export { createL3ChildLauncher, createServiceHost, runSingleProcessService } from "./node/service-host";
+export type {
+    CallTelegramOptions,
+    ResolvedTelegramStorageOptions,
+    TelegramApiResponse,
+    TelegramChunkDeleteResult,
+    TelegramDocument,
+    TelegramFile,
+    TelegramMessage,
+    TelegramStorageProvider,
+    TelegramStorageProviderOptions,
+    TelegramUploadResult,
+} from "./node/telegram";
+export {
+    callTelegramApi,
+    createTelegramStorageProvider,
+    downloadTelegramChunk,
+    encodeTelegramChunkUrl,
+    PROVIDER_TELEGRAM,
+    parseTelegramChunkUrl,
+    resolveTelegramStorageOptions,
+    telegramDownloadBinary,
+    telegramFileDownloadUrl,
+} from "./node/telegram";
 export { RepoManager } from "./repo/repo-manager";
 export { runCollectLogTick } from "./shared/log/spool/collector";
 export { LOG_SPOOL_SERVICE_ID_ENV } from "./shared/log/spool/config";

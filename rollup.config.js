@@ -7,10 +7,15 @@ import typescript from "@rollup/plugin-typescript";
 const root = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 const peerDependencies = Object.keys(pkg.peerDependencies ?? {});
+/** Always external — optional for browser consumers; required when using Telegram proxy. */
+const alwaysExternal = ["undici"];
 
 /** @param {string} id */
 function isExternal(id) {
     if (id.startsWith("node:")) {
+        return true;
+    }
+    if (alwaysExternal.some((name) => id === name || id.startsWith(`${name}/`))) {
         return true;
     }
     return peerDependencies.some((name) => id === name || id.startsWith(`${name}/`));

@@ -69,7 +69,13 @@
         "@supabase/postgrest-js": "^1.19.0",
         "@supabase/supabase-js": "^2.50.0",
         "lodash-es": "^4.17.21",
+        "undici": "^7.10.0",
         "zod": "^3.23.0"
+    },
+    "peerDependenciesMeta": {
+        "undici": {
+            "optional": true
+        }
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.3",
@@ -84,6 +90,7 @@
         "tslib": "^2.8.1",
         "tsx": "^4.19.4",
         "typescript": "~5.7.2",
+        "undici": "^7.10.0",
         "zod": "^3.24.0"
     },
     "publishConfig": {
