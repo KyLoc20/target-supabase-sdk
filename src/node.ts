@@ -158,6 +158,20 @@ export {
     telegramFileDownloadUrl,
 } from "./node/telegram";
 export { RepoManager } from "./repo/repo-manager";
+export type {
+    CheckFeedLocalAvailabilityInput,
+    FeedAvailabilityResult,
+    FeedIngestSource,
+    RegisterFeedInput,
+    RegisterFeedResult,
+} from "./shared/feed/node";
+export {
+    checkFeedLocalAvailability,
+    checkFeedOssAvailability,
+    FEED_INGEST_SOURCES,
+    isFeedIngestSource,
+    registerFeed,
+} from "./shared/feed/node";
 export { runCollectLogTick } from "./shared/log/spool/collector";
 export { LOG_SPOOL_SERVICE_ID_ENV } from "./shared/log/spool/config";
 export type { LogSpoolCoordinator, LogSpoolCoordinatorOptions } from "./shared/log/spool/coordinator";

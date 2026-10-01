@@ -189,7 +189,14 @@ export {
     unregisterService,
     unregisterServiceAtShutdown,
 } from "./service/index";
-
+export type { BuildFeedLinkDraftInput, FeedOriginal, FeedSource, FeedValue } from "./shared/feed";
+export {
+    buildFeedLinkDraft,
+    buildFeedLinkName,
+    FEED_VALUES,
+    feedLinkDedupFilters,
+    isFeedValue,
+} from "./shared/feed";
 export type { FetchInitFactory, FetchRetryOptions } from "./shared/http/fetch-retry";
 export {
     fetchBinaryWithRetry,

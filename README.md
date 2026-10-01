@@ -266,6 +266,34 @@ await registerMediaLink({
 
 Details: `src/shared/media/README.md` and `.cursor/skills/media-link/SKILL.md`.
 
+### Feed Links (`feed.image` / `feed.audio` / `feed.video` / `feed.image-list`)
+
+Convention on `Link` (same `category=link`): `value === details.loaderKey`. Platform key `name = {platformName}.{feedKey}`. System lifecycle tags (`.public`, `.local`, `.oss`) use a leading dot. Draft on the default entry; **ingest** `.public` → `.local`/`.oss` on `/node` via `registerFeed` (locator validation + optimistic lock).
+
+```typescript
+import { buildFeedLinkDraft } from "target-supabase-sdk";
+import { registerFeed } from "target-supabase-sdk/node";
+
+const draft = buildFeedLinkDraft({
+  value: "feed.video",
+  platformName: "bilibili",
+  feedKey: "12345",
+  source: ".public",
+  locator: "https://example.com/feed/12345",
+  tagList: ["creator-x"],
+});
+
+await registerFeed({
+  id: feedRowId,
+  source: ".local",
+  storageProvider: process.env.LOCAL_STORAGE_PROVIDER!,
+  locator: "D:\\\\data\\\\bilibili.12345.mp4",
+  localStorageProvider: process.env.LOCAL_STORAGE_PROVIDER!,
+});
+```
+
+Details: `src/shared/feed/README.md` and `.cursor/skills/feed-link/SKILL.md`.
+
 ### PostgREST filter helpers (0.2.15+)
 
 When using `supabase.client` directly (e.g. `ilike` search or `text[]` tag filters):
