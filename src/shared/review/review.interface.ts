@@ -2,8 +2,8 @@
  * Review Link protocol — Link rows with `value` / `loaderKey` === {@link REVIEW_VALUE}.
  * No separate Target category; category remains `link`.
  *
- * A Review records one user interaction with a subject Target (`Link.name` = that Target's id).
- * Many review Links may share the same subject id.
+ * A Review records one user interaction; `Link.name` is caller-defined (often a subject Target id).
+ * Many review Links may share the same `name`.
  */
 
 export const REVIEW_VALUE = "review" as const;

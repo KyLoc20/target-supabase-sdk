@@ -4,4 +4,4 @@
 
 export type { BuildReviewLinkDraftInput } from "./review.build";
 export { buildReviewLinkDraft } from "./review.build";
-export { reviewLinksForTargetFilters } from "./review.query";
+export { reviewLinksForNameFilters } from "./review.query";

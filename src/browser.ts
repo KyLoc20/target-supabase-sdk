@@ -242,7 +242,7 @@ export {
     mediaLinkDedupFilters,
 } from "./shared/media";
 export type { BuildReviewLinkDraftInput } from "./shared/review";
-export { buildReviewLinkDraft, reviewLinksForTargetFilters } from "./shared/review";
+export { buildReviewLinkDraft, reviewLinksForNameFilters } from "./shared/review";
 export { isHttpUrl, resolveFetchUrl } from "./shared/utils/fetch-url";
 export { getValueAtPath } from "./shared/utils/get-value-at-path";
 export type {
