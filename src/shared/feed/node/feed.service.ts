@@ -1,8 +1,14 @@
-import { getTarget, updateTarget } from "../../../core.api";
+import {
+    getPossibleTarget,
+    getTarget,
+    isCreateTargetAlreadyExistsError,
+    postTarget,
+    updateTarget,
+} from "../../../core.api";
 import type { Target } from "../../../core.interface";
 import { CategoryLink, type Link, type LinkDetails } from "../../../link/link.interface";
 import { createLogger } from "../../log/core/create-logger";
-import { buildFeedTagList, resolveFeedOriginalStorageProvider } from "../feed.build";
+import { buildFeedLinkDraft, buildFeedTagList, resolveFeedOriginalStorageProvider } from "../feed.build";
 import {
     type FeedIngestSource,
     type FeedOriginal,
@@ -10,7 +16,12 @@ import {
     isFeedIngestSource,
     isFeedValue,
 } from "../feed.interface";
-import { checkFeedLocalAvailability, checkFeedOssAvailability } from "./feed.access";
+import { feedLinkDedupFilters } from "../feed.query";
+import {
+    type CheckFeedOssAvailabilityOptions,
+    checkFeedLocalAvailability,
+    checkFeedOssAvailability,
+} from "./feed.access";
 
 const logger = createLogger({ module: "feed" });
 
@@ -22,6 +33,8 @@ export interface RegisterFeedInput {
     locator: string;
     /** Required when `source` is `.local` (e.g. `process.env.LOCAL_STORAGE_PROVIDER`). Ignored for `.oss`. */
     localStorageProvider?: string;
+    /** `.oss` HTTP check: inject `fetch` / same-host resolve. */
+    ossCheck?: CheckFeedOssAvailabilityOptions;
 }
 
 export interface RegisterFeedResult {
@@ -137,7 +150,7 @@ export async function registerFeed(input: RegisterFeedInput): Promise<RegisterFe
             throw new Error(`registerFeed: local locator unavailable — ${availability.reason ?? "unknown"}`);
         }
     } else {
-        const availability = await checkFeedOssAvailability(locator);
+        const availability = await checkFeedOssAvailability(locator, input.ossCheck);
         if (!availability.ok) {
             throw new Error(`registerFeed: oss locator unavailable — ${availability.reason ?? "unknown"}`);
         }
@@ -180,4 +193,118 @@ export async function registerFeed(input: RegisterFeedInput): Promise<RegisterFe
         data: { id, source: input.source, storageProvider: resolvedStorageProvider, locator },
     });
     return { id, updated: true };
+}
+
+export interface CreateFeedInput {
+    /** Full Link `name` (Filter itemName, etc.). */
+    name: string;
+    value: FeedValue;
+    source: FeedIngestSource;
+    storageProvider: string;
+    locator: string;
+    description?: string;
+    preview?: string;
+    tagList?: string[];
+    localStorageProvider?: string;
+    ossCheck?: CheckFeedOssAvailabilityOptions;
+}
+
+export interface CreateFeedResult {
+    id: string;
+    created: boolean;
+}
+
+/**
+ * Insert a new feed Link already on `.local` or `.oss` (not a `.public` promote).
+ * Dedup: `category` + `value` + `name`. Same original → `{ created: false }`.
+ */
+export async function createFeed(input: CreateFeedInput): Promise<CreateFeedResult> {
+    if (!isFeedValue(input.value)) {
+        throw new Error(`createFeed: unsupported feed value: ${String(input.value)}`);
+    }
+    if (!isFeedIngestSource(input.source)) {
+        throw new Error(`createFeed: source must be .local or .oss, got ${String(input.source)}`);
+    }
+
+    const name = input.name.trim();
+    if (name === "") {
+        throw new Error("createFeed: name is empty");
+    }
+
+    const resolvedStorageProvider = resolveFeedOriginalStorageProvider(input.source, input.storageProvider);
+    const locator = input.locator.trim();
+    if (locator === "") {
+        throw new Error("createFeed: locator is empty");
+    }
+
+    const { data: existing } = await getPossibleTarget({
+        filterList: feedLinkDedupFilters({ value: input.value, name }),
+    });
+    if (existing != null) {
+        const link = existing as Link;
+        if (isSameIngestState(link, input.source, resolvedStorageProvider, locator)) {
+            return { id: existing.id, created: false };
+        }
+        throw new Error("createFeed: feed name already exists with different source, storageProvider, or locator");
+    }
+
+    if (input.source === ".local") {
+        const localStorageProvider = input.localStorageProvider?.trim() ?? "";
+        if (localStorageProvider === "") {
+            throw new Error("createFeed: localStorageProvider is required when source is .local");
+        }
+        const availability = await checkFeedLocalAvailability({
+            value: input.value,
+            storageProvider: resolvedStorageProvider,
+            locator,
+            localStorageProvider,
+        });
+        if (!availability.ok) {
+            throw new Error(`createFeed: local locator unavailable — ${availability.reason ?? "unknown"}`);
+        }
+    } else {
+        const availability = await checkFeedOssAvailability(locator, input.ossCheck);
+        if (!availability.ok) {
+            throw new Error(`createFeed: oss locator unavailable — ${availability.reason ?? "unknown"}`);
+        }
+    }
+
+    const draft = buildFeedLinkDraft({
+        name,
+        value: input.value,
+        source: input.source,
+        storageProvider: resolvedStorageProvider,
+        locator,
+        description: input.description,
+        preview: input.preview ?? locator,
+        tagList: input.tagList,
+    });
+
+    try {
+        const { data, error } = await postTarget({
+            name: draft.name,
+            value: draft.value,
+            category: draft.category,
+            tagList: draft.tagList,
+            details: draft.details,
+        });
+        if (error != null || data == null) {
+            throw new Error(error?.message ?? "createFeed: postTarget failed");
+        }
+        logger.info("feed created", {
+            topic: "register",
+            data: { id: data.id, source: input.source, name, locator },
+        });
+        return { id: data.id, created: true };
+    } catch (error) {
+        if (isCreateTargetAlreadyExistsError(error)) {
+            const raced = await getPossibleTarget({
+                filterList: feedLinkDedupFilters({ value: input.value, name }),
+            });
+            if (raced.data != null) {
+                return { id: raced.data.id, created: false };
+            }
+        }
+        throw error;
+    }
 }

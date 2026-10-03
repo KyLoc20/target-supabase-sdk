@@ -160,6 +160,9 @@ export {
 export { RepoManager } from "./repo/repo-manager";
 export type {
     CheckFeedLocalAvailabilityInput,
+    CheckFeedOssAvailabilityOptions,
+    CreateFeedInput,
+    CreateFeedResult,
     FeedAvailabilityResult,
     FeedIngestSource,
     RegisterFeedInput,
@@ -168,6 +171,7 @@ export type {
 export {
     checkFeedLocalAvailability,
     checkFeedOssAvailability,
+    createFeed,
     FEED_INGEST_SOURCES,
     isFeedIngestSource,
     registerFeed,

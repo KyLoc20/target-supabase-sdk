@@ -36,7 +36,7 @@ import {
 } from "target-supabase-sdk";
 
 // Node — ingest after .public draft exists
-import { registerFeed, FEED_INGEST_SOURCES } from "target-supabase-sdk/node";
+import { registerFeed, createFeed, checkFeedOssAvailability, FEED_INGEST_SOURCES } from "target-supabase-sdk/node";
 ```
 
 ---
@@ -45,6 +45,7 @@ import { registerFeed, FEED_INGEST_SOURCES } from "target-supabase-sdk/node";
 
 1. **Create (browser or any host)** — `buildFeedLinkDraft` with `source: ".public"`, public `locator` (often a platform URL), `original.storageProvider: ""`. Persist via `postTarget` / `createTarget`.
 2. **Ingest (Node)** — `registerFeed` on an existing row `id`: validate the new locator, then promote `tagList` from `.public` to `.local` or `.oss` and update `original.storageProvider` + `locator`. Preserves `twinList` and other non-source tags.
+3. **Create already ingested (Node)** — `createFeed` inserts a new row already tagged `.local` or `.oss` (Filter / OSS-first). Dedup on `category` + `value` + `name`.
 
 ---
 
@@ -108,7 +109,7 @@ Leading `.` marks **system** tags (not user tags).
 3. Require `tagList` to include `.public` (not already ingested with different state).
 4. **Availability**
    - `.local` — `checkFeedLocalAvailability`: `storageProvider === localStorageProvider`, absolute path, file (or directory for `feed.image-list`) exists and is non-empty where applicable.
-   - `.oss` — `checkFeedOssAvailability`: `http(s)` URL; `HEAD`, then `GET` with `Range: bytes=0-0` if `HEAD` is not supported.
+   - `.oss` — `checkFeedOssAvailability`: `http(s)` URL; optional `tryLocalResolve` then `HEAD`, then `GET` with `Range: bytes=0-0` if `HEAD` is not supported. Pass `ossCheck.fetch` for proxied outbound.
 5. **Update** — `updateTarget` with optimistic lock `details->original->>storageProvider` eq `""` (still `.public` tier). Sets `tagList` via `buildFeedTagList`, updates `original.storageProvider` and `locator`, keeps `twinList`.
 
 **Errors (representative)**
@@ -149,7 +150,7 @@ Same variable as media register — see `src/shared/media/README.md`.
 
 | Topic | Current behavior | Possible follow-up |
 |-------|------------------|-------------------|
-| OSS auth | Only anonymous `HEAD`/`GET` | Signed URLs or provider-specific probes |
+| OSS HTTP | Default global `fetch`; inject `fetch` / `tryLocalResolve` | Signed URLs or provider-specific probes |
 | `.local` on another host | Fails availability (by design, like media) | Remote agent ingest |
 | `twinList` on ingest | Not re-validated | Optional probe per twin |
 | Re-ingest / migrate `.local` → `.oss` | Not supported | New API with lock on prior source tag |

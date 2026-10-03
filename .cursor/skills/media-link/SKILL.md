@@ -38,12 +38,11 @@ Do **not** put `url`, `producer`, or `mediaKind` in `original` — use `locator`
 
 ```text
 findMediaLink(value, name)
-  → exists? return { id, created: false }
-checkMediaAvailability(storageProvider, locator, localStorageProvider)
-  → storageProvider must equal localStorageProvider (e.g. LOCAL_STORAGE_PROVIDER)
-  → locator absolute + reachable
+  → local locator exists? return { id, created: false }
+  → HTTP locator exists? patch original if storage/locator differ
+checkMediaAvailability on local path (locator, or localLocator when locator is http)
 probe → contentHash / size / mimeType
-buildMediaLinkDraft → postTarget
+buildMediaLinkDraft → postTarget (persisted locator may be HTTP)
 ```
 
 ## image-list

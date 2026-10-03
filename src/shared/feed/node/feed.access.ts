@@ -87,7 +87,19 @@ export async function checkFeedLocalAvailability(
 const OSS_CHECK_TIMEOUT_MS = 15_000;
 const OSS_CHECK_MAX_ATTEMPTS = 2;
 
-async function probeHttpLocator(locator: string, method: "HEAD" | "GET"): Promise<Response> {
+export interface CheckFeedOssAvailabilityOptions {
+    /** Override global `fetch` (proxied outbound, etc.). Default: SDK `fetchWithRetry`. */
+    fetch?: (url: string, init?: RequestInit) => Promise<Response>;
+    /** When true, skip HTTP (co-located Files sandbox, etc.). */
+    tryLocalResolve?: (locator: string) => Promise<boolean>;
+    timeoutMs?: number;
+}
+
+async function probeHttpLocator(
+    locator: string,
+    method: "HEAD" | "GET",
+    options?: CheckFeedOssAvailabilityOptions,
+): Promise<Response> {
     return fetchWithRetry(
         locator,
         {
@@ -96,8 +108,9 @@ async function probeHttpLocator(locator: string, method: "HEAD" | "GET"): Promis
         },
         {
             label: "feed-oss-check",
-            timeoutMs: OSS_CHECK_TIMEOUT_MS,
+            timeoutMs: options?.timeoutMs ?? OSS_CHECK_TIMEOUT_MS,
             maxAttempts: OSS_CHECK_MAX_ATTEMPTS,
+            ...(options?.fetch != null ? { fetch: options.fetch } : {}),
         },
     );
 }
@@ -105,11 +118,15 @@ async function probeHttpLocator(locator: string, method: "HEAD" | "GET"): Promis
 /**
  * Remote reachability for feed ingest (`.oss` source) via HTTP(S).
  *
- * Tries `HEAD`, then `GET` with `Range: bytes=0-0` when `HEAD` is not allowed.
+ * Optional `tryLocalResolve` first (same-host Files). Then `HEAD`, then `GET` with
+ * `Range: bytes=0-0` when `HEAD` is not allowed. Pass `fetch` for proxied outbound.
  *
  * **Node-only**
  */
-export async function checkFeedOssAvailability(locator: string): Promise<FeedAvailabilityResult> {
+export async function checkFeedOssAvailability(
+    locator: string,
+    options?: CheckFeedOssAvailabilityOptions,
+): Promise<FeedAvailabilityResult> {
     const trimmed = locator.trim();
     if (trimmed === "") {
         return { ok: false, reason: "locator is empty" };
@@ -118,10 +135,20 @@ export async function checkFeedOssAvailability(locator: string): Promise<FeedAva
         return { ok: false, reason: `oss locator must be an http(s) URL: ${trimmed}` };
     }
 
+    if (options?.tryLocalResolve != null) {
+        try {
+            if (await options.tryLocalResolve(trimmed)) {
+                return { ok: true };
+            }
+        } catch {
+            // fall through to HTTP
+        }
+    }
+
     try {
-        let response = await probeHttpLocator(trimmed, "HEAD");
+        let response = await probeHttpLocator(trimmed, "HEAD", options);
         if (response.status === 405 || response.status === 501) {
-            response = await probeHttpLocator(trimmed, "GET");
+            response = await probeHttpLocator(trimmed, "GET", options);
         }
         if (response.ok || (response.status >= 200 && response.status < 400)) {
             return { ok: true };

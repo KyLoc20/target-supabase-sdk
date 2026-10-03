@@ -28,6 +28,8 @@ export interface FetchRetryOptions {
     /** When set, retry/success lines are logged via SDK logger. */
     logger?: LoggerWithScope;
     hint?: string;
+    /** Override global `fetch` (e.g. proxied outbound fetch). Ignores `dispatcher`. */
+    fetch?: (url: string, init?: RequestInit) => Promise<Response>;
 }
 
 function backoffMs(retryBaseMs: number, attempt: number, response?: Response, maxBackoffMs?: number): number {
@@ -47,11 +49,20 @@ function backoffMs(retryBaseMs: number, attempt: number, response?: Response, ma
     return delayMs;
 }
 
-async function fetchOnce(url: string, init: RequestInit, timeoutMs: number, dispatcher?: unknown): Promise<Response> {
+async function fetchOnce(
+    url: string,
+    init: RequestInit,
+    timeoutMs: number,
+    dispatcher?: unknown,
+    fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>,
+): Promise<Response> {
     const options: RequestInit & { dispatcher?: unknown } = {
         ...init,
         signal: AbortSignal.timeout(timeoutMs),
     };
+    if (fetchImpl != null) {
+        return fetchImpl(url, options);
+    }
     if (dispatcher != null) {
         options.dispatcher = dispatcher;
     }
@@ -76,7 +87,7 @@ export async function fetchWithRetry(
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-            const response = await fetchOnce(url, buildInit(), options.timeoutMs, options.dispatcher);
+            const response = await fetchOnce(url, buildInit(), options.timeoutMs, options.dispatcher, options.fetch);
 
             if (!response.ok && isRetryableStatus(response.status) && attempt < maxAttempts) {
                 const delayMs = backoffMs(retryBaseMs, attempt, response, options.maxBackoffMs);

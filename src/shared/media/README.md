@@ -93,10 +93,10 @@ Internal SDK code:
 
 ## Register flow (`registerMediaLink`)
 
-1. **Dedup** — `category` + `value` + `name` via `findMediaLink`. If present → `{ id, created: false }`.
-2. **Availability** — `storageProvider` must equal `localStorageProvider` (typically `LOCAL_STORAGE_PROVIDER` from the service `.env`); `locator` absolute and reachable.
-3. **Probe** — stream SHA-256 / `stat` / MIME (or directory file count for `image-list`).
-4. **Insert** — `buildMediaLinkDraft` → `postTarget` (race → re-find).
+1. **Dedup** — `category` + `value` + `name` via `findMediaLink`. Local locator: if present → `{ id, created: false }`. HTTP locator: patch `original` when storage/locator differ.
+2. **Availability** — local path: `storageProvider` must equal `localStorageProvider`; `locator` absolute and reachable. HTTP `locator`: require `localLocator` and probe that file on `localStorageProvider`.
+3. **Probe** — stream SHA-256 / `stat` / MIME (or directory file count for `image-list`) from the local file.
+4. **Insert** — `buildMediaLinkDraft` → `postTarget` (race → re-find / HTTP patch). Persisted `locator` may be the HTTP URL.
 
 ## Env (Node hosts)
 

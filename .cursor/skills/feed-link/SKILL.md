@@ -3,14 +3,15 @@ name: feed-link
 description: >-
   Feed convention on Link (feed.image|feed.audio|feed.video|feed.image-list) in
   target-supabase-sdk: buildFeedLinkDraft, system tags .public|.local|.oss,
-  registerFeed ingest on Node, feedLinkDedupFilters. Use when creating or ingesting platform feed Links.
+  registerFeed ingest on Node, createFeed for .oss/.local insert, feedLinkDedupFilters.
+  Use when creating or ingesting platform feed Links.
 ---
 
 # Feed Link (target-supabase-sdk)
 
 ## One-line rule
 
-**Feed = Link with `value === loaderKey ∈ {feed.image, feed.audio, feed.video, feed.image-list}`.** Draft on default entry; **ingest** (`.public` → `.local`/`.oss`) via Node `registerFeed` only.
+**Feed = Link with `value === loaderKey ∈ {feed.image, feed.audio, feed.video, feed.image-list}`.** Draft on default entry; **ingest** (`.public` → `.local`/`.oss`) via Node `registerFeed`; **insert already ingested** via `createFeed`.
 
 ## Imports
 
@@ -18,6 +19,7 @@ description: >-
 import { buildFeedLinkDraft, feedLinkDedupFilters } from "target-supabase-sdk";
 import {
   registerFeed,
+  createFeed,
   checkFeedLocalAvailability,
   checkFeedOssAvailability,
   FEED_INGEST_SOURCES,
@@ -27,7 +29,8 @@ import {
 ## Lifecycle
 
 1. `buildFeedLinkDraft({ source: ".public", storageProvider omitted, locator: platformUrl, ... })` → `postTarget`
-2. `registerFeed({ id, source: ".local"|".oss", storageProvider, locator, localStorageProvider? })`
+2. `registerFeed({ id, source: ".local"|".oss", storageProvider, locator, localStorageProvider?, ossCheck? })`
+3. Or `createFeed({ name, value, source: ".oss"|".local", storageProvider, locator, ossCheck? })` when no `.public` row exists
 
 ## System source tags
 
@@ -40,7 +43,7 @@ Leading `.` = system tag (not user tag): `.public`, `.local`, `.oss`.
 | `source` | Locator check |
 |----------|----------------|
 | `.local` | `storageProvider === localStorageProvider`, absolute path, file or `feed.image-list` directory |
-| `.oss` | `http(s)` URL; `HEAD` then ranged `GET` |
+| `.oss` | `http(s)` URL; optional `tryLocalResolve` then `HEAD` / ranged `GET`; inject `ossCheck.fetch` |
 
 Optimistic lock: `details->original->>storageProvider` eq `""` while promoting off `.public`.
 
@@ -51,7 +54,7 @@ Idempotent when same `source` + `storageProvider` + `locator` already stored.
 | Symbol | Entry |
 |--------|--------|
 | `buildFeedLinkDraft`, `buildFeedLinkName`, `feedLinkDedupFilters`, `FEED_VALUES`, `isFeedValue` | `.` |
-| `registerFeed`, `FEED_INGEST_SOURCES`, availability checks | `/node` |
+| `registerFeed`, `createFeed`, `FEED_INGEST_SOURCES`, availability checks | `/node` |
 
 Never re-export `./node` from `shared/feed/index.ts`.
 

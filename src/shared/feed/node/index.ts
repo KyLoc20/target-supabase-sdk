@@ -5,7 +5,11 @@
 
 export type { FeedIngestSource } from "../feed.interface";
 export { FEED_INGEST_SOURCES, isFeedIngestSource } from "../feed.interface";
-export type { CheckFeedLocalAvailabilityInput, FeedAvailabilityResult } from "./feed.access";
+export type {
+    CheckFeedLocalAvailabilityInput,
+    CheckFeedOssAvailabilityOptions,
+    FeedAvailabilityResult,
+} from "./feed.access";
 export { checkFeedLocalAvailability, checkFeedOssAvailability } from "./feed.access";
-export type { RegisterFeedInput, RegisterFeedResult } from "./feed.service";
-export { registerFeed } from "./feed.service";
+export type { CreateFeedInput, CreateFeedResult, RegisterFeedInput, RegisterFeedResult } from "./feed.service";
+export { createFeed, registerFeed } from "./feed.service";

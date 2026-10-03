@@ -13,9 +13,11 @@ import { buildFeedLinkName } from "./feed.name";
 
 export interface BuildFeedLinkDraftInput {
     value: FeedValue;
+    /** When set, used as Link `name` (skips {@link buildFeedLinkName}). */
+    name?: string;
     /** Dots are normalized to spaces in {@link buildFeedLinkName} before joining with `feedKey`. */
-    platformName: string;
-    feedKey: string;
+    platformName?: string;
+    feedKey?: string;
     source: FeedSource;
     locator: string;
     /**
@@ -75,7 +77,8 @@ export function buildFeedLinkDraft(input: BuildFeedLinkDraftInput): TargetDraft<
         throw new Error(`buildFeedLinkDraft: unsupported feed source: ${String(input.source)}`);
     }
 
-    const name = buildFeedLinkName(input.platformName, input.feedKey);
+    const explicitName = input.name?.trim() ?? "";
+    const name = explicitName !== "" ? explicitName : buildFeedLinkName(input.platformName ?? "", input.feedKey ?? "");
     const locator = input.locator.trim();
     if (locator === "") {
         throw new Error("buildFeedLinkDraft: locator is empty");
