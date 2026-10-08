@@ -5,12 +5,15 @@ import {
     OPTIMISTIC_LOCK_ERROR_CODE,
     OPTIMISTIC_LOCK_FAILED_MESSAGE,
     type QueryFilter,
+    type TargetFilterBuilder,
     updateTargetDetails,
     validateWithSchema,
 } from "../core.api";
 import { generateResponse, type SupabaseResponse } from "../core.interface";
 import { createLogger, type LoggerWithScope } from "../shared/log";
 import { getErrorMessage } from "../shared/utils/error.utils";
+import { escapeIlikePattern } from "../shared/utils/postgrest.utils";
+import { supabase } from "../supabase";
 import { LOG_TOPIC_TASK } from "./task.constant";
 import { CategoryTask, ResultCode, type Task, type TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
 
@@ -112,11 +115,27 @@ export type PatchTaskProgressPayload = z.infer<typeof patchTaskProgressSchema>;
 
 export const patchClaimTaskSchema = z.object({
     nodeId: nodeIdSchema,
+    /** Task `value` must be in this list (always applied). */
     availableTaskList: z.array(z.string()).min(1),
     traceId: traceIdSchema,
+    /**
+     * Optional second axis on `name` (AND with `availableTaskList`, not coupled to `value`).
+     * When non-empty: `name` must equal a prefix or start with `prefix:`; query uses PostgREST `ilike`.
+     */
+    namePrefixList: z.array(z.string().trim().min(1)).optional(),
 });
 
 export type PatchClaimTaskPayload = z.infer<typeof patchClaimTaskSchema>;
+
+/** `name === prefix` or `name.startsWith(prefix + ':')` via `name ilike 'prefix%'`. */
+function buildClaimTaskNamePrefixFilterBuilder(namePrefixes: string[]): TargetFilterBuilder {
+    const base = supabase.client.from("target").select("*");
+    if (namePrefixes.length === 1) {
+        return base.ilike("name", `${escapeIlikePattern(namePrefixes[0])}%`);
+    }
+    const nameOrParts = namePrefixes.map((prefix) => `name.ilike.${escapeIlikePattern(prefix)}%`);
+    return base.or(nameOrParts.join(","));
+}
 
 // ─── Optimistic lock helpers ─────────────────────────────────────────────────
 
@@ -338,7 +357,11 @@ export const patchTaskProgress = validateWithSchema(
 /**
  * Discover and claim one TODO task for this node.
  *
- * Flow: oldest TODO in `availableTaskList` (FIFO by `created_at`) → {@link claimTaskById}.
+ * Match criteria (all required): `details.status = TODO`, `value ∈ availableTaskList`, and when
+ * `namePrefixList` is non-empty, `name` matches any listed prefix. Those filters are independent
+ * (AND); omitting `namePrefixList` does not relax the `value` constraint.
+ *
+ * Flow: oldest matching row (FIFO by `created_at`) → {@link claimTaskById}.
  * Equivalent to `patchChangeTaskStatus({ id, action: CLAIM, nodeId })` when `id` is already known.
  *
  * Returns `data: null` when no TODO task matches.
@@ -347,25 +370,49 @@ export const patchTaskProgress = validateWithSchema(
 export const patchClaimTask = validateWithSchema(
     patchClaimTaskSchema,
     "patchClaimTaskSchema",
-)(async ({ nodeId, availableTaskList, traceId }): Promise<SupabaseResponse<Task | null>> => {
+)(async ({ nodeId, availableTaskList, traceId, namePrefixList }): Promise<SupabaseResponse<Task | null>> => {
     const logger = createLogger({ module: "patchClaimTask", traceId, labels: { nodeId } });
+
+    const namePrefixes = (namePrefixList ?? []).map((prefix) => prefix.trim()).filter((prefix) => prefix !== "");
+
+    function taskNameMatchesPrefixList(name: string): boolean {
+        return namePrefixes.some((prefix) => name === prefix || name.startsWith(`${prefix}:`));
+    }
 
     let todoTask: Task;
     try {
-        const { data: taskCandidates } = await getTargetList<Task>({
-            category: CategoryTask.TASK,
-            filterList: [
-                { field: TASK_STATUS_FIELD, operator: "eq", value: TaskStatus.TODO },
-                { field: "value", operator: "in", value: availableTaskList },
-            ],
-            limit: 1,
-            orderBy: { field: "created_at", ascending: true },
-        });
-        const possibleTask = taskCandidates?.[0] ?? null;
-        if (possibleTask == null) {
-            return generateResponse.success(null);
+        if (namePrefixes.length === 0) {
+            const { data: taskCandidates } = await getTargetList<Task>({
+                category: CategoryTask.TASK,
+                filterList: [
+                    { field: TASK_STATUS_FIELD, operator: "eq", value: TaskStatus.TODO },
+                    { field: "value", operator: "in", value: availableTaskList },
+                ],
+                limit: 1,
+                orderBy: { field: "created_at", ascending: true },
+            });
+            const possibleTask = taskCandidates?.[0] ?? null;
+            if (possibleTask == null) {
+                return generateResponse.success(null);
+            }
+            todoTask = possibleTask;
+        } else {
+            const { data: taskCandidates } = await getTargetList<Task>({
+                category: CategoryTask.TASK,
+                filterList: [
+                    { field: TASK_STATUS_FIELD, operator: "eq", value: TaskStatus.TODO },
+                    { field: "value", operator: "in", value: availableTaskList },
+                ],
+                limit: 1,
+                orderBy: { field: "created_at", ascending: true },
+                filterBuilder: buildClaimTaskNamePrefixFilterBuilder(namePrefixes),
+            });
+            const possibleTask = taskCandidates?.find((task) => taskNameMatchesPrefixList(task.name)) ?? null;
+            if (possibleTask == null) {
+                return generateResponse.success(null);
+            }
+            todoTask = possibleTask;
         }
-        todoTask = possibleTask;
     } catch (error) {
         const message = getErrorMessage(error);
         logger.error("獲取 TODO 任務失敗", { topic: LOG_TOPIC_TASK, data: { error: message, availableTaskList } });

@@ -2,7 +2,7 @@ import { isOptimisticLockResponse } from "../core.api";
 import { BaseNodeRuntime, LOG_TOPIC_NODE, type NodeLoopContext } from "../node/node-runtime.base";
 import { createLogger, createScope, type LoggerWithScope, withModule } from "../shared/log";
 import { getErrorMessage, toError } from "../shared/utils/error.utils";
-import { patchChangeTaskStatus, patchClaimTask } from "./task.api";
+import { type PatchClaimTaskPayload, patchChangeTaskStatus, patchClaimTask } from "./task.api";
 import { CRITICAL_UNKNOWN_TASK_TRACE_ID, LOG_TOPIC_TASK } from "./task.constant";
 import { TaskStatusAction } from "./task.interface";
 import { TaskManager, type TaskRunResult } from "./task-manager";
@@ -17,6 +17,11 @@ class TaskNode extends BaseNodeRuntime {
 
     get availableTaskList(): readonly string[] {
         return [...this._availableTaskList];
+    }
+
+    /** Optional claim filters passed to {@link patchClaimTask} (e.g. name prefix per task type). */
+    protected getPatchClaimTaskOptions(): Pick<PatchClaimTaskPayload, "namePrefixList"> {
+        return {};
     }
 
     constructor() {
@@ -63,6 +68,7 @@ class TaskNode extends BaseNodeRuntime {
             nodeId,
             availableTaskList: [...availableTaskList],
             traceId: loopTraceId,
+            ...this.getPatchClaimTaskOptions(),
         });
         if (claimError) {
             if (isOptimisticLockResponse(claimError)) {
