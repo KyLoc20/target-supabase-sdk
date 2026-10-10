@@ -1,7 +1,7 @@
 /**
  * PostgREST / Supabase JS client helpers for `target` table filters.
  *
- * @see `.cursor/skills/postgrest-query-filters/SKILL.md`
+ * @see `.cursor/skills/target-list-query/SKILL.md`
  */
 
 /**

@@ -244,7 +244,7 @@ async function runBootstrapScan(options: BootstrapLocalTasksOptions): Promise<Bo
  * ./tasks/my-task/index.mjs
  * ```
  *
- * `taskDir` / `entry` paths are relative to **their config file's directory** (see config-file-relative-paths skill).
+ * `taskDir` / `entry` paths are relative to **their config file's directory** (see task-local-discovery skill).
  *
  * Legacy fallback: `./task.config.js` at project root (`taskDir: "./tasks"`).
  */

@@ -3,8 +3,12 @@ name: service-guard
 description: >-
   ServiceGuardNode for L3 services on target-supabase-sdk: readiness gate,
   spawnBusinessNodes (scheduler+worker), registry slot, TaskNode liveness,
-  silent mode, isGuardAvailable / guardRetryAfterSec. Blueprint: watch-service.
-  Use when wiring src/processes/service-guard.ts or reviewing guard ticks.
+  silent mode, spawn ownership (main→guard only; guard→scheduler+worker),
+  isGuardAvailable / guardRetryAfterSec, consecutive heartbeat failure,
+  Docker healthcheck 503 loops, HTTP /health vs /observability.
+  Blueprint: watch-service. Use when wiring src/processes/service-guard.ts
+  or reviewing guard ticks, silent mode, or migrating L3 main off
+  spawnScheduler / criticalSupervisors scheduler.
 ---
 
 # ServiceGuardNode (target-supabase-sdk/node)
@@ -36,7 +40,6 @@ import { createL3ChildLauncher } from "target-supabase-sdk/node";
 
 `spawnBusinessNodes` / `stopBusinessNodes` / `isBusinessReady` come from `createL3ChildLauncher` — do not hand-roll in the service.
 
-Silent mode, spawn ownership, and HTTP liveness vs readiness: [guard-silent-mode](../guard-silent-mode/SKILL.md).
 Blueprint: [watch-service](../../../watch-service/.cursor/skills/watch-service/SKILL.md).
 
 ## Per-service wiring (blueprint)
@@ -74,6 +77,51 @@ await createServiceGuardNode().start();
 ```
 
 Reference implementations: **watch-service**, **log-service** (`src/processes/service-guard.ts`).
+
+## Spawn ownership
+
+| Parent | Spawns |
+|--------|--------|
+| **main** | Guard only. download-service also spawns **chrome-sidecar** (not a Node) before Guard. |
+| **Guard** | scheduler + worker (download scheduler is noop). |
+
+`criticalSupervisors` is **`["guard"]` only**. Do not list `scheduler` — Guard death still takes down the host; scheduler death is recovered by Guard.
+
+Main `stopAll` must pass `extraPids` for worker and scheduler (Guard spawned them in another OS process).
+
+`stopBusinessNodes` runs **in the Guard process** and must not stop Guard or main. Reset `worker.ready` / `scheduler.ready` to `false` so recovery does not succeed on stale flags.
+
+Use `createL3ChildLauncher` in `launcher.ts` for spawn/stop. Scheduler writes `scheduler.ready` in `onBeforeRegisterNode` (same pattern as TaskNode `worker.ready`). Bootstrap `waitForServiceReady` requires both (download also waits `chromeSidecar.ready`).
+
+## Silent vs exit
+
+Silent is **consecutive Guard heartbeat failure only** (threshold 3). Not worker crash, not a brief `ready=false` during respawn.
+
+| Trigger | Behavior |
+|---------|----------|
+| Heartbeat consecutive failures | Enter silent: persist `guard.mode`, stop business nodes, heartbeat-only loop with backoff 15s→5min. **No `process.exit`.** |
+| Heartbeat restored | Recover: stop → `spawnBusinessNodes` → wait `isBusinessReady`. Failure returns to silent. |
+| Bootstrap readiness / register-node failure | Guard still exits → host dies (cannot start without DB). |
+| SIGTERM / SIGINT / slot lost / uncaughtException | Still shutdown/exit. |
+
+Healthy loop **ensures** business processes via idempotent `spawnBusinessNodes` (respawn exited children). TaskNode stale respawn stays on the guard runner. Do **not** enter silent when `isBusinessReady()` is false — that races worker restart.
+
+## HTTP (liveness vs readiness)
+
+Docker healthchecks treat non-2xx as restart. Silent must not flap the container.
+
+| Surface | Silent / offline |
+|---------|------------------|
+| **`/health*`** | Local runtime only (`readiness.passed` + registry). **200** while main is up. JSON includes `available: isGuardAvailable(guard)`. |
+| **`/observability`** | `ok` includes `isGuardAvailable`. Tolerate `scanTargetList` failure. **503** + `Retry-After` from `guardRetryAfterSec`. |
+| **Business routes** | **503** + `Retry-After`. Static `/ui/` may stay up. |
+
+```typescript
+import { guardRetryAfterSec, isGuardAvailable } from "target-supabase-sdk/node";
+
+isGuardAvailable(runtime.guard); // mode omitted or "healthy"
+guardRetryAfterSec(runtime.guard); // null when available
+```
 
 ## Runtime state — `guard` slice (all L3 services)
 
@@ -114,6 +162,5 @@ L3 consumer services must **not** add global DOING reclaim schedulers; wait for 
 
 ## Related
 
-- [guard-silent-mode](../guard-silent-mode/SKILL.md) — silent + spawn ownership
-- [l3-service-host](../l3-service-host/SKILL.md)
+- [l3-service-host](../l3-service-host/SKILL.md) — host, spawn, readiness, extraPids
 - [watch-service](../../../watch-service/.cursor/skills/watch-service/SKILL.md) — blueprint service

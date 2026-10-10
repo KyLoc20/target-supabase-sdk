@@ -1,10 +1,12 @@
 ---
 name: service-preload
 description: >-
-  Unified Node --import preload protocol for services on target-supabase-sdk:
-  one scripts/preload.mjs per service, runServicePreload from target-supabase-sdk/preload.
-  Use when adding preload scripts, migrating off preload-env/diagnostics chains, or
-  configuring launcher spawnTsxChild preloadModules.
+  Unified Node --import preload protocol and env loading for target-supabase-sdk:
+  one scripts/preload.mjs per service, runServicePreload from target-supabase-sdk/preload,
+  loadEnvFiles, requireEnv, envMs/envPort, resolveProjectRootFromModule,
+  publicBaseUrlFromEnv, initSupabaseFromStandardEnv. Use when adding preload scripts,
+  migrating off preload-env/diagnostics chains, configuring launcher spawnTsxChild
+  preloadModules, implementing service env.ts, or Supabase bootstrap from SUPABASE_* keys.
 ---
 
 # Service preload (target-supabase-sdk)
@@ -217,8 +219,51 @@ supabase-sdk/
 - Reintroduce multi-file preload chains in new services
 - Use a shared JSON registry for log readiness — file spool uses per-process `.tmp` / `.json` instead
 
+## Env parsers (`src/node/env/`)
+
+Preload loads `.env`; app entry reads `process.env` and calls async init. Do not duplicate `.env` parsing in service `env.ts`.
+
+```typescript
+import {
+  loadEnvFiles,
+  requireEnv,
+  readEnv,
+  envMs,
+  envPort,
+  envInt,
+  envNumber,
+  envBool,
+  resolveProjectRootFromModule,
+  resolveProjectRootByPackageName,
+  publicBaseUrlFromEnv,
+  initSupabaseFromStandardEnv,
+} from "target-supabase-sdk/node";
+
+// esbuild bundles: walk up to package.json by name
+const projectRoot = resolveProjectRootByPackageName(import.meta.url, "storage-service");
+// tsx / fixed depth
+const projectRoot = resolveProjectRootFromModule(import.meta.url, "..");
+
+await initSupabaseFromStandardEnv({
+  root: projectRoot,
+  afterLoadEnv: normalizeLegacyAliases,
+});
+
+const timeout = envMs("STARTUP_READY_TIMEOUT_MS", 180_000);
+const port = envPort(3100);
+const baseUrl = publicBaseUrlFromEnv(port, { envKey: "STORAGE_PUBLIC_URL" });
+```
+
+| API | Purpose |
+|-----|---------|
+| `loadEnvFiles` | `.env.local` → `.env`, no overwrite of existing env |
+| `requireEnv` / `readEnv` | Required vs optional string |
+| `envMs` / `envInt` / `envPort` / `envNumber` / `envBool` | Typed parsers |
+| `initSupabaseFromStandardEnv` | App entry only — requires `SUPABASE_URL` + `SUPABASE_ANON_KEY` |
+
+Keep domain getters in service `src/env.ts` (Telegram / upload limits / legacy aliases). Do not put service-specific keys in the SDK or import `node/env` from the browser entry.
+
 ## Related skills
 
-- [env-config](../env-config/SKILL.md) — Phase 2 parsers, Phase 2b Supabase init in app
 - [log-spool](../log-spool/SKILL.md) — file spool layout and L3 integration
-- [process-spawn](../process-spawn/SKILL.md) — `preloadModules` single path
+- [l3-service-host](../l3-service-host/SKILL.md) — `preloadModules`, spawn, readiness

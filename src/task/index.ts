@@ -1,6 +1,6 @@
 /**
  * Task domain public API — curated re-exports only.
- * Internal modules (local-task-registry, task-repo-context, task.utils) stay private.
+ * Internal modules (local-task-registry, task-repo-context) stay private.
  */
 
 export type {

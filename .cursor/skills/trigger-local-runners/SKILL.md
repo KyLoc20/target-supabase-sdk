@@ -148,7 +148,7 @@ Due runners in one tick run concurrently (`Promise.all`). If multiple runners ca
 
 ## Do not
 
-- Call `scanEnabledTriggers` from `TriggerNode`
+- Call `scanEnabledTriggers` from `TriggerNode` — remote daily due-check uses `isTriggerDue` / `buildFireKey` on `/node`, not TriggerNode
 - Run duplicate TriggerNode fleets with the same side effects
 - `unregisterRunner` while runner is `running`
 

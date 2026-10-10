@@ -181,7 +181,7 @@ export const { readRuntimeState, writeRuntimeState, resetRuntimeStateForStartup,
 
 Each process writes only its slice — no cross-slice lost updates. Top-level `updatedAt` is derived on read from the latest shard file mtime (no shared meta file).
 
-Pair with `ServiceReadyGate` + `waitForServiceReady` — see [readiness](../readiness/SKILL.md).
+Pair with `ServiceReadyGate` + `waitForServiceReady` — see [l3-service-host](../l3-service-host/SKILL.md).
 
 ---
 
@@ -191,8 +191,8 @@ Pair with `ServiceReadyGate` + `waitForServiceReady` — see [readiness](../read
 |-------|------|
 | Log-persist shard registry (same Windows EPERM class) | [service-preload](../service-preload/SKILL.md) |
 | L3 host + slice ownership | [l3-service-host](../l3-service-host/SKILL.md) |
-| Ready gate reads `readiness` + `worker` slices | [readiness](../readiness/SKILL.md) |
-| `/health` aggregates runtime + TaskNode | [observability](../observability/SKILL.md) |
+| Ready gate reads `readiness` + `worker` slices | [l3-service-host](../l3-service-host/SKILL.md) |
+| `/health` aggregates runtime + TaskNode | [l3-service-host](../l3-service-host/SKILL.md) |
 | Reference service wiring | [watch-service SKILL](../../watch-service/.cursor/skills/watch-service/SKILL.md) |
 
 ---

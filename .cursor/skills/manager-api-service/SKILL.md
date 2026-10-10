@@ -2,9 +2,12 @@
 name: manager-api-service
 description: >-
   Three-layer domain pattern for target-supabase-sdk: Manager (domain logic),
-  API (Supabase persistence), Service (workflow orchestration). Use when adding
+  API (Supabase persistence), Service (workflow orchestration). Function parameter
+  style: use a single options object when a function has more than two parameters
+  or multiple parameters of the same type (especially string). Use when adding
   or reviewing domain modules, deciding where code belongs, naming *Manager,
-  post*/get*/delete* APIs, or one-shot publish/restore flows (e.g. Parcel).
+  post*/get*/delete* APIs, one-shot publish/restore flows (e.g. Parcel), or
+  authoring helpers / scope factories / APIs.
 ---
 
 # Manager · API · Service
@@ -121,3 +124,30 @@ CLI `parcel:split` / `parcel:restore` call **Service** + **getParcel**; chunk/ke
 - Fat API that uploads files → belongs in Manager + Service
 - Service reimplementing checksum/crypto → call Manager
 - Singleton `getInstance()` on stateless Manager → unnecessary; use module exports unless options/lifecycle required (see `singleton-pitfalls` skill)
+
+## Function parameters
+
+**More than two parameters, or two+ parameters of the same type (especially `string`) → one options object; call sites use named fields.**
+
+Keep positional when ≤ 2 args and types are distinct (`withModule(scope, module)`). Convert `(module, traceId, nodeId)` and growing optional tails to `{Verb}{Noun}Input`.
+
+```typescript
+export type CreateScopeInput = {
+  module: string;
+  traceId: string;
+  labels?: Record<string, string>;
+  parent?: LogScope;
+};
+
+export function createScope(input: CreateScopeInput): LogScope { /* … */ }
+```
+
+| Piece | Pattern |
+|-------|---------|
+| Input type | `{Verb}{Noun}Input` — export when public |
+| Parameter name | `input` or `options` |
+| Optional fields | `?` + defaults inside the function |
+
+Reference: `createScope` / `patchScope` in `src/shared/log/log-scope.ts`, `createLogger` in `create-logger.ts`.
+
+Do not: `(a: string, b: string, c: string)` public helpers; boolean flags as 3rd+ positional args; untyped `Record` for everything.

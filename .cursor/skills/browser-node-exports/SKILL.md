@@ -121,7 +121,7 @@ Interfaces and Supabase RPC helpers can be browser-safe; classes that touch loca
 
 **Internal imports use leaf paths**
 
-Within a domain, import `from "./task.api"` not `from "./index"` — avoids barrel cycles. See [barrel-import-cycles](../barrel-import-cycles/SKILL.md).
+Within a domain, import `from "./task.api"` not `from "./index"` — avoids barrel cycles. See [library-exports](../library-exports/SKILL.md).
 
 **Never statically import from browser graph**
 

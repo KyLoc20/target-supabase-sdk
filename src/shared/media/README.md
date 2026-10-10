@@ -106,4 +106,4 @@ Internal SDK code:
 
 Cross-host `storageProvider` cannot be verified on the current process — availability returns `ok: false`.
 
-See `.cursor/skills/media-link/SKILL.md`.
+See `.cursor/skills/link-conventions/SKILL.md`.

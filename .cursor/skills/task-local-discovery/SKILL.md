@@ -3,8 +3,10 @@ name: task-local-discovery
 description: >-
   Task discovery, registration, and runtime JS loading in target-supabase-sdk.
   Use when implementing or reviewing task.config.js, registerTasks, bootstrapLocalTasks,
-  RepoManager, prepareTask, postTask, postTaskWithValidation, TaskRepoValidation, Task.value / Repo.value keys, worker availableTaskList,
-  getScanRemoteRepoValues, patchClaimTask, or remote vs local script loading.
+  RepoManager, prepareTask, postTask, postTaskWithValidation, TaskRepoValidation,
+  Task.value / Repo.value keys, worker availableTaskList, getScanRemoteRepoValues,
+  patchClaimTask, remote vs local script loading, taskDir/entry paths that must not
+  use process.cwd(), start/shutdown single-flight guards, or concurrent bootstrap caches.
 ---
 
 # Task discovery & runtime loading (target-supabase-sdk)
@@ -52,7 +54,7 @@ Author (TS optional) → Build → JS artifact → runtime import("./entry.js")
 
 ## Host app layout
 
-See [config-file-relative-paths](../config-file-relative-paths/SKILL.md) for path resolution rules.
+Paths written **inside** a config file resolve against that file's directory — not `process.cwd()`. Only **discovering** which config file exists uses `cwd` as anchor.
 
 ```text
 <host-project>/
@@ -280,11 +282,42 @@ Caches: bootstrap fingerprint; module import cache; remote context cache by `tas
 
 ---
 
+## Config-file-relative paths
+
+**Paths inside a config file resolve against that file's directory — not `process.cwd()`.**
+
+| Anchor | Used for | API |
+|--------|----------|-----|
+| **Config file directory** | Fields inside the config (`taskDir`, `entry`, …) | `resolvePathFromConfigFile`, `resolvePathFromBaseDir` |
+| **`cwd`** | Finding the root config file on disk | `resolvePathFromCwd`, `resolveFirstExistingPath` |
+
+Wrong (common): `config/task.config.js` + `taskDir: "./tasks"` → `config/tasks/`, not repo `tasks/`. Use `"../tasks"`.
+
+Reuse `src/shared/utils/config-path.utils.ts` — do not duplicate `dirname` + `resolve` + `pathToFileURL` in feature modules. Absolute filesystem paths in config are used as-is. `https://` / `file://` on `Repo.details.url` are not config-file-relative.
+
+## Single-flight
+
+**Concurrent callers await the same in-flight Promise — the expensive async body runs once.**
+
+| Pattern | Semantics | Reference |
+|---------|-----------|-----------|
+| **A. Lifetime cache** | At most once per instance; completed Promise stays | `BaseNodeRuntime.start()` / `shutdown()` |
+| **B. In-flight only** | Clear in `finally` so a later call can run again | `bootstrapLocalTasks` + fingerprint cache |
+
+Assign the in-flight Promise **synchronously** (no `await` between check and assign). Single-flight ≠ singleton — it dedupes one operation in flight, not global identity. See [singleton-pitfalls](../singleton-pitfalls/SKILL.md).
+
+```typescript
+// ❌ TOCTOU
+if (!this.running) {
+    this.running = true;
+    await this.runStart();
+}
+```
+
 ## Related skills
 
-- [config-file-relative-paths](../config-file-relative-paths/SKILL.md) — `taskDir` / `entry` path anchors
 - [target-list-query](../target-list-query/SKILL.md) — `scanTargetList` / `getTargetList` layering
 - [sdk-error-handling](../sdk-error-handling/SKILL.md) — throw vs envelope at boundaries
 - [task-state-machine](../task-state-machine/SKILL.md) — `patchClaimTask`, claim flow
 - [singleton-pitfalls](../singleton-pitfalls/SKILL.md) — `supabase.initialize()` before remote bootstrap
-- [single-flight](../single-flight/SKILL.md) — `bootstrapLocalTasks` concurrent dedupe pattern
+- [library-dev-scripts](../library-dev-scripts/SKILL.md) — worker `cwd` vs project root

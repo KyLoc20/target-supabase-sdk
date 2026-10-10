@@ -1,10 +1,12 @@
 ---
 name: task-state-machine
 description: >-
-  Task status state machine and task.api.ts feature APIs in target-supabase-sdk.
-  Use when implementing or reviewing patchChangeTaskStatus, TaskStatusAction, CLAIM,
-  patchClaimTask, patchTaskProgress, Zod schemas, optimistic lock filters on task rows,
-  worker vs scheduler transition boundaries, or planned DOING reclaim on node LOST.
+  Task status state machine, queue delivery semantics, and task.api.ts feature APIs
+  in target-supabase-sdk. Use when implementing or reviewing patchChangeTaskStatus,
+  TaskStatusAction, CLAIM, patchClaimTask, patchTaskProgress, Zod schemas, optimistic
+  lock filters on task rows, worker vs scheduler transition boundaries, planned DOING
+  reclaim on node LOST, pollTargetList, getPollCommandList, postCommand, queue dequeue,
+  concurrent workers, or deciding RPC / claim / idempotency (at-most-once vs at-least-once).
 ---
 
 # Task state machine (`src/task/task.api.ts`)
@@ -163,13 +165,32 @@ and any path that sets `LOST` without waiting.
 - Keep fail-closed scheduler checks (`TODO \| DOING`) — correct once SDK reclaims on `LOST`.
 - Document ops dependency until shipped: manual `CANCEL` with owner `nodeId`, or platform monitor.
 
+## Queue delivery semantics
+
+| Semantic | Meaning | Typical failure |
+|----------|---------|-----------------|
+| **at-most-once** | Processed at most once | **Loss** — dequeued but worker crashes before handling |
+| **at-least-once** | Processed at least once | **Duplicate** — handled but ack/delete fails |
+| **exactly-once** | Neither loss nor duplicate | Needs DB atomicity + idempotent handlers |
+
+| API / flow | Practical semantic | Notes |
+|------------|--------------------|-------|
+| `pollTargetList` / `getPollCommandList` | ~at-most-once | SELECT then DELETE by `id`; not atomic (`TODO(concurrency)` in `core.api.ts`) |
+| `patchClaimTask` / optimistic UPDATE | Toward at-most-once claim | Lock on `status = TODO`; lost race throws |
+| Task FINISH after claim | App handles partial failure | Claimed DOING + process death → orphan until reclaim |
+| DOING orphan recovery | **Not implemented** | Planned: node `LOST` → `CANCEL` DOING → TODO (above) |
+
+Upgrade dequeue when multiple workers poll the same queue, loss is unacceptable, or duplicates cause bad side effects. Preferred future: RPC + `FOR UPDATE SKIP LOCKED`, or claim-status then process. Align claims with [optimistic-lock-update](../optimistic-lock-update/SKILL.md).
+
+Do not assume `generateResponse.success` rows were processed — only dequeued.
+
 ## Related skills
 
 - [task-local-discovery](../task-local-discovery/SKILL.md) — prepareTask, worker bootstrap
 - [optimistic-lock-update](../optimistic-lock-update/SKILL.md) — lock filter pattern
 - [sdk-error-handling](../sdk-error-handling/SKILL.md) — throw vs null
 - [service-guard](../service-guard/SKILL.md) — worker respawn; future stale-node → LOST + reclaim
-- [queue-delivery-semantics](../queue-delivery-semantics/SKILL.md) — DOING orphan recovery
+- [target-list-query](../target-list-query/SKILL.md) — `pollTargetList` vs `scanTargetList`
 
 ## Reference
 

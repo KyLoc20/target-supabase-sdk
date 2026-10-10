@@ -159,6 +159,6 @@ Same variable as media register — see `src/shared/media/README.md`.
 
 ## Related
 
-- `.cursor/skills/feed-link/SKILL.md`
+- `.cursor/skills/link-conventions/SKILL.md`
 - Media register pattern: `src/shared/media/README.md`
 - Optimistic lock: `.cursor/skills/optimistic-lock-update/SKILL.md`

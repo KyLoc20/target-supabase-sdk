@@ -15,7 +15,7 @@ export function getConfigFileDir(configFilePath: string): string {
  * - Absolute `pathInConfig` → returned as-is
  * - Relative `pathInConfig` → `resolve(dirname(configFilePath), pathInConfig)`
  *
- * **Not** relative to `process.cwd()`. See `.cursor/skills/config-file-relative-paths/SKILL.md`.
+ * **Not** relative to `process.cwd()`. See `.cursor/skills/task-local-discovery/SKILL.md`.
  */
 export function resolvePathFromConfigFile(configFilePath: string, pathInConfig: string): string {
     const trimmed = pathInConfig.trim();

@@ -60,7 +60,12 @@ function enabledTriggerFilter() {
     return [{ field: TRIGGER_STATUS_FIELD, operator: "eq" as const, value: TriggerStatus.ENABLED }];
 }
 
-/** List all ENABLED triggers (Phase 1: in-memory due check). */
+/**
+ * List all ENABLED triggers. Due-check is in-memory on the caller:
+ * filter with `isTriggerDue`, then `patchTriggerFired` with `buildFireKey`
+ * (both from `trigger.utils`, exported on `/node`).
+ * Do not call this from TriggerNode (local interval runners only).
+ */
 export const scanEnabledTriggers = validateWithSchema(
     scanEnabledTriggersSchema,
     "scanEnabledTriggersSchema",

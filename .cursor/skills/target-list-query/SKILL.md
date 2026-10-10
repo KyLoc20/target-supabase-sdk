@@ -3,9 +3,11 @@ name: target-list-query
 description: >-
   Target table query layering in target-supabase-sdk core.api: getTargetList (single page),
   scanTargetList (full scan), getTargetTotalCount, pollTargetList, getPossibleTarget
-  (maybeSingle). Use when implementing or reviewing list/fetch-all/pagination loops,
-  repo discovery, bootstrap scans, find-by-filter lookups, or deciding getTargetList vs
-  scanTargetList vs getPossibleTarget — especially when historical duplicates may exist.
+  (maybeSingle). PostgREST helpers: escapeIlikePattern for ilike/or searches,
+  toPostgrestTextArrayLiteral for text[] overlaps and not.ov filters.
+  Use when implementing or reviewing list/fetch-all/pagination loops, repo discovery,
+  bootstrap scans, find-by-filter lookups, filtering Target.tagList via supabase.client,
+  or when ilike patterns or array literals break PostgREST query strings.
 ---
 
 # Target list query layering (target-supabase-sdk)
@@ -143,6 +145,36 @@ if (error) { /* handle */ }
 
 ---
 
+## PostgREST filter helpers
+
+Location: `src/shared/utils/postgrest.utils.ts` — exported from `target-supabase-sdk` (browser + node).
+
+`QueryFilter` in `core.api.ts` has no `ilike`. Services that need fuzzy search use `supabase.client` directly.
+
+### `escapeIlikePattern(raw)`
+
+Use before embedding user input in `.ilike()` or `.or("col.ilike.%…%")`. Escapes `%` `_` `\`; strips `,` (breaks PostgREST `.or()` lists).
+
+```typescript
+const q = escapeIlikePattern(req.query.q);
+query = query.ilike("name", `%${q}%`);
+query = query.or(`value.ilike.%${q}%,name.ilike.%${q}%`);
+```
+
+### `toPostgrestTextArrayLiteral(values)`
+
+Formats a JS `string[]` as a PostgreSQL `text[]` literal. **Never** `.not("tagList", "ov", jsArray)` — `Array#toString()` is not a PG array.
+
+```typescript
+query = query.overlaps("tagList", toPostgrestTextArrayLiteral(includeTags));
+query = query.filter("tagList", "not.ov", toPostgrestTextArrayLiteral(excludeTags));
+```
+
+| JS array | Literal |
+|----------|---------|
+| `["verb"]` | `{"verb"}` |
+| `["stop-word:base", "small-word"]` | `{"stop-word:base","small-word"}` |
+
 ## Related skills
 
 - [create-target-redundancy](../create-target-redundancy/SKILL.md) — `maybeSingle` / duplicates on create path; UNIQUE / RPC future
@@ -155,3 +187,4 @@ if (error) { /* handle */ }
 |---------|------|
 | Query primitives (`getPossibleTarget`, list/scan) | `src/core.api.ts` |
 | Repo value discovery | `src/repo/repo.api.ts` (`getScanRemoteRepoValues`) |
+| `escapeIlikePattern` / `toPostgrestTextArrayLiteral` | `src/shared/utils/postgrest.utils.ts` |

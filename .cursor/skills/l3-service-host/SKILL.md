@@ -3,9 +3,14 @@ name: l3-service-host
 description: >-
   Reusable L3 service startup via target-supabase-sdk: createServiceHost,
   createL3ChildLauncher (main→guard; guard→scheduler+worker), claimServiceRegistrySlot,
-  ManagedChildProcesses + criticalSupervisors ["guard"], applyRegistrySlotGuardStep.
+  ManagedChildProcesses + criticalSupervisors ["guard"], applyRegistrySlotGuardStep,
+  buildNodeImportArgs, spawnTsxChild, Windows-safe --import paths, extraPids shutdown,
+  runReadinessChecks, createRequiredEnvCheck, createPathsExistCheck,
+  createSupabaseReachableCheck, pollUntil, waitForServiceReady,
+  evaluateBusyNodeLiveness, countTasksByType, summarizeTaskQueue.
   Blueprint: watch-service. Use when adding or migrating L3 services, wiring spawn/stop,
-  or reviewing runSingleProcessService (non-L3 one-process tools only).
+  reviewing runSingleProcessService, implementing service preflight or main startup
+  gates, or building /health /observability / supervisor TaskNode guards.
 ---
 
 # L3 service host (target-supabase-sdk)
@@ -174,16 +179,124 @@ Scheduler slice includes `pid` / `ready` / `readyAt` (written by the scheduler p
 - **`/observability`**: include `isGuardAvailable(runtime.guard)` in `ok`; tolerate scan failure when offline.
 - Business routes: **503** + `Retry-After` from `guardRetryAfterSec` while silent.
 
-See [guard-silent-mode](../guard-silent-mode/SKILL.md).
+See [service-guard](../service-guard/SKILL.md) (silent mode + spawn ownership).
+
+---
+
+## Process spawn
+
+```typescript
+import {
+  createL3ChildLauncher,
+  createManagedChildProcesses,
+  buildNodeImportArgs,
+  spawnTsxChild,
+  isChildProcessRunning,
+  ManagedChildProcesses,
+} from "target-supabase-sdk/node";
+```
+
+| Layer | Location | Contents |
+|-------|----------|----------|
+| **L1** | SDK `process-spawn.ts` | `--import` argv, `spawnTsxChild` |
+| **L2** | SDK `ManagedChildProcesses` | label registry, dedupe, `stopAll` |
+| **L3** | SDK `createL3ChildLauncher` + each service `launcher.ts` | Guard-owned scheduler+worker; main-owned Guard; extras stay local |
+
+Always pass **relative** preload paths with `cwd: projectRoot`. Never pass `D:\…` absolutes to `--import` on Node 24 ESM.
+
+Process-local — **one `ManagedChildProcesses` instance per OS process** (main vs Guard each have their own).
+
+```typescript
+const { child, created } = children.spawn("worker", "./src/processes/worker.ts");
+await children.stopAll({ extraPids: [orphanWorkerPid] });
+```
+
+| Method | Behavior |
+|--------|----------|
+| `spawn(label, entryScript)` | Dedupe if label already running; returns `{ child, created }` |
+| `getRunning(label)` | Running child or null |
+| `stopAll({ extraPids })` | SIGTERM tracked children → grace → SIGKILL; then SIGTERM extra PIDs |
+
+`stopBusinessNodes` runs in the **Guard** process. `stopChildProcesses` is main shutdown (`extraPids` for Guard-spawned PIDs). download-service keeps `spawnChromeSidecar` in `launcher.ts` (main-owned).
+
+Do not: share one `ManagedChildProcesses` across main and Guard; spawn worker from main when Guard owns spawn; forget `extraPids` on main shutdown.
+
+---
+
+## Readiness
+
+```typescript
+import {
+  runReadinessChecks,
+  createRequiredEnvCheck,
+  createPathsExistCheck,
+  createSupabaseReachableCheck,
+  pollUntil,
+  waitForServiceReady,
+  type ServiceReadyGate,
+} from "target-supabase-sdk/node";
+```
+
+Location: `src/node/readiness/`
+
+```typescript
+const report = await runReadinessChecks([
+  createRequiredEnvCheck("supabase_env", ["SUPABASE_URL", "SUPABASE_ANON_KEY"]),
+  createPathsExistCheck("task_config", ["/path/to/task.config.js"]),
+  createSupabaseReachableCheck(),
+  async () => ({ name: "custom", ok: true }),
+]);
+```
+
+| Factory | Purpose |
+|---------|---------|
+| `createRequiredEnvCheck` | Env keys non-empty |
+| `createPathsExistCheck` | `fs.access` all paths |
+| `createSupabaseReachableCheck` | `scanTargetList` probe |
+
+Domain checks (Telegram getMe, task packages) stay in each service.
+
+```typescript
+const gate: ServiceReadyGate = {
+  async read() {
+    const state = await readRuntimeState();
+    return {
+      failed: state.readiness.status === "failed",
+      ready: state.readiness.status === "passed" && state.worker.ready && state.scheduler.ready,
+      failureMessage: state.readiness.message,
+    };
+  },
+};
+await waitForServiceReady(gate, { timeoutMs: 180_000, logger });
+```
+
+`waitForServiceReady`: fail-fast on `failed`, poll until `ready`. Do not omit `scheduler.ready` (all six L3 services have a scheduler process, including noop). Read via `readRuntimeState()` — not raw `state.json`. See [json-state-store](../json-state-store/SKILL.md).
+
+---
+
+## TaskNode liveness and queue helpers
+
+```typescript
+import {
+  evaluateBusyNodeLiveness,
+  countTasksByType,
+  summarizeTaskQueue,
+} from "target-supabase-sdk";
+```
+
+Location: `src/node/node-liveness.ts`, `src/task/task-queue.ts`
+
+`evaluateBusyNodeLiveness(nodes, { staleMs, excludeNodeId?, onlyFreshCandidates? })` is pure (no I/O). Supervisor spawn guards should set `onlyFreshCandidates: true` and `excludeNodeId`.
+
+`countTasksByType` / `summarizeTaskQueue` take an already-scanned Task list. Task type strings stay in each service. Express `/health` and `/observability` composition stays in L3.
 
 ---
 
 ## Related skills
 
-- [service-guard](../service-guard/SKILL.md) — guard process API
-- [guard-silent-mode](../guard-silent-mode/SKILL.md) — silent mode + spawn ownership
+- [service-guard](../service-guard/SKILL.md) — guard process API, silent mode, spawn ownership
 - [target-system-registry](../target-system-registry/SKILL.md) — slot semantics
 - [log-spool](../log-spool/SKILL.md) — file spool + guard collect-log
-- [process-spawn](../process-spawn/SKILL.md) — `ManagedChildProcesses`, extraPids
 - [json-state-store](../json-state-store/SKILL.md) — sharded runtime state + Windows RMW pitfall
+- [service-preload](../service-preload/SKILL.md) — `--import` preload + env parsers
 - [node-service-build](../../../watch-service/.cursor/skills/node-service-build/SKILL.md) — esbuild dist entries

@@ -15,7 +15,7 @@ description: >-
 
 **Each L3 startup `postService`s a new instance row (same `value` allowed). `target-system-registry` Config lists `ServiceSlot`s; only instances that claim `EMPTY → ACTIVE` are available. Graceful shutdown releases the slot; a future monitor clears stale slots after crashes.**
 
-Not the same as local `config/*.config.js` — see [config-file-relative-paths](../config-file-relative-paths/SKILL.md) for filesystem config.
+Not the same as local `config/*.config.js` — see [task-local-discovery](../task-local-discovery/SKILL.md) for filesystem config.
 
 ---
 
@@ -306,7 +306,7 @@ Removed: idempotent “already bound, skip register” — each startup must cla
 - [manager-api-service](../manager-api-service/SKILL.md) — `registry.api` vs `registry.service`
 - [create-target-redundancy](../create-target-redundancy/SKILL.md) — `postSystemRegistryConfig` dedupe
 - [optimistic-lock-update](../optimistic-lock-update/SKILL.md) — slot claim updates
-- [config-file-relative-paths](../config-file-relative-paths/SKILL.md) — local JS config (different concern)
+- [task-local-discovery](../task-local-discovery/SKILL.md) — local JS config (different concern)
 - [service-preload](../service-preload/SKILL.md) — L3 env bootstrap (orthogonal to DB registry)
 
 ## Key files

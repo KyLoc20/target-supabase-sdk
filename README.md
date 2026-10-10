@@ -264,7 +264,7 @@ await registerMediaLink({
 });
 ```
 
-Details: `src/shared/media/README.md` and `.cursor/skills/media-link/SKILL.md`.
+Details: `src/shared/media/README.md` and `.cursor/skills/link-conventions/SKILL.md`.
 
 ### Feed Links (`feed.image` / `feed.audio` / `feed.video` / `feed.image-list`)
 
@@ -292,7 +292,7 @@ await registerFeed({
 });
 ```
 
-Details: `src/shared/feed/README.md` and `.cursor/skills/feed-link/SKILL.md`.
+Details: `src/shared/feed/README.md` and `.cursor/skills/link-conventions/SKILL.md`.
 
 ### PostgREST filter helpers (0.2.15+)
 
@@ -303,7 +303,7 @@ When using `supabase.client` directly (e.g. `ilike` search or `text[]` tag filte
 | `escapeIlikePattern` | User input for `.ilike()` / `.or("col.ilike.%…%")` — escapes `%` `_` `\` and strips `,` |
 | `toPostgrestTextArrayLiteral` | `.overlaps("tagList", …)` and `.filter("tagList", "not.ov", …)` — **never** `.not("tagList", "ov", jsArray)` |
 
-Pitfalls and examples: `.cursor/skills/postgrest-query-filters/SKILL.md`.
+Pitfalls and examples: `.cursor/skills/target-list-query/SKILL.md`.
 
 ## Development
 

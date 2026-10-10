@@ -8,3 +8,5 @@ export type { LinkTargetDraftBuildInput } from "./link.build";
 export { buildLinkTargetDraft, LINK_MANIFEST_VERSION, linkTargetDraftBuildInputSchema } from "./link.build";
 export type { Link, LinkDetails } from "./link.interface";
 export { CategoryLink } from "./link.interface";
+export type { LinkDedupFiltersInput } from "./link.query";
+export { linkDedupFilters } from "./link.query";

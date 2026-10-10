@@ -170,7 +170,7 @@ When user asks about browser bundling, webpack `node:fs` errors, or packaging to
 - [rollup-library-build](../rollup-library-build/SKILL.md) — SDK Rollup bundles
 - watch-service app build: `watch-service/.cursor/skills/node-service-build/SKILL.md` (esbuild — not Rollup)
 - [library-exports](../library-exports/SKILL.md) — barrel rules
-- [barrel-import-cycles](../barrel-import-cycles/SKILL.md) — leaf imports inside domains
+- [library-exports](../library-exports/SKILL.md) — leaf imports inside domains; barrel cycles
 
 ## Reference files
 

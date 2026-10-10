@@ -123,8 +123,9 @@ Shutdown: parallel `stopAll` is OK — leftover `.tmp` is picked up on next guar
 
 ## Related skills
 
-- [l3-log-spool-migration](../l3-log-spool-migration/SKILL.md) — **downstream L3 repo** migration checklist (required after SDK API removal)
 - [json-state-store](../json-state-store/SKILL.md) incident lessons.
+
+Migration off the old log-persist registry coordinator is **done** (watch / download / log / upload / cv / gc). New L3 services use this skill + [l3-service-host](../l3-service-host/SKILL.md) — do not reintroduce `startup/log-persist.ts`.
 
 ---
 

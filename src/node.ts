@@ -289,5 +289,6 @@ export type {
     TriggerRunnerFn,
 } from "./trigger/trigger.interface";
 export * from "./trigger/trigger.interface";
+export { buildDailyFireKey, buildFireKey, isDailyScheduleDue, isTriggerDue } from "./trigger/trigger.utils";
 export { TriggerManager } from "./trigger/trigger-manager";
 export { TriggerNode } from "./trigger/trigger-node";

@@ -94,7 +94,7 @@ import { supabase } from "./supabase";      // core.api
 import { supabase } from "../supabase";     // repo-manager
 ```
 
-Never import `supabase` from `browser.ts` or barrel **inside** `src/`. See [barrel-import-cycles](../barrel-import-cycles/SKILL.md).
+Never import `supabase` from `browser.ts` or barrel **inside** `src/`. See [library-exports](../library-exports/SKILL.md).
 
 ---
 
@@ -110,7 +110,7 @@ Never import `supabase` from `browser.ts` or barrel **inside** `src/`. See [barr
 ## Related skills
 
 - [singleton-pitfalls](../singleton-pitfalls/SKILL.md)
-- [barrel-import-cycles](../barrel-import-cycles/SKILL.md)
+- [library-exports](../library-exports/SKILL.md) — no barrel imports inside `src/`
 - [library-dev-scripts](../library-dev-scripts/SKILL.md)
 
 ## Reference files

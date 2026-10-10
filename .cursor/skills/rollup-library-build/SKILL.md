@@ -234,7 +234,7 @@ import { TaskNode, loadEnvFiles } from "target-supabase-sdk/node";
 - [browser-node-exports](../browser-node-exports/SKILL.md) — what goes in each entry
 - [browser-bundle-verification](../browser-bundle-verification/SKILL.md) — CI verification layers
 - [library-exports](../library-exports/SKILL.md) — barrels and `package.json` exports
-- [env-config](../env-config/SKILL.md) — `loadEnvFiles` on `/node` entry
+- [service-preload](../service-preload/SKILL.md) — `loadEnvFiles` on `/node` entry
 
 ## Reference files
 

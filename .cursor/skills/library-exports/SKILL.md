@@ -3,8 +3,10 @@ name: library-exports
 description: >-
   Public API and package export conventions for target-supabase-sdk: barrel (index.ts)
   pattern, domain index.ts, root index.ts, package.json exports, named vs export type,
-  Manager vs api. Use when adding exports, reviewing index.ts, explaining barrel imports,
-  publishing the package, or deciding what to expose to consumers.
+  Manager vs api. ESM circular-import and TDZ pitfalls: never import { supabase }
+  from "." or "..", module-level Zod schemas, ReferenceError before initialization.
+  Use when adding exports, reviewing src/**/*.api.ts, index.ts barrels, publishing
+  the package, or adding core.api constants used at module load time.
 ---
 
 # Library exports (target-supabase-sdk)
@@ -51,7 +53,7 @@ export { createScope, withModule, ... } from "./log-scope";
 
 **Barrel ≠ `export *` at domain layer.** Domain barrel uses **explicit lists** (see below). Root may use `export * from "./task"` because domain barrel is already curated.
 
-**Internal `src/` code** imports **leaf paths** (`from "./task.api"`, `from "../shared/log/log-manager"`) — not the domain barrel — to avoid cycles. See [barrel-import-cycles](../barrel-import-cycles/SKILL.md). **Exception:** cross-domain callers may use `from "../shared/log"` when importing another domain's public surface.
+**Internal `src/` code** imports **leaf paths** (`from "./task.api"`, `from "../shared/log/log-manager"`) — not the domain barrel — to avoid cycles (see below). **Exception:** cross-domain callers may use `from "../shared/log"` when importing another domain's public surface.
 
 ---
 
@@ -84,7 +86,7 @@ src/shared/log/create-logger.ts ─┘
 | **Root barrel** | `src/index.ts` | `export * from "./task"` — no per-file paths for migrated domains |
 | **Leaf modules** | `*.interface.ts`, `*.api.ts`, `*-manager.ts` | Implementation; internal imports stay direct |
 
-**Internal code** in the **same domain** imports leaf modules (`from "./task.api"`, `from "./log-manager"`) — not `from "./index"` or `from "../task"` barrel. See [barrel-import-cycles](../barrel-import-cycles/SKILL.md).
+**Internal code** in the **same domain** imports leaf modules (`from "./task.api"`, `from "./log-manager"`) — not `from "./index"` or `from "../task"` barrel.
 
 ---
 
@@ -93,7 +95,7 @@ src/shared/log/create-logger.ts ─┘
 ```typescript
 /**
  * Task domain public API — curated re-exports only.
- * Internal modules (local-task-registry, task-repo-context, task.utils) stay private.
+ * Internal modules (local-task-registry, task-repo-context) stay private.
  */
 
 // enums / runtime values from interface
@@ -114,7 +116,7 @@ export type { RegisterTasksOptions, RegisterTasksResult, PrepareTaskResponse, ..
 
 **Do not** `export * from "./task-manager"` if that file re-exports internal types from `task-repo-context` — cherry-pick in domain `index.ts` instead.
 
-**Keep private** (task example): `local-task-registry.ts`, `task-repo-context.ts`, `task.utils.ts`, `bootstrapLocalTasks`, script loaders.
+**Keep private** (task example): `local-task-registry.ts`, `task-repo-context.ts`, `bootstrapLocalTasks`, script loaders.
 
 ### Smaller domain example (`src/shared/log/index.ts`)
 
@@ -265,14 +267,44 @@ Root `export * from "./task"` is safe **because** `task/index.ts` is already cur
 
 ---
 
+## Barrel import cycles (TDZ)
+
+**Implementation modules under `src/` never import from `index.ts` (`"."` / `".."`). Import leaf modules directly (`./supabase`, `../core.api`).** `index.ts` / `browser.ts` are for **package consumers only**.
+
+What broke:
+
+```
+node-manager → command.api → core.api → index.ts → core.api (unfinished)
+```
+
+`command.api.ts` evaluated Zod at module load (`z.max(MAX_POLL_TARGET_LIST_SIZE)`). `core.api.ts` had suspended on `import { supabase } from "."` before the const was assigned → **TDZ** `ReferenceError`.
+
+**Fix:** `core.api.ts` uses `import { supabase } from "./supabase"`.
+
+Forbidden inside `src/`:
+
+```typescript
+import { supabase } from ".";
+import { supabase } from "..";
+import { foo } from "../index";
+```
+
+High risk when module-level Zod reads an imported constant from a module that can circularly depend on the barrel. Mitigations: keep `core.api` free of barrel imports; put shared caps in a leaf `core.constants.ts`; or lazy `() => z.object(...)`.
+
+```bash
+rg "from [\"']\\.\\.?[\"']" src/
+```
+
+See [supabase-holder](../supabase-holder/SKILL.md).
+
 ## Related skills
 
-- [barrel-import-cycles](../barrel-import-cycles/SKILL.md) — never `import from "."` inside `src/`
 - [sdk-error-handling](../sdk-error-handling/SKILL.md) — `*.api.ts` envelope
 - [core-schema](../core-schema/SKILL.md) — `targetDraftSchema`, `safeParseWithSchema`
 - [target-draft-build](../target-draft-build/SKILL.md) — `*.build.ts` draft assembly (link/list)
 - [task-local-discovery](../task-local-discovery/SKILL.md) — task internals not in public index
 - [library-dev-scripts](../library-dev-scripts/SKILL.md) — scripts not published
+- [supabase-holder](../supabase-holder/SKILL.md) — `import { supabase } from "./supabase"`
 
 ## Reference files
 

@@ -1,5 +1,5 @@
 import type { QueryFilter } from "../../core.interface";
-import { CategoryLink } from "../../link/link.interface";
+import { linkDedupFilters } from "../../link/link.query";
 import { REVIEW_VALUE } from "./review.interface";
 
 /**
@@ -7,10 +7,5 @@ import { REVIEW_VALUE } from "./review.interface";
  * Many rows may match — the SDK does not define dedup for reviews.
  */
 export function reviewLinksForNameFilters(name: string): QueryFilter[] {
-    const trimmed = name.trim();
-    return [
-        { field: "category", operator: "eq", value: CategoryLink.LINK },
-        { field: "value", operator: "eq", value: REVIEW_VALUE },
-        { field: "name", operator: "eq", value: trimmed },
-    ];
+    return linkDedupFilters({ value: REVIEW_VALUE, name });
 }
