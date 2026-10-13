@@ -4,11 +4,14 @@ description: >-
   Feed and Media conventions on Link in target-supabase-sdk. Feed:
   feed.image|feed.audio|feed.video|feed.image-list, buildFeedLinkDraft,
   system tags .public|.local|.oss, registerFeed, createFeed,
-  feedLinkDedupFilters. Media: value/loaderKey video|audio|image|image-list,
-  MediaOriginal, buildMediaLinkDraft, registerMediaLink, findMediaLink,
+  feedLinkDedupFilters. Idea: value=idea, name=idea.image for clipboard images,
+  buildIdeaLinkDraft, buildIdeaImageLinkDraft, ideaLinkValueFilters. Media:
+  value/loaderKey video|audio|image|image-list, MediaOriginal,
+  buildMediaLinkDraft, registerMediaLink, findMediaLink,
   LOCAL_STORAGE_PROVIDER availability. Use when creating or ingesting
-  platform feed Links, registering or querying media Links, replacing
-  cv/download video|audio drafts, or implementing image-list.
+  platform feed Links, idea notes or paste-image Links, registering or
+  querying media Links, replacing cv/download video|audio drafts, or
+  implementing image-list.
 ---
 
 # Link conventions (target-supabase-sdk)
@@ -96,6 +99,40 @@ buildMediaLinkDraft → postTarget (persisted locator may be HTTP)
 | `registerMediaLink`, `checkMediaAvailability`, `findMediaLink`, `probeMediaOriginal` | `/node` only |
 
 Never re-export `./node` from `shared/media/index.ts`. Details: `src/shared/media/README.md`.
+
+---
+
+## Idea
+
+**Idea = Link with `value === loaderKey === "idea"`.** Text notes use caller `name` (title); clipboard images use fixed **`name === "idea.image"`** (same `value`). Draft on default entry; paste bytes + temp URL on Node.
+
+```typescript
+import {
+  buildIdeaLinkDraft,
+  buildIdeaImageLinkDraft,
+  ideaLinkValueFilters,
+  IDEA_LINK_VALUE,
+  IDEA_IMAGE_LINK_NAME,
+} from "target-supabase-sdk";
+import {
+  hashIdeaPasteImage,
+  buildIdeaTempDownloadLocator,
+  buildIdeaPasteRelativePath,
+} from "target-supabase-sdk/node";
+```
+
+1. Text — `buildIdeaLinkDraft({ name, content, url?, tagList?, ... })` → `postTarget` / `createTarget` (no title dedup).
+2. Image — store bytes on host, then `buildIdeaImageLinkDraft({ contentHash, url })` (no content-hash dedup).
+3. List/filter — `ideaLinkValueFilters()`; query **`value`**, not `loaderKey` (image-only: add `name=idea.image`).
+
+Quick-note tags (e.g. `.raw`) belong in **chrome-extension** wrappers, not the SDK.
+
+| Symbol | Entry |
+|--------|--------|
+| `buildIdeaLinkDraft`, `buildIdeaImageLinkDraft`, `ideaCreateSchema`, parse, `ideaLinkValueFilters` | `.` |
+| `hashIdeaPasteImage`, temp download locators | `/node` |
+
+Never re-export `./node` from `shared/idea/index.ts`. Details: `src/shared/idea/README.md`, `VALIDATION-MATRIX.md`.
 
 ---
 

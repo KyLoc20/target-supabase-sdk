@@ -176,6 +176,13 @@ export {
     isFeedIngestSource,
     registerFeed,
 } from "./shared/feed/node";
+export {
+    buildIdeaPasteRelativePath,
+    buildIdeaTempDownloadLocator,
+    hashIdeaPasteImage,
+    IDEA_TEMP_DOWNLOAD_PATH_SUFFIX,
+    parseIdeaTempDownloadLocator,
+} from "./shared/idea/node";
 export { runCollectLogTick } from "./shared/log/spool/collector";
 export { LOG_SPOOL_SERVICE_ID_ENV } from "./shared/log/spool/config";
 export type { LogSpoolCoordinator, LogSpoolCoordinatorOptions } from "./shared/log/spool/coordinator";

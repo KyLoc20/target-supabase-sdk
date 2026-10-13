@@ -205,6 +205,27 @@ export {
     requestHasBody,
 } from "./shared/http/fetch-retry";
 export type {
+    BuildIdeaImageLinkDraftInput,
+    BuildIdeaLinkDraftInput,
+    IdeaCreateSchemaInput,
+    IdeaOriginal,
+    IdeaUpdateSchemaInput,
+} from "./shared/idea";
+export {
+    buildIdeaImageLinkDraft,
+    buildIdeaLinkDraft,
+    IDEA_IMAGE_LINK_NAME,
+    IDEA_IMAGE_TAG_RAW,
+    IDEA_IMAGE_TEMP_DIR,
+    IDEA_LINK_VALUE,
+    ideaCreateSchema,
+    ideaLinkValueFilters,
+    ideaUpdateSchema,
+    isIdeaImageLinkName,
+    normalizeStringList,
+    parseIdeaOriginal,
+} from "./shared/idea";
+export type {
     CreateLoggerInput,
     DecodedLogBatch,
     FlatLogEntry,
