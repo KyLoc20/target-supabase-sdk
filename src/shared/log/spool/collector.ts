@@ -1,7 +1,6 @@
-import { access, constants, readdir, readFile, rename, stat, unlink } from "node:fs/promises";
+import { access, constants, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isLogEntry } from "../core/log-batch";
-import { computeLogBatchIdempotencyKey } from "../upload/batch-id";
 import { buildLogListDraft, postLogBatch } from "../upload/flush";
 import { spoolLogger } from "../upload/logger";
 import { type DEFAULT_LOG_SPOOL_CONFIG, resolveLogSpoolConfig } from "./config";
@@ -11,6 +10,7 @@ import { logSpoolProcessDir, resolveLogSpoolRoot } from "./paths";
 import { resolveAllLogSpoolProcessRoles } from "./process-roles";
 
 const UPLOAD_LANE = "slow";
+const MAX_UPLOADS_PER_COLLECT_TICK = 20;
 
 /** Per serviceId — guard collect-log tick runs GC at most once per `gc.intervalMs`. */
 const lastGcAtMsByServiceId = new Map<string, number>();
@@ -61,6 +61,10 @@ function processMetaKey(serviceId: string, processRole: LogSpoolProcessRole): st
     return `${serviceId}:${processRole}`;
 }
 
+function syncedMarkerPath(jsonPath: string): string {
+    return jsonPath.replace(/\.json$/, ".synced");
+}
+
 async function uploadTmpBatch(input: {
     serviceId: string;
     serviceValue: string;
@@ -78,6 +82,7 @@ async function uploadTmpBatch(input: {
 
     const jsonFileName = input.fileName.replace(/\.tmp$/, ".json");
     const jsonPath = join(logSpoolProcessDir(input.spoolRoot, input.serviceId, input.processRole), jsonFileName);
+    const syncedPath = syncedMarkerPath(jsonPath);
 
     if (await pathExists(jsonPath)) {
         try {
@@ -88,6 +93,19 @@ async function uploadTmpBatch(input: {
             });
         } catch {
             // best-effort
+        }
+        return "skipped";
+    }
+
+    if (await pathExists(syncedPath)) {
+        try {
+            await rename(input.tmpPath, jsonPath);
+        } catch {
+            try {
+                await unlink(input.tmpPath);
+            } catch {
+                // best-effort
+            }
         }
         return "skipped";
     }
@@ -108,19 +126,10 @@ async function uploadTmpBatch(input: {
     }
 
     const processKey = processMetaKey(input.serviceId, input.processRole);
-    // TODO: `lane` is legacy transport metadata — scheduled for removal; fixed to "slow" for downstream decode compatibility.
-    const idempotencyKey = computeLogBatchIdempotencyKey({
-        service: input.serviceValue,
-        process: processKey,
-        lane: UPLOAD_LANE,
-        entries: batch.entries,
-    });
-
     const draft = buildLogListDraft({
         service: input.serviceValue,
         process: processKey,
         lane: UPLOAD_LANE,
-        idempotencyKey,
         entries: batch.entries,
     });
 
@@ -137,7 +146,19 @@ async function uploadTmpBatch(input: {
     }
 
     try {
+        await writeFile(syncedPath, `${Date.now()}\n`, "utf8");
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        spoolLogger.warn("collect-log synced marker write failed", { syncedPath, error: message });
+    }
+
+    try {
         await rename(input.tmpPath, jsonPath);
+        try {
+            await unlink(syncedPath);
+        } catch {
+            // best-effort
+        }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         spoolLogger.error("collect-log rename tmp→json failed after upload", {
@@ -145,14 +166,13 @@ async function uploadTmpBatch(input: {
             jsonPath,
             error: message,
         });
-        return "failed";
+        return "uploaded";
     }
 
     spoolLogger.info("collect-log uploaded batch", {
         processRole: input.processRole,
         fileName: jsonFileName,
         entryCount: batch.entries.length,
-        idempotencyKey,
     });
 
     return "uploaded";
@@ -217,22 +237,22 @@ async function gcSyncedJsonFiles(input: {
         }
 
         for (const name of names) {
-            if (!name.endsWith(".json")) {
+            if (!name.endsWith(".json") && !name.endsWith(".synced")) {
                 continue;
             }
-            if (parseLogSpoolBatchFilename(name) == null) {
+            if (parseLogSpoolBatchFilename(name) == null && !name.endsWith(".synced")) {
                 continue;
             }
 
-            const jsonPath = join(processDir, name);
+            const filePath = join(processDir, name);
             try {
-                const fileStat = await stat(jsonPath);
+                const fileStat = await stat(filePath);
                 if (input.nowMs - fileStat.mtimeMs <= input.syncedRetentionMs) {
                     continue;
                 }
-                await unlink(jsonPath);
+                await unlink(filePath);
                 removed += 1;
-                spoolLogger.info("collect-log gc removed synced json", {
+                spoolLogger.info("collect-log gc removed synced file", {
                     fileName: name,
                     processRole,
                 });
@@ -256,7 +276,7 @@ function shouldRunGc(serviceId: string, nowMs: number, intervalMs: number): bool
 
 /**
  * Guard-only: upload pending `.tmp` batches, rename to `.json`, then periodic GC.
- * Upload completion is implied by `.json` presence; no sync-state file.
+ * Post success is tracked via `.json` or `.synced` marker (prevents duplicate DB inserts).
  */
 export async function runCollectLogTick(input: RunCollectLogTickInput): Promise<RunCollectLogTickResult> {
     const config = resolveLogSpoolConfig(input.config);
@@ -271,6 +291,8 @@ export async function runCollectLogTick(input: RunCollectLogTickInput): Promise<
         gcSyncedRemoved: 0,
     };
 
+    let uploadsThisTick = 0;
+
     for (const processRole of resolveAllLogSpoolProcessRoles()) {
         const processDir = logSpoolProcessDir(spoolRoot, input.serviceId, processRole);
         let names: string[] = [];
@@ -284,6 +306,9 @@ export async function runCollectLogTick(input: RunCollectLogTickInput): Promise<
             if (!name.endsWith(".tmp")) {
                 continue;
             }
+            if (uploadsThisTick >= MAX_UPLOADS_PER_COLLECT_TICK) {
+                break;
+            }
             const status = await uploadTmpBatch({
                 serviceId: input.serviceId,
                 serviceValue: input.serviceValue,
@@ -295,6 +320,7 @@ export async function runCollectLogTick(input: RunCollectLogTickInput): Promise<
             });
             if (status === "uploaded") {
                 result.uploaded += 1;
+                uploadsThisTick += 1;
             } else if (status === "skipped") {
                 result.skipped += 1;
             } else {

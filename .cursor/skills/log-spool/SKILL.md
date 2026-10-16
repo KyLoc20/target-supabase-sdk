@@ -172,7 +172,7 @@ Process-role helpers and `resolveLogSpoolSpawnEnvForLabel` are **internal** — 
 
 | Component | Change needed? |
 |-----------|----------------|
-| `decodeLogBatch` / `LogTrace` merge by `traceId` | **No** — still `LogBatch.0` + `details.items` |
+| `decodeLogBatch` / `LogTrace` merge by `traceId` | **No** — `value=log-batch` / `log-trace`; query by `value`, not JSON loaderKey |
 | `meta.process` | Now `{serviceId}:worker` string — decode accepts any non-empty string |
 | `meta.service` | Still logical value (`watch-service`) |
 | `meta.lane` | Still `slow` |

@@ -1,9 +1,8 @@
-import { isCreateTargetAlreadyExistsError } from "../../../core.api";
-import { postLogListCreate } from "../../../list/list.api";
+import { postListCreate } from "../../../list/list.api";
 import { CategoryList } from "../../../list/list.interface";
 import type { LogEntry } from "../core/log-manager";
 import type { BuildLogListDraftInput, LogListDraft } from "./interface";
-import { LOG_PERSIST_LOADER_KEY } from "./interface";
+import { LOG_BATCH_LIST_VALUE } from "./interface";
 import { persistLogger } from "./logger";
 
 export function estimateEntriesBytes(entries: LogEntry[]): number {
@@ -18,19 +17,18 @@ export function estimateEntriesBytes(entries: LogEntry[]): number {
 }
 
 export function buildLogListDraft(input: BuildLogListDraftInput): LogListDraft {
-    const { service, process, lane, idempotencyKey, entries } = input;
-    // TODO: `lane` is legacy transport metadata — scheduled for removal; callers still pass a fixed value for decode compatibility.
+    const { service, process, lane, entries } = input;
     const first = entries[0];
     const last = entries[entries.length - 1];
 
     return {
-        name: `log-batch:${service}:${process}:${lane}`,
-        value: idempotencyKey,
+        name: service,
+        value: LOG_BATCH_LIST_VALUE,
         category: CategoryList.LIST,
         tagList: ["log", lane, service],
         details: {
             manifestVersion: 0,
-            loaderKey: LOG_PERSIST_LOADER_KEY,
+            loaderKey: LOG_BATCH_LIST_VALUE,
             meta: {
                 service,
                 process,
@@ -40,7 +38,6 @@ export function buildLogListDraft(input: BuildLogListDraftInput): LogListDraft {
                 from: first?.timestamp ?? null,
                 to: last?.timestamp ?? null,
                 flushedAt: Date.now(),
-                idempotencyKey,
             },
             preview: first?.message ?? "",
             items: entries,
@@ -67,36 +64,24 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
 }
 
 export async function postLogBatch(draft: LogListDraft, postTimeoutMs: number): Promise<void> {
-    try {
-        const result = await withTimeout(
-            postLogListCreate({
-                name: draft.name,
-                value: draft.value,
-                category: draft.category,
-                details: draft.details,
-            }),
-            postTimeoutMs,
-            "postLogListCreate",
-        );
+    const result = await withTimeout(
+        postListCreate({
+            name: draft.name,
+            value: draft.value,
+            category: draft.category,
+            details: draft.details,
+        }),
+        postTimeoutMs,
+        "postListCreate",
+    );
 
-        if (!result.success) {
-            const message = result.error?.message ?? "postLogListCreate failed";
-            persistLogger.error("post log batch failed", {
-                idempotencyKey: draft.value,
-                name: draft.name,
-                error: message,
-            });
-            throw new Error(message);
-        }
-    } catch (error) {
-        if (isCreateTargetAlreadyExistsError(error)) {
-            persistLogger.error("post log batch idempotent duplicate — treating as success", {
-                idempotencyKey: draft.value,
-                name: draft.name,
-            });
-            return;
-        }
-        throw error;
+    if (!result.success) {
+        const message = result.error?.message ?? "postListCreate failed";
+        persistLogger.error("post log batch failed", {
+            name: draft.name,
+            error: message,
+        });
+        throw new Error(message);
     }
 }
 

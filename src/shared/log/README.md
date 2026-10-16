@@ -18,8 +18,7 @@ src/shared/log/
 
   upload/                  # shared Supabase upload pipeline (Node)
     env.ts                 # LOG_PERSIST_ENABLED, SERVICE, PROCESS, runtime dir
-    interface.ts           # LogBatch meta, loader keys, lane type
-    batch-id.ts            # computeLogBatchIdempotencyKey
+    interface.ts           # LogBatch meta, LOG_BATCH_LIST_VALUE, lane type
     flush.ts               # buildLogListDraft, postLogBatch
     hook.ts                # LogManager → spool writer offer bridge
     logger.ts              # internal pipeline loggers (no feedback loop)
@@ -58,7 +57,7 @@ App code
   → {spoolRoot}/{serviceId}/{role}/*.tmp
 
 Guard collect-log runner (1 min tick)
-  → read *.tmp → postLogBatch → rename *.json
+  → read *.tmp → postLogBatch (List value=log-batch, name=service) → rename *.json / .synced marker
   → GC old tmp/json (once per day; 7 d retention)
 
 log-service (downstream)

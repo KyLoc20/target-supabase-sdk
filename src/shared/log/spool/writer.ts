@@ -5,7 +5,7 @@ import { estimateEntriesBytes, takeEntriesWithinBytes } from "../upload/flush";
 import { registerLogPersistOffer } from "../upload/hook";
 import { isLogPersistInternalTopic, spoolLogger } from "../upload/logger";
 import { DEFAULT_LOG_SPOOL_CONFIG, resolveLogSpoolConfig } from "./config";
-import { buildLogSpoolBatchBaseName, computeLogSpoolShortHash } from "./file";
+import { buildLogSpoolBatchBaseName, randomLogSpoolShortId } from "./file";
 import type { EnableLogSpoolOptions, LogSpoolBatchFile, LogSpoolProcessRole, LogSpoolWriterStats } from "./interface";
 import { logSpoolProcessDir, resolveLogSpoolRoot } from "./paths";
 
@@ -224,12 +224,7 @@ class LogSpoolWriter {
         spoolRoot: string;
     }): Promise<{ fileName: string; tmpPath: string }> {
         const first = input.entries[0];
-        const shortHash = computeLogSpoolShortHash({
-            serviceValue: input.serviceValue,
-            serviceId: input.serviceId,
-            processRole: input.processRole,
-            entries: input.entries,
-        });
+        const shortHash = randomLogSpoolShortId();
         const baseName = buildLogSpoolBatchBaseName({
             processRole: input.processRole,
             firstEntryTimestamp: first.timestamp,

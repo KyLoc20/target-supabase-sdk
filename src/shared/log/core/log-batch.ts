@@ -5,8 +5,8 @@
  */
 
 import type { List } from "../../../list/list.interface";
-import type { LogEntry } from "../core/log-manager";
-import { LOG_PERSIST_LOADER_KEY, type LogBatchMeta, type LogPersistLane } from "../upload/interface";
+import { LOG_BATCH_LIST_VALUE, type LogBatchMeta, type LogPersistLane } from "../upload/interface";
+import type { LogEntry } from "./log-manager";
 
 const LANES: ReadonlySet<string> = new Set<LogPersistLane>(["fast", "medium", "slow"]);
 
@@ -26,8 +26,8 @@ export interface FlatLogEntry extends LogEntry {
     process: string;
     lane: LogPersistLane;
     pid: number;
-    /** Idempotency key of the source batch. */
-    batchId: string;
+    /** Source List row id. */
+    listId: string;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -61,8 +61,7 @@ export function parseLogBatchMeta(rawMeta: unknown): LogBatchMeta | null {
     const service = asString(source.service);
     const processName = asString(source.process);
     const laneRaw = asString(source.lane);
-    const idempotencyKey = asString(source.idempotencyKey);
-    if (service == null || processName == null || laneRaw == null || !LANES.has(laneRaw) || idempotencyKey == null) {
+    if (service == null || processName == null || laneRaw == null || !LANES.has(laneRaw)) {
         return null;
     }
 
@@ -75,7 +74,6 @@ export function parseLogBatchMeta(rawMeta: unknown): LogBatchMeta | null {
         from: asFiniteNumber(source.from),
         to: asFiniteNumber(source.to),
         flushedAt: asFiniteNumber(source.flushedAt) ?? 0,
-        idempotencyKey,
     };
 }
 
@@ -93,9 +91,9 @@ export function isLogEntry(value: unknown): value is LogEntry {
     );
 }
 
-/** Is this List a persisted log batch (by loaderKey)? */
+/** Is this List a persisted log batch (by `value`)? */
 export function isLogBatchList(list: List): boolean {
-    return list.details?.loaderKey === LOG_PERSIST_LOADER_KEY;
+    return list.value === LOG_BATCH_LIST_VALUE;
 }
 
 /**
@@ -104,6 +102,10 @@ export function isLogBatchList(list: List): boolean {
  */
 export function decodeLogBatch(list: List): DecodedLogBatch | null {
     if (!isLogBatchList(list)) {
+        return null;
+    }
+    const loaderKey = list.details?.loaderKey;
+    if (typeof loaderKey === "string" && loaderKey.endsWith(".bad")) {
         return null;
     }
     const meta = parseLogBatchMeta(list.details?.meta);
@@ -142,7 +144,7 @@ export function flattenLogBatch(batch: DecodedLogBatch): FlatLogEntry[] {
         process: batch.meta.process,
         lane: batch.meta.lane,
         pid: batch.meta.pid,
-        batchId: batch.meta.idempotencyKey,
+        listId: batch.listId,
     }));
 }
 
