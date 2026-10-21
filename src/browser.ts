@@ -43,7 +43,8 @@ export type {
     TaskNodeLivenessFreshest,
     TaskNodeLivenessReport,
 } from "./node/node-liveness";
-export { evaluateBusyNodeLiveness } from "./node/node-liveness";
+export { evaluateBusyNodeLiveness, nodesForTaskLiveness } from "./node/node-liveness";
+export { requireNodeServiceIdFromEnv } from "./node/node-service-id";
 export type { ChunkResolveProvider } from "./parcel/chunk-fetch-registry";
 export {
     installChunkFetchRegistry,

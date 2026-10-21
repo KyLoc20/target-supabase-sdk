@@ -22,17 +22,20 @@ Not the same as local `config/*.config.js` — see [task-local-discovery](../tas
 ## Data planes (do not merge)
 
 ```text
-Control / capacity (Config)          Runtime (Service row)           Process detail (Node)
-───────────────────────────          ─────────────────────           ─────────────────────
-target-system-registry               category=service instance       category=node
-details.objects: ServiceSlot[]       details.runtime (guard)         details.lastHeartBeat
-EMPTY ↔ ACTIVE slot claims           heartbeat + node rollup         per-process liveness
+Control / capacity (Config)          Runtime (Service row)              Process detail (Node)
+───────────────────────────          ─────────────────────              ─────────────────────
+target-system-registry               category=service instance          category=node
+details.objects: ServiceSlot[]       details.runtime (guard)            name = service instance id
+EMPTY ↔ ACTIVE slot claims           scoped node rollup (guard)       value = NodeKind (task|trigger|guard|other)
+                                     lastHeartBeat + node snapshots     details.status / lastHeartBeat
 ```
+
+Node row contract (0.3.0+): [node-protocol](../node-protocol/SKILL.md).
 
 | Plane | Authority | Writers |
 |-------|-----------|---------|
 | **Config `ServiceSlot`** | Declared replica count + which **instance id** owns which slot | Seed / ops (layout); `registerService` (`EMPTY→ACTIVE`); `unregisterService` (graceful `ACTIVE→EMPTY`); monitor (later, crash recovery) |
-| **Service `details.runtime`** | Observed health of one instance + its nodes | Service **guard** only |
+| **Service `details.runtime`** | Observed health of one instance + **its** nodes (`Node.name === serviceId`) | Service **guard** only |
 | **Service row** (`postService`) | One row per process startup; `value` = logical key (not unique) | L3 startup — **always new instance** via `claimServiceRegistrySlot` |
 | **Availability** | Which instance is live | **`getTargetSystemRegistry`** / `resolveActiveRegistryServiceId` — not `getService({ value })` |
 
@@ -242,6 +245,8 @@ runtime?: {
 }
 ```
 
+Guard fills `nodes` from a **scoped** scan (`name eq` this instance's `serviceId`), not the global node table. Worker spawn decisions use **`node.task`** rows only ({@link nodesForTaskLiveness}).
+
 Zod: `serviceRuntimeSchema` in `service.api.ts`. Catalog `postService` may omit `runtime` until guard starts.
 
 ---
@@ -318,6 +323,6 @@ Removed: idempotent “already bound, skip register” — each startup must cla
 - `src/service/registry/registry.service.ts` — `getTargetSystemRegistry`, `registerService`, `unregisterService`, `appendSystemRegistryEmptySlots`
 - `src/service/registry/registry.interface.ts` — `ServiceSlot`, `ServiceSlotStatus`
 - `src/service/service.interface.ts` — `Service`, `ServiceRuntime`
-- `src/node/node-runtime.base.ts` — `beforeProcessExit` hook for single-process L3
+- `src/node/base-node-runtime.ts` — `beforeProcessExit` hook for single-process L3
 - **gc-service** `scripts/system-registry.seed.json` — default slot layout for ops
 - **gc-service** `.cursor/skills/system-registry-ops/SKILL.md` — CLI + Web UI

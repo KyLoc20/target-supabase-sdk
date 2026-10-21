@@ -14,7 +14,9 @@ description: >-
 # ServiceGuardNode (target-supabase-sdk/node)
 
 Reusable L3 **guard process** — readiness gate, business-node spawn owner, registry slot
-check, TaskNode liveness, Service runtime heartbeat, silent mode on network loss.
+check, **instance-scoped** TaskNode liveness, Service runtime heartbeat, silent mode on network loss.
+
+Node protocol (0.3.0+): [node-protocol](../node-protocol/SKILL.md).
 
 ## Import
 
@@ -149,6 +151,16 @@ Scheduler slice also has `pid` / `ready` / `readyAt` (worker-shaped). Do **not**
 
 Default runner key: `SERVICE_GUARD_RUNNER_KEY` (`"service-guard"`).
 
+## Guard tick — node scan (0.3.0+)
+
+`runServiceGuardTick`:
+
+1. `scanTargetList({ category: node, filterList: [{ field: "name", operator: "eq", value: serviceId }] })` when `serviceId` is set; otherwise empty list.
+2. `evaluateBusyNodeLiveness(nodesForTaskLiveness(nodes), { staleMs, excludeNodeId, onlyFreshCandidates: true })` — **only `node.task`** peers count for worker health.
+3. `patchServiceRuntime` writes the **scoped** full list (task + trigger + guard) into `Service.details.runtime.nodes`.
+
+Do not use a fleet-wide node scan for spawn decisions — see [node-protocol § Guard vs fleet](../node-protocol/SKILL.md#guard-vs-fleet-do-not-merge-semantics).
+
 ## Future plan — task reclaim on node LOST (SDK, not implemented)
 
 Today guard **respawns** worker when TaskNode heartbeat is stale (`taskNodeStaleMs`) but
@@ -162,5 +174,6 @@ L3 consumer services must **not** add global DOING reclaim schedulers; wait for 
 
 ## Related
 
+- [node-protocol](../node-protocol/SKILL.md) — Node row shape, scoped Guard vs fleet GC
 - [l3-service-host](../l3-service-host/SKILL.md) — host, spawn, readiness, extraPids
 - [watch-service](../../../watch-service/.cursor/skills/watch-service/SKILL.md) — blueprint service

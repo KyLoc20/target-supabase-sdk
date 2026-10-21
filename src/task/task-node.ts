@@ -1,5 +1,6 @@
 import { isOptimisticLockResponse } from "../core.api";
-import { BaseNodeRuntime, LOG_TOPIC_NODE, type NodeLoopContext } from "../node/node-runtime.base";
+import { BaseNodeRuntime, LOG_TOPIC_NODE, type NodeLoopContext } from "../node/base-node-runtime";
+import { NodeKind } from "../node/node.interface";
 import { createLogger, createScope, type LoggerWithScope, withModule } from "../shared/log";
 import { getErrorMessage, toError } from "../shared/utils/error.utils";
 import { type PatchClaimTaskPayload, patchChangeTaskStatus, patchClaimTask } from "./task.api";
@@ -26,6 +27,10 @@ class TaskNode extends BaseNodeRuntime {
 
     constructor() {
         super("taskNode");
+    }
+
+    protected getNodeKind(): NodeKind {
+        return NodeKind.TASK;
     }
 
     protected async onBeforeRegisterNode(logger: LoggerWithScope): Promise<void> {

@@ -13,8 +13,9 @@ import {
 import { getErrorMessage } from "../shared/utils/error.utils";
 import { patchChangeNodeStatus, patchNodeHeartBeat, patchStopNode, postRegisterNode } from "./node.api";
 import { LOG_TOPIC_NODE } from "./node.constant";
-import { NodeStatus } from "./node.interface";
+import { type NodeKind, NodeStatus } from "./node.interface";
 import { formatHeartbeat, getRandomInterval } from "./node.utils";
+import { requireNodeServiceIdFromEnv } from "./node-service-id";
 
 export { LOG_TOPIC_NODE };
 
@@ -43,6 +44,9 @@ const LOG_TOPIC_PROCESS = "process";
  */
 abstract class BaseNodeRuntime {
     protected static readonly HEARTBEAT_FAILURE_THRESHOLD = 3;
+
+    /** Role written to {@link Node.value} at registration. */
+    protected abstract getNodeKind(): NodeKind;
     /** Log `nodeId` label while startup has not yet received an assigned id from Supabase. */
     private static readonly NODE_ID_PENDING_ASSIGNMENT = "pending-node-id";
 
@@ -241,7 +245,12 @@ abstract class BaseNodeRuntime {
 
         logger.debug("開始向 Supabase 註冊節點", { topic: LOG_TOPIC_NODE });
         try {
-            const { data, error } = await postRegisterNode({ traceId: this.startupTraceId });
+            const serviceId = requireNodeServiceIdFromEnv();
+            const { data, error } = await postRegisterNode({
+                serviceId,
+                kind: this.getNodeKind(),
+                traceId: this.startupTraceId,
+            });
             if (data == null || error) {
                 throw error ?? new Error("postRegisterNode 失敗");
             }

@@ -29,7 +29,7 @@ export interface ServiceDetails {
     runtime?: ServiceRuntime;
 }
 
-/** Per-node snapshot under a running Service — maintained by the service guard. */
+/** Per-node snapshot for nodes owned by this Service instance (`Node.name === serviceId`). */
 export interface ServiceNodeSnapshot {
     nodeId: string;
     status: NodeStatus;
@@ -38,7 +38,7 @@ export interface ServiceNodeSnapshot {
 
 /**
  * Runtime observability for a registered Service instance.
- * Heartbeat and node rollups are written by the service guard, not the system registry Config.
+ * Heartbeat and node rollups are written by the service guard (scoped to this instance), not the system registry Config.
  */
 export interface ServiceRuntime {
     lastHeartBeat: number;

@@ -127,9 +127,10 @@ export function createServiceHost(options: ServiceHostOptions): ServiceHost {
             await options.onRegistryClaimed(hostCtx);
         }
 
+        process.env[LOG_SPOOL_SERVICE_ID_ENV] = session.service.id;
+
         const enableSpool = options.enableLogSpoolAfterClaim ?? true;
         if (enableSpool && logSpoolEnabledFromEnv()) {
-            process.env[LOG_SPOOL_SERVICE_ID_ENV] = session.service.id;
             await ensureLogSpoolFromEnv({
                 serviceId: session.service.id,
                 serviceValue: options.serviceValue,

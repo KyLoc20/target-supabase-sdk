@@ -82,7 +82,8 @@ Worker start (NodeManager.runStart)
        3. availableTaskList = union(local.registered, remote.values)
        4. if length === 0 → throw → NodeManager requestShutdown
 
-postRegisterNode → main loop
+postRegisterNode({ serviceId, kind: NodeKind.TASK }) → READY → BUSY → main loop
+(requires `LOG_SPOOL_SERVICE_ID` — see [node-protocol](../node-protocol/SKILL.md))
 
 patchClaimTask({ availableTaskList }) → Task
 

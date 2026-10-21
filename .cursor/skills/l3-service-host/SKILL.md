@@ -84,7 +84,9 @@ export const {
 } = createL3ChildLauncher({ childProcesses, readRuntimeState, writeRuntimeState });
 ```
 
-Launcher spawns via `childProcesses.spawn(label, script)` — when main has set `LOG_SPOOL_SERVICE_ID` after registry claim, spawn **auto-injects** `LOG_SPOOL_SERVICE_ID` + `LOG_PERSIST_PROCESS` for labels `main|guard|scheduler|worker`. Explicit `buildLogSpoolSpawnEnv` is optional.
+Launcher spawns via `childProcesses.spawn(label, script)` — after registry claim, **`createServiceHost` always sets `LOG_SPOOL_SERVICE_ID` on main** (required for `postRegisterNode`, not only when log spool is enabled). Spawn **auto-injects** that id + `LOG_PERSIST_PROCESS` for labels `main|guard|scheduler|worker`. Explicit `buildLogSpoolSpawnEnv` is optional.
+
+`runSingleProcessService` sets `LOG_SPOOL_SERVICE_ID` after claim before `run()`. See [node-protocol](../node-protocol/SKILL.md).
 
 ---
 
@@ -279,6 +281,7 @@ await waitForServiceReady(gate, { timeoutMs: 180_000, logger });
 ```typescript
 import {
   evaluateBusyNodeLiveness,
+  nodesForTaskLiveness,
   countTasksByType,
   summarizeTaskQueue,
 } from "target-supabase-sdk";
@@ -286,7 +289,15 @@ import {
 
 Location: `src/node/node-liveness.ts`, `src/task/task-queue.ts`
 
-`evaluateBusyNodeLiveness(nodes, { staleMs, excludeNodeId?, onlyFreshCandidates? })` is pure (no I/O). Supervisor spawn guards should set `onlyFreshCandidates: true` and `excludeNodeId`.
+`evaluateBusyNodeLiveness(nodes, { staleMs, excludeNodeId?, onlyFreshCandidates? })` is pure (no I/O). Pass **`nodesForTaskLiveness(scopedNodes)`** when the scan includes trigger/guard rows or fleet data. Guard tick does this internally.
+
+| Caller | Node list source |
+|--------|------------------|
+| Guard `runServiceGuardTick` | Scoped by `Node.name === serviceId`; liveness input = task kind only |
+| gc-service `/observability` | Fleet scan → filter by own `serviceId` → `nodesForTaskLiveness` |
+| gc-service overview | Fleet scan — **no** liveness; aggregate counts only |
+
+Supervisor spawn guards should set `onlyFreshCandidates: true`. `excludeNodeId` is the guard process node id ({@link NodeKind.GUARD}); task-only liveness already ignores guard/trigger rows.
 
 `countTasksByType` / `summarizeTaskQueue` take an already-scanned Task list. Task type strings stay in each service. Express `/health` and `/observability` composition stays in L3.
 
@@ -299,4 +310,5 @@ Location: `src/node/node-liveness.ts`, `src/task/task-queue.ts`
 - [log-spool](../log-spool/SKILL.md) — file spool + guard collect-log
 - [json-state-store](../json-state-store/SKILL.md) — sharded runtime state + Windows RMW pitfall
 - [service-preload](../service-preload/SKILL.md) — `--import` preload + env parsers
+- [node-protocol](../node-protocol/SKILL.md) — Node row shape, env, Guard vs fleet
 - [node-service-build](../../../watch-service/.cursor/skills/node-service-build/SKILL.md) — esbuild dist entries

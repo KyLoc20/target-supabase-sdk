@@ -1,7 +1,7 @@
 import { scanTargetList } from "../../core.api";
 import { patchServiceRuntime } from "../../service/registry/registry.service";
 import { CategoryNode, type Node } from "../node.interface";
-import { evaluateBusyNodeLiveness } from "../node-liveness";
+import { evaluateBusyNodeLiveness, nodesForTaskLiveness } from "../node-liveness";
 import { applyRegistrySlotGuardStep } from "./registry-slot-guard-step";
 import type { ServiceGuardTickInput, ServiceGuardTickResult } from "./service-guard.interface";
 import { getWorkerSpawnCooldownLastAt, markWorkerSpawned } from "./worker-spawn-cooldown";
@@ -48,12 +48,18 @@ export async function runServiceGuardTick(input: ServiceGuardTickInput): Promise
         decision = "slot_ok";
     }
 
-    const { data: nodes = [] } = await scanTargetList<Node>({
-        category: CategoryNode.NODE,
-        maxRows: maxNodes,
-    });
+    const nodes =
+        serviceId == null
+            ? []
+            : ((
+                  await scanTargetList<Node>({
+                      category: CategoryNode.NODE,
+                      filterList: [{ field: "name", operator: "eq", value: serviceId }],
+                      maxRows: maxNodes,
+                  })
+              ).data ?? []);
 
-    const liveness = evaluateBusyNodeLiveness(nodes, {
+    const liveness = evaluateBusyNodeLiveness(nodesForTaskLiveness(nodes), {
         staleMs: taskNodeStaleMs,
         now: nowMs,
         excludeNodeId: nodeId,

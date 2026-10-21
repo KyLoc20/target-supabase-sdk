@@ -2,7 +2,8 @@ import { createLogger, type LoggerWithScope } from "../../shared/log";
 import { registerCollectLogRunner } from "../../shared/log/spool/register-collect-log-runner";
 import { getErrorMessage } from "../../shared/utils/error.utils";
 import { TriggerNode } from "../../trigger/trigger-node";
-import type { NodeLoopContext } from "../node-runtime.base";
+import type { NodeLoopContext } from "../base-node-runtime";
+import { NodeKind } from "../node.interface";
 import { pollUntil } from "../readiness/poll-until";
 import { runReadinessGate } from "../readiness/run-readiness-gate";
 import type { GuardRuntimeSlice } from "../runtime-state/service-runtime-state.types";
@@ -38,6 +39,10 @@ class ServiceGuardNode extends TriggerNode {
         });
         this.options = options;
         this.businessReadyTimeoutMs = options.businessReadyTimeoutMs ?? DEFAULT_BUSINESS_READY_TIMEOUT_MS;
+    }
+
+    protected getNodeKind(): NodeKind {
+        return NodeKind.GUARD;
     }
 
     /** Register the guard runner and return a ready-to-start node. */

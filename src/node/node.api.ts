@@ -3,7 +3,7 @@ import { createTarget, type QueryFilter, updateTargetDetails, validateWithSchema
 import { generateResponse } from "../core.interface";
 import { createLogger } from "../shared/log";
 import { LOG_TOPIC_NODE } from "./node.constant";
-import { CategoryNode, type Node, type NodeDetails, NodeStatus } from "./node.interface";
+import { CategoryNode, type Node, type NodeDetails, NodeKind, NodeStatus } from "./node.interface";
 
 const NODE_STATUS_FIELD = "details->>status" as const;
 
@@ -13,6 +13,8 @@ const traceIdSchema = z.string().trim().min(1).optional();
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
 
 export const postRegisterNodeSchema = z.object({
+    serviceId: nodeIdSchema,
+    kind: z.nativeEnum(NodeKind),
     traceId: traceIdSchema,
 });
 
@@ -53,9 +55,9 @@ function lockOnNodeStatus(status: NodeStatus): QueryFilter[] {
 export const postRegisterNode = validateWithSchema(
     postRegisterNodeSchema,
     "postRegisterNodeSchema",
-)(async (payload) => {
+)(async ({ serviceId, kind, ...payload }) => {
     return createTarget<Node, PostRegisterNodePayload>({
-        payload,
+        payload: { serviceId, kind, ...payload },
         createFn: () => {
             const details: NodeDetails = {
                 manifestVersion: 0,
@@ -63,9 +65,9 @@ export const postRegisterNode = validateWithSchema(
                 lastHeartBeat: Date.now(),
             };
             return {
-                name: "",
+                name: serviceId,
                 category: CategoryNode.NODE,
-                value: "",
+                value: kind,
                 tagList: [],
                 details,
             };

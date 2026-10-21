@@ -17,10 +17,18 @@ export enum CategoryNode {
     NODE = "node",
 }
 
+/** Node role — stored in {@link Node.value}. */
+export enum NodeKind {
+    TASK = "node.task",
+    TRIGGER = "node.trigger",
+    GUARD = "node.guard",
+    OTHER = "node.other",
+}
+
 export interface Node extends Target {
-    /** Empty */
+    /** Owning Service instance id (`postService` row id); empty when not bound to a service. */
     name: string;
-    /** Empty */
+    /** Node role — {@link NodeKind}. */
     value: string;
     details: NodeDetails;
     category: CategoryNode;

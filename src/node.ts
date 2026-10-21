@@ -7,6 +7,8 @@
 export * from "./browser";
 export * from "./command/command.api";
 export * from "./command/command.interface";
+export type { BaseNodeRuntimeOptions, NodeLoopContext } from "./node/base-node-runtime";
+export { BaseNodeRuntime } from "./node/base-node-runtime";
 export type {
     EnvIntOptions,
     EnvNumberOptions,
@@ -48,8 +50,6 @@ export {
     nodeBufferToArrayBuffer,
     readAndVerifySourceFile,
 } from "./node/fs/read-source-file";
-export type { BaseNodeRuntimeOptions, NodeLoopContext } from "./node/node-runtime.base";
-export { BaseNodeRuntime } from "./node/node-runtime.base";
 export type {
     BuildNodeImportArgsInput,
     CreateManagedChildProcessesOptions,

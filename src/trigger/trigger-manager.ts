@@ -1,4 +1,4 @@
-import type { NodeLoopContext } from "../node/node-runtime.base";
+import type { NodeLoopContext } from "../node/base-node-runtime";
 import { createLogger, createScope, withModule } from "../shared/log";
 import { getErrorMessage } from "../shared/utils/error.utils";
 import {

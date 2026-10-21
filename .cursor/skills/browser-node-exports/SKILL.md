@@ -41,14 +41,14 @@ src/index.ts     — export * from "./browser"
 
 - `supabase`, `core.*`, `auth`, `link`, `list`, domain APIs
 - `task.interface`, `task.api` **patch\*** functions, **`postTask`** (enqueue only, no Repo validation)
-- `node.interface`, `node.api` (Supabase RPC — no TaskNode class)
+- `node.interface` (`NodeKind`, …), `node.api` (`postRegisterNode` requires `serviceId` + `kind` since **0.3.0**), `nodesForTaskLiveness`, `requireNodeServiceIdFromEnv`
 - `repo.interface`, `repo.api` (not `RepoManager`)
 
 ### Node entry adds
 
 - `TaskManager`, `RepoManager`
 - `postTaskWithValidation`, `TaskRepoValidation`
-- `TaskNode`, `TriggerNode`, `TriggerManager`, `BaseNodeRuntime`
+- `TaskNode`, `TriggerNode`, `TriggerManager`, `BaseNodeRuntime` (`src/node/base-node-runtime.ts`)
 - `command.*`, `trigger.*` (API); runner scheduling → [trigger-local-runners](../trigger-local-runners/SKILL.md)
 
 ---

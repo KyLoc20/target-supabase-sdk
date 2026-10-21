@@ -1,4 +1,4 @@
-import { type Node, NodeStatus } from "./node.interface";
+import { type Node, NodeKind, NodeStatus } from "./node.interface";
 
 export interface TaskNodeLivenessFreshest {
     nodeId: string;
@@ -31,6 +31,11 @@ export interface EvaluateBusyNodeLivenessOptions {
 
 function isBusyWithHeartbeat(node: Node): boolean {
     return node.details.status === NodeStatus.BUSY && typeof node.details.lastHeartBeat === "number";
+}
+
+/** Subset used for worker liveness (Guard / observability) — {@link NodeKind.TASK} only. */
+export function nodesForTaskLiveness(nodes: readonly Node[]): Node[] {
+    return nodes.filter((node) => node.value === NodeKind.TASK);
 }
 
 /** Evaluate TaskNode liveness from a scanned node list (no I/O). */

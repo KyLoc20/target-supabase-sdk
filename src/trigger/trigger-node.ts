@@ -1,4 +1,5 @@
-import { BaseNodeRuntime, LOG_TOPIC_NODE, type NodeLoopContext } from "../node/node-runtime.base";
+import { BaseNodeRuntime, LOG_TOPIC_NODE, type NodeLoopContext } from "../node/base-node-runtime";
+import { NodeKind } from "../node/node.interface";
 import { createLogger, createScope, type LoggerWithScope, LogLevel } from "../shared/log";
 import { LOG_TOPIC_TRIGGER, TRIGGER_LOOP_INTERVAL_MS } from "./trigger.constant";
 import type { TriggerNodeOptions } from "./trigger.interface";
@@ -25,6 +26,10 @@ class TriggerNode extends BaseNodeRuntime {
             throw new Error(`[TriggerNode] loopIntervalMs must be a positive number, got ${loopIntervalMs}`);
         }
         this.loopIntervalMs = loopIntervalMs;
+    }
+
+    protected getNodeKind(): NodeKind {
+        return NodeKind.TRIGGER;
     }
 
     protected getLoopIntervalMs(): number {
