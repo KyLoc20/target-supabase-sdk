@@ -16,6 +16,8 @@ export interface Service extends Target {
 
 export enum CategoryService {
     SERVICE = "service",
+    /** Cold storage — excluded from registry resolution and active service scans. */
+    SERVICE_ARCHIVED = "service.archived",
 }
 
 export interface ServiceDetails {

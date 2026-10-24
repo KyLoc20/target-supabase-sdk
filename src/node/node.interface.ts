@@ -15,6 +15,8 @@ export enum NodeStatus {
 
 export enum CategoryNode {
     NODE = "node",
+    /** Cold storage — excluded from scheduling and active node scans. */
+    NODE_ARCHIVED = "node.archived",
 }
 
 /** Node role — stored in {@link Node.value}. */

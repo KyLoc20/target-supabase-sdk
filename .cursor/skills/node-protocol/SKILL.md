@@ -18,7 +18,7 @@ SDK **0.3.0+** — **not backward compatible** with rows where `name` and `value
 
 | Field | Meaning |
 |-------|---------|
-| `category` | `"node"` (`CategoryNode.NODE`) |
+| `category` | `"node"` (`CategoryNode.NODE`) — cold rows use `"node.archived"` (`CategoryNode.NODE_ARCHIVED`) |
 | `name` | **Owning Service instance id** (`postService` row id / registry `serviceId`). Empty only for nodes intentionally outside a service (production L3 should always set). |
 | `value` | **Role** — {@link NodeKind} string |
 | `details.status` | `READY` → `BUSY` → `LOST` (unchanged) |
