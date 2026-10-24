@@ -24,6 +24,7 @@ That is not atomic. Two writers can both pass validation and overwrite each othe
 |------|-----|
 | Only `details` (optional `extra`) | `updateTargetDetails` |
 | `tagList` and/or `details` / `extra` in one UPDATE | `updateTarget` |
+| **`category` only** (restricted — archive / admin) | `updateTargetCategory` |
 | Full-row create-shaped rewrite | **Do not** — `patchTarget` is deprecated |
 
 `updateTargetDetails` is implemented as a thin wrapper over `updateTarget`.

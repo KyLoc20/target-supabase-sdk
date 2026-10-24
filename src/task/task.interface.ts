@@ -2,6 +2,8 @@ import type { Target } from "../core.interface";
 
 export enum CategoryTask {
     TASK = "task",
+    /** Cold storage — excluded from worker claim and `category=task` scans. See task-archive skill. */
+    TASK_ARCHIVED = "task.archived",
 }
 
 export enum TaskStatus {

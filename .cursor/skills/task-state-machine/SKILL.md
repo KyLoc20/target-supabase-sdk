@@ -191,6 +191,7 @@ Do not assume `generateResponse.success` rows were processed — only dequeued.
 - [sdk-error-handling](../sdk-error-handling/SKILL.md) — throw vs null
 - [service-guard](../service-guard/SKILL.md) — worker respawn; future stale-node → LOST + reclaim
 - [target-list-query](../target-list-query/SKILL.md) — `pollTargetList` vs `scanTargetList`
+- [task-archive](../task-archive/SKILL.md) — `task.archived` cold rows (outside active state machine)
 
 ## Reference
 

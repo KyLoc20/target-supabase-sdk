@@ -567,6 +567,59 @@ export const updateTarget = async <T, D>({ id, updateFn, optimisticLockFilterLis
 };
 
 /**
+ * Update only `target.category` with optional DB-level optimistic locking on UPDATE.
+ *
+ * **Restricted use** — not a general-purpose API:
+ * - Task archival (`task` → `task.archived`) and similar cold-storage moves
+ * - One-off admin / migration tooling with explicit review
+ *
+ * Do **not** use for normal domain flows (use feature APIs + {@link updateTarget} / {@link updateTargetDetails}).
+ * Identity fields (`name`, `value`) are never writable here. Prefer locks that include the **expected
+ * current** `category` and any row predicate needed for atomicity (e.g. `details->>status`).
+ */
+export interface UpdateTargetCategoryParams {
+    id: string;
+    category: Target["category"];
+    optimisticLockFilterList?: QueryFilter[];
+}
+
+export const updateTargetCategory = async ({
+    id,
+    category,
+    optimisticLockFilterList = [],
+}: UpdateTargetCategoryParams) => {
+    const updateQuery = applyQueryFilters(
+        supabase.client.from("target").update({ category }).eq("id", id),
+        optimisticLockFilterList,
+    );
+
+    const { data, error } = await updateQuery.select("id, category").maybeSingle();
+
+    if (error) {
+        handleSupabaseError("updateTargetCategory", error, "Failed to update target category.");
+    }
+    if (!data) {
+        if (optimisticLockFilterList.length === 0) {
+            throw new Error(UPDATE_TARGET_NOT_FOUND_MESSAGE);
+        }
+        const { data: stillThere, error: recheckError } = await supabase.client
+            .from("target")
+            .select("id")
+            .eq("id", id)
+            .maybeSingle();
+        if (recheckError) {
+            handleSupabaseError("updateTargetCategory", recheckError, "Failed to recheck target after lock miss.");
+        }
+        if (!stillThere) {
+            throw new Error(UPDATE_TARGET_NOT_FOUND_MESSAGE);
+        }
+        throw new Error(OPTIMISTIC_LOCK_FAILED_MESSAGE);
+    }
+
+    return generateResponse.success(data as Pick<Target, "id" | "category">);
+};
+
+/**
  * Read-modify-write `target.details` with optional DB-level optimistic locking on UPDATE.
  *
  * Do not use application-layer pre-update validators (e.g. checking state after SELECT then

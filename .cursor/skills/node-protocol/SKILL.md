@@ -5,7 +5,7 @@ description: >-
   value, service instance id on name, postRegisterNode payload, LOG_SPOOL_SERVICE_ID,
   Guard scoped scan vs fleet GC, nodesForTaskLiveness, Service.runtime.nodes rollup.
   Use when registering TaskNode/TriggerNode/ServiceGuardNode, reviewing guard ticks,
-  gc-service overview vs observability, or ops cleanup of legacy empty name/value rows.
+  gc-service overview vs observability.
 ---
 
 # Node protocol (`category = node`)
@@ -94,7 +94,7 @@ Never filter Node rows by `details->>lastHeartBeat` in SQL today.
 ## Ops cutover (no online migration in SDK)
 
 1. Upgrade **all** L3 services to SDK **0.3.0+** and redeploy (no old binaries writing empty `name`/`value`).
-2. After stable run, delete legacy rows: `category = node` and empty `name` and empty `value`.
+2. After stable run, delete legacy rows once: `category=node` with empty `name` and empty `value` (ops SQL or ad-hoc script — not shipped in SDK).
 3. Optional: trim stale `Service.details.runtime` on old instance rows (Guard rewrites on tick).
 
 ---
