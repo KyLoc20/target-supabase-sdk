@@ -10,7 +10,7 @@ import { TriggerManager } from "./trigger-manager";
  * Main loop: commands → heartbeat → {@link TriggerManager.tick}.
  *
  * Register runners via {@link TriggerManager.registerRunner} before {@link start}.
- * Does not scan Supabase trigger rows — see `trigger.api.ts` for remote admin APIs.
+ * In-process interval runners only (no `category=trigger` Target rows).
  *
  * Deploy **one** TriggerNode per logical scheduler — multiple processes duplicate runner work.
  */

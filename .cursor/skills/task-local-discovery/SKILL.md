@@ -98,7 +98,7 @@ NodeManager.executeTask
        → taskParamsValidator(params)
        → bindTaskFn → ExecutableTaskFn
 
-CLI / Trigger postTaskWithValidation
+CLI / scheduler postTaskWithValidation
   → TaskRepoValidation.validate({ bootstrapLocal: true, includeRemote: true })
        → same getRepoContext priority as above
 
@@ -141,7 +141,7 @@ Options: `RegisterTasksOptions` — `logger`, `local?`, `includeRemote?`.
 
 Both paths share `RepoManager.getRepoContext`: **local registry first**; remote only when `includeRemote: true`.
 
-`postTaskWithValidation` (CLI / monolithic Trigger): `bootstrapLocal: true`, `includeRemote: true` (defaults).
+`postTaskWithValidation` (CLI / in-process scheduler): `bootstrapLocal: true`, `includeRemote: true` (defaults).
 
 `postTask` (scheduler / browser enqueue): no Repo or params validation — execution gate is `prepareTask`.
 

@@ -166,7 +166,7 @@ Types: `Service`, `Api`, `ApiDetails` (`method`, `path`, `endpoint`, `request`, 
 
 ### TriggerNode (local interval runners)
 
-`TriggerNode` registers with Supabase (heartbeat, commands) and runs **in-process interval runners**. It does **not** read ENABLED trigger rows from the database (`trigger.api.ts` remains for admin/CLI).
+`TriggerNode` registers with Supabase (heartbeat, commands) and runs **in-process interval runners** registered in code (`TriggerManager.registerRunner`). There is no `category=trigger` Target type in the SDK.
 
 Register runners in code **before** `start()` (registration closes on bootstrap):
 

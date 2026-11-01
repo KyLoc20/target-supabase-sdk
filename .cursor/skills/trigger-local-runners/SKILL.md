@@ -2,15 +2,14 @@
 name: trigger-local-runners
 description: >-
   Local interval runners for TriggerNode in target-supabase-sdk. Use when registering
-  TriggerManager.registerRunner, tick/retry/timeout semantics, TriggerNodeOptions,
-  or distinguishing remote trigger.api from in-process scheduling.
+  TriggerManager.registerRunner, tick/retry/timeout semantics, or TriggerNodeOptions.
 ---
 
 # Trigger local runners (target-supabase-sdk)
 
 ## One-line rule
 
-**`TriggerNode` schedules in-process runners via `TriggerManager.registerRunner`.** It does **not** scan Supabase ENABLED triggers. Remote rows stay in `trigger.api.ts` (admin/CLI only).
+**`TriggerNode` schedules in-process runners via `TriggerManager.registerRunner`.** Scheduling is code-only; the SDK does not define Supabase `category=trigger` rows.
 
 **Deploy one TriggerNode per logical scheduler** — multiple processes with the same runners will duplicate work.
 
@@ -33,7 +32,7 @@ scripts/run-trigger-node.ts
 |--------|------|
 | `trigger-manager.ts` | Registry, `tick`, retry/timeout execution |
 | `trigger-node.ts` | Bootstrap, heartbeat gate, `requireRunners` |
-| `trigger.api.ts` | **Not used by TriggerNode** |
+| `trigger.interface.ts` | Runner types and `TriggerNodeOptions` only |
 
 ---
 
@@ -148,7 +147,6 @@ Due runners in one tick run concurrently (`Promise.all`). If multiple runners ca
 
 ## Do not
 
-- Call `scanEnabledTriggers` from `TriggerNode` — remote daily due-check uses `isTriggerDue` / `buildFireKey` on `/node`, not TriggerNode
 - Run duplicate TriggerNode fleets with the same side effects
 - `unregisterRunner` while runner is `running`
 
