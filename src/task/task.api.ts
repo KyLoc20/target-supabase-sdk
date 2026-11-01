@@ -16,8 +16,8 @@ import { escapeIlikePattern } from "../shared/utils/postgrest.utils";
 import { supabase } from "../supabase";
 import { LOG_TOPIC_TASK } from "./task.constant";
 import { CategoryTask, ResultCode, type Task, type TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
+import { TASK_STATUS_FIELD } from "./task-query.api";
 
-const TASK_STATUS_FIELD = "status" as const;
 const TASK_NODE_ID_FIELD = "details->>nodeId" as const;
 
 // ─── State machine ───────────────────────────────────────────────────────────

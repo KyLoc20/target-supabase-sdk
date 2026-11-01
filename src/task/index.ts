@@ -39,6 +39,22 @@ export type { PostTaskWithRetryOptions, PostTaskWithRetryResult } from "./task-p
 export { POST_TASK_DEFAULT_MAX_ATTEMPTS, postTaskWithRetry } from "./task-post-retry.api";
 export { postTaskWithValidation } from "./task-post-validated.api";
 export type {
+    CountTasksParams,
+    HasActiveTasksParams,
+    ListTasksParams,
+    TaskSummary,
+} from "./task-query.api";
+export {
+    buildTaskQueryFilters,
+    countTasks,
+    hasActiveTasks,
+    listTasks,
+    TASK_STATUS_FIELD,
+    taskStatusFilterEq,
+    taskStatusFilterIn,
+    taskToSummary,
+} from "./task-query.api";
+export type {
     TaskRepoValidationFailureReason,
     ValidateTaskRepoAndParamsInput,
     ValidateTaskRepoAndParamsResult,

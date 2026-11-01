@@ -7,7 +7,7 @@ description: >-
   buildNodeImportArgs, spawnTsxChild, Windows-safe --import paths, extraPids shutdown,
   runReadinessChecks, createRequiredEnvCheck, createPathsExistCheck,
   createSupabaseReachableCheck, pollUntil, waitForServiceReady,
-  evaluateBusyNodeLiveness, countTasksByType, summarizeTaskQueue.
+  evaluateBusyNodeLiveness, countTasks (task-query.api).
   Blueprint: watch-service. Use when adding or migrating L3 services, wiring spawn/stop,
   reviewing runSingleProcessService, implementing service preflight or main startup
   gates, or building /health /observability / supervisor TaskNode guards.
@@ -276,30 +276,25 @@ await waitForServiceReady(gate, { timeoutMs: 180_000, logger });
 
 ---
 
-## TaskNode liveness and queue helpers
+## TaskNode liveness and queue depth
 
 ```typescript
-import {
-  evaluateBusyNodeLiveness,
-  nodesForTaskLiveness,
-  countTasksByType,
-  summarizeTaskQueue,
-} from "target-supabase-sdk";
+import { evaluateBusyNodeLiveness, nodesForTaskLiveness, countTasks, TaskStatus } from "target-supabase-sdk";
 ```
 
-Location: `src/node/node-liveness.ts`, `src/task/task-queue.ts`
+Location: `src/node/node-liveness.ts`, `src/task/task-query.api.ts`
 
 `evaluateBusyNodeLiveness(nodes, { staleMs, excludeNodeId?, onlyFreshCandidates? })` is pure (no I/O). Pass **`nodesForTaskLiveness(scopedNodes)`** when the scan includes trigger/guard rows or fleet data. Guard tick does this internally.
 
 | Caller | Node list source |
 |--------|------------------|
 | Guard `runServiceGuardTick` | Scoped by `Node.name === serviceId`; liveness input = task kind only |
-| gc-service `/observability` | Fleet scan → filter by own `serviceId` → `nodesForTaskLiveness` |
-| gc-service overview | Fleet scan — **no** liveness; aggregate counts only |
+| gc-service `/observability` | Node scan → filter by own `serviceId` → `nodesForTaskLiveness`; queue via **`countTasks`** |
+| gc-service overview | **`countTasks`** per type/status — no full task scan |
 
 Supervisor spawn guards should set `onlyFreshCandidates: true`. `excludeNodeId` is the guard process node id ({@link NodeKind.GUARD}); task-only liveness already ignores guard/trigger rows.
 
-`countTasksByType` / `summarizeTaskQueue` take an already-scanned Task list. Task type strings stay in each service. Express `/health` and `/observability` composition stays in L3.
+Do **not** `scanTargetList` on `category=task` just to count TODO/DOING — use **`countTasks({ value, status })`**. See [task-query-api](../task-query-api/SKILL.md). Express `/health` and `/observability` composition stays in L3.
 
 ---
 

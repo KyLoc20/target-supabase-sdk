@@ -307,5 +307,19 @@ export type { PostTaskPayload } from "./task/task-post.api";
 export { postTask, postTaskSchema } from "./task/task-post.api";
 export type { PostTaskWithRetryOptions, PostTaskWithRetryResult } from "./task/task-post-retry.api";
 export { POST_TASK_DEFAULT_MAX_ATTEMPTS, postTaskWithRetry } from "./task/task-post-retry.api";
-export type { TaskStatusCount } from "./task/task-queue";
-export { countTasksByType, summarizeTaskQueue } from "./task/task-queue";
+export type {
+    CountTasksParams,
+    HasActiveTasksParams,
+    ListTasksParams,
+    TaskSummary,
+} from "./task/task-query.api";
+export {
+    buildTaskQueryFilters,
+    countTasks,
+    hasActiveTasks,
+    listTasks,
+    TASK_STATUS_FIELD,
+    taskStatusFilterEq,
+    taskStatusFilterIn,
+    taskToSummary,
+} from "./task/task-query.api";
