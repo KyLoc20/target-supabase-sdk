@@ -134,7 +134,8 @@ Do not import `task-manager`, `repo-manager`, `local-task-registry`, `repo.scrip
 1. **Grep** `node:` in the module and its static import graph.
 2. **No `node:`** → add to `src/browser.ts`.
 3. **Uses `node:fs` / `node:crypto` / …** → add only to `src/node.ts` (or refactor to dynamic `import()` if intentionally callable from browser).
-4. Run `pnpm build` — must pass `scripts/verify-browser-entry.mjs`.
+4. **Mixed file** (one pure export + Node imports in same module) → **split** into browser-safe leaf + Node leaf; never re-export the pure symbol from the Node file on `shared/*/index.ts` (shared Rollup chunks + external `node:*` break Webpack).
+5. Run `pnpm build` — must pass `scripts/verify-browser-entry.mjs` (browser.js **and** its chunk imports).
 
 ---
 
@@ -195,8 +196,10 @@ import { postTaskWithValidation } from "target-supabase-sdk/node";
 
 `pnpm build` runs `scripts/verify-browser-entry.mjs`:
 
-- Scans the **bundled** `dist/browser.js` for static `from "node:…"` imports
-- Fails if browser artifact pulls Node built-ins
+- Scans **`dist/browser.js` and its static `./chunks/*` imports** for `node:…` (including side-effect imports)
+- Fails if the browser **bundle graph** would pull Node built-ins into Webpack/Vite consumers
+
+**Co-located Node + browser helpers:** split files (e.g. log `batch-timestamp.ts` vs `spool/file.ts`). Do not export browser symbols from modules with top-level `node:*` imports — shared Rollup chunks retain external `node:` specifiers.
 
 Optional: `scripts/verify-graph.mjs` for multi-file `dist/` layouts (legacy / tooling); **CI gate** is bundle scan only.
 
@@ -223,7 +226,7 @@ Node entry is not separately verified — Rollup + shared-chunk smoke in consume
 - [singleton-pitfalls](../singleton-pitfalls/SKILL.md) — dual-bundle duplicate singleton
 - [library-exports](../library-exports/SKILL.md) — domain barrel rules
 - [task-local-discovery](../task-local-discovery/SKILL.md) — why local-task-registry stays private
-- chrome-extension-starter: `.cursor/skills/target-supabase-sdk-browser-bundle/` — consumer notes (shim optional after SDK 0.2.0)
+- chrome-extension-starter: `.cursor/skills/target-supabase-sdk-browser-bundle/` — consumer bundler notes (no `node:crypto` shim needed when browser graph is clean)
 
 ## Reference files
 

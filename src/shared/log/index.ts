@@ -42,6 +42,6 @@ export {
     resolveLogData,
     withModule,
 } from "./core/log-scope";
-export { formatLogSpoolBatchTimestamp } from "./spool/file";
+export { formatLogSpoolBatchTimestamp } from "./spool/batch-timestamp";
 export type { LogBatchMeta, LogPersistLane } from "./upload/interface";
 export { LOG_BATCH_LIST_VALUE } from "./upload/interface";

@@ -223,7 +223,7 @@ When adding a domain, API, or Manager, **classify browser vs Node before** regis
    - No `node:*` in the chain → add to `src/browser.ts` (and domain `index.ts`)
    - Uses Node built-ins → add **only** to `src/node.ts` (consumers use `target-supabase-sdk/node`)
    - Same file mixes both → **split** into separate leaf modules (example: `task.api.ts` vs `task-post.api.ts`)
-3. **Build** — `pnpm build` runs Rollup (dual entry `browser.js` + `node.js`, shared chunks), `tsc --emitDeclarationOnly` for types, then `scripts/verify-browser-entry.mjs`, which scans the bundled `dist/browser.js` and fails if it contains `from "node:…"` imports.
+3. **Build** — `pnpm build` runs Rollup (dual entry `browser.js` + `node.js`, shared chunks), `tsc --emitDeclarationOnly` for types, then `scripts/verify-browser-entry.mjs`, which scans **`dist/browser.js` and every `./chunks/*` file it statically imports** and fails if any contain `node:…` imports (Rollup keeps `node:*` as external in shared chunks — Webpack MV3 cannot resolve them).
 
 ```bash
 pnpm build

@@ -46,7 +46,7 @@ pnpm clean
 | `rollup.config.js` | `input: { browser, node }`; `output.dir: dist`; `chunkFileNames: chunks/[name]-[hash].js`; peers + `node:*` external |
 | `tsconfig.rollup.json` | TS for `@rollup/plugin-typescript` (`noEmit: true`) |
 | `tsconfig.dts.json` | `emitDeclarationOnly`, `outDir: dist`, `rootDir: src` |
-| `scripts/verify-browser-entry.mjs` | Scan **single** `dist/browser.js` for `from "node:…"` |
+| `scripts/verify-browser-entry.mjs` | Scan `dist/browser.js` + its static chunk imports for `node:…` |
 
 ### `external` policy
 

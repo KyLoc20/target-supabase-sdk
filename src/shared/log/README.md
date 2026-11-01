@@ -29,7 +29,8 @@ src/shared/log/
     writer.ts              # per-process memory buffer → .tmp files
     collector.ts           # guard: upload .tmp, rename .json, periodic GC
     paths.ts               # {RUNTIME_DATA_DIR}/log-spool/{serviceId}/…
-    file.ts                # batch filename parse/build
+    batch-timestamp.ts     # formatLogSpoolBatchTimestamp (browser-safe; exported on default entry)
+    file.ts                # batch filename parse/build (Node spool writer/collector only)
     process-roles.ts       # main|guard|scheduler|worker + extras
     config.ts              # writer / GC / collect interval env
     coordinator.ts         # createLogSpoolCoordinator facade
@@ -44,6 +45,8 @@ src/shared/log/
 | `target-supabase-sdk/node` | spool + upload symbols used by L3 services |
 
 Node-only code must not be imported from the browser bundle. Spool files use `node:fs`.
+
+**Browser export rule:** Do not re-export symbols from `spool/file.ts` on `shared/log/index.ts`. Put any browser-needed pure helpers in a separate file (e.g. `batch-timestamp.ts`). A top-level `import "node:crypto"` in the same module as a browser export ends up in Rollup **shared chunks** and breaks Chrome/Webpack even when that symbol is never called at runtime.
 
 ---
 
