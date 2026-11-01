@@ -17,13 +17,13 @@ import { supabase } from "../supabase";
 import { LOG_TOPIC_TASK } from "./task.constant";
 import { CategoryTask, ResultCode, type Task, type TaskDetails, TaskStatus, TaskStatusAction } from "./task.interface";
 
-const TASK_STATUS_FIELD = "details->>status" as const;
+const TASK_STATUS_FIELD = "status" as const;
 const TASK_NODE_ID_FIELD = "details->>nodeId" as const;
 
 // ─── State machine ───────────────────────────────────────────────────────────
 
 /**
- * Task state machine (field: `details.status`)
+ * Task state machine (field: top-level `target.status`)
  *
  * ```text
  *   publish          claim (CLAIM / patchClaimTask)     finish
@@ -174,17 +174,21 @@ async function transitionTask({
     optimisticLockFilterList,
     updateFn,
     updateExtraFn,
+    nextStatus,
 }: {
     id: string;
     optimisticLockFilterList: QueryFilter[];
     updateFn: (details: TaskDetails) => TaskDetails;
     updateExtraFn?: (existing: TaskDetails) => string;
+    /** When set, writes `target.status` in the same UPDATE as `details`. */
+    nextStatus?: TaskStatus;
 }): Promise<Task> {
     return updateTargetDetails<Task, TaskDetails>({
         id,
         optimisticLockFilterList,
         updateFn,
         updateExtraFn,
+        updateStatusFn: nextStatus == null ? undefined : () => nextStatus,
     });
 }
 
@@ -200,7 +204,7 @@ function logTaskTransition(
             action,
             taskId: task.id,
             taskValue: task.value,
-            status: task.details.status,
+            status: task.status,
             nodeId: task.details.nodeId,
             ...data,
         },
@@ -220,9 +224,9 @@ async function claimTaskById({
     return transitionTask({
         id: taskId,
         optimisticLockFilterList: lockOnStatus(TaskStatus.TODO),
+        nextStatus: TaskStatus.DOING,
         updateFn: (details) => ({
             ...details,
-            status: TaskStatus.DOING,
             nodeId,
         }),
         updateExtraFn,
@@ -244,10 +248,10 @@ export const patchChangeTaskStatus = validateWithSchema(
             const data = await transitionTask({
                 id,
                 optimisticLockFilterList: lockOnStatus(TaskStatus.OPEN),
+                nextStatus: TaskStatus.TODO,
                 updateFn: (details) => ({
                     ...details,
                     ...clearExecutionState(),
-                    status: TaskStatus.TODO,
                 }),
                 updateExtraFn,
             });
@@ -265,10 +269,10 @@ export const patchChangeTaskStatus = validateWithSchema(
             const data = await transitionTask({
                 id,
                 optimisticLockFilterList: lockOnReset(nodeId),
+                nextStatus: TaskStatus.OPEN,
                 updateFn: (details) => ({
                     ...details,
                     ...clearExecutionState(),
-                    status: TaskStatus.OPEN,
                 }),
                 updateExtraFn,
             });
@@ -280,10 +284,10 @@ export const patchChangeTaskStatus = validateWithSchema(
             const data = await transitionTask({
                 id,
                 optimisticLockFilterList: lockOnDoingOwner(nodeId),
+                nextStatus: TaskStatus.TODO,
                 updateFn: (details) => ({
                     ...details,
                     ...clearExecutionState(),
-                    status: TaskStatus.TODO,
                 }),
                 updateExtraFn,
             });
@@ -294,10 +298,8 @@ export const patchChangeTaskStatus = validateWithSchema(
             const data = await transitionTask({
                 id,
                 optimisticLockFilterList: lockOnStatus(TaskStatus.OPEN, TaskStatus.DONE),
-                updateFn: (details) => ({
-                    ...details,
-                    status: TaskStatus.CLOSED,
-                }),
+                nextStatus: TaskStatus.CLOSED,
+                updateFn: (details) => details,
                 updateExtraFn,
             });
             logTaskTransition(logger, action, data);
@@ -308,10 +310,10 @@ export const patchChangeTaskStatus = validateWithSchema(
             const data = await transitionTask({
                 id,
                 optimisticLockFilterList: lockOnDoingOwner(nodeId),
+                nextStatus: TaskStatus.DONE,
                 updateFn: (details) => ({
                     ...details,
                     progress: 100,
-                    status: TaskStatus.DONE,
                     nodeId,
                     result: {
                         cost,
@@ -357,7 +359,7 @@ export const patchTaskProgress = validateWithSchema(
 /**
  * Discover and claim one TODO task for this node.
  *
- * Match criteria (all required): `details.status = TODO`, `value ∈ availableTaskList`, and when
+ * Match criteria (all required): `status = TODO`, `value ∈ availableTaskList`, and when
  * `namePrefixList` is non-empty, `name` matches any listed prefix. Those filters are independent
  * (AND); omitting `namePrefixList` does not relax the `value` constraint.
  *

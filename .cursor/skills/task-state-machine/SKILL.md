@@ -11,6 +11,8 @@ description: >-
 
 # Task state machine (`src/task/task.api.ts`)
 
+**Persistence:** `Task.status` is the top-level `target.status` column. `TaskDetails` does **not** include `status`. Deploy only after DB migration (`docs/supabase/task_migrate_status_from_details.sql`).
+
 ## Public APIs
 
 | API | Role |
@@ -51,7 +53,7 @@ Attempting DOING/DONE reset without `nodeId` fails optimistic lock (only TODO ro
 
 | Helper | Purpose |
 |--------|---------|
-| `transitionTask` | Thin wrapper over `updateTargetDetails` |
+| `transitionTask` | `updateTargetDetails` + optional `nextStatus` → `updateStatusFn` on column |
 | `claimTaskById` | TODO → DOING; shared by `claim` and `patchClaimTask` |
 | `lockOnStatus` | Status-only optimistic lock |
 | `lockOnDoingOwner` | `DOING` + owner `nodeId` |
@@ -119,7 +121,7 @@ Orphan **DOING** rows block L3 schedulers that use fail-closed open-task checks
 When a Node is considered offline (`NodeStatus.LOST`):
 
 1. **Reclaim tasks owned by that node** — for each Task where
-   `details.status = DOING` and `details.nodeId = <nodeId>`:
+   `status = DOING` and `details.nodeId = <nodeId>`:
    `patchChangeTaskStatus({ action: cancel, id, nodeId, traceId })` → **TODO**
    (clears execution state per existing `CANCEL` transition).
 2. **Idempotent** — safe if called twice; lock is `DOING + nodeId`.
@@ -154,7 +156,7 @@ and any path that sets `LOST` without waiting.
 
 - New helper e.g. `reclaimDoingTasksForNode({ nodeId, traceId })` in `task.api.ts`
   or called from `patchStopNode` / node-offline hook.
-- Scan: `category = task`, `details->>status = DOING`, `details->>nodeId = nodeId`
+- Scan: `category = task`, `status = DOING`, `details->>nodeId = nodeId`
   (paginate; cap per tick if needed).
 - Use existing `CANCEL` action — no new state-machine edge.
 - Unit/integration tests: graceful stop mid-task; stale node; double reclaim.

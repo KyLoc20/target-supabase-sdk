@@ -13,7 +13,7 @@ description: >-
 | `category` | Meaning |
 |------------|---------|
 | `task` (`CategoryTask.TASK`) | Active queue — worker claim, stale scans, overview counts |
-| `task.archived` (`CategoryTask.TASK_ARCHIVED`) | Cold row — same `details` / `name` / `value`; **not** claimed or listed as active Task |
+| `task.archived` (`CategoryTask.TASK_ARCHIVED`) | Cold row — same `status` / `details` / `name` / `value`; **not** claimed or listed as active Task |
 
 Move rows with SDK **`updateTargetCategory`** only (restricted API in `core.api.ts`). Do not use `updateTarget` / `patchTarget` for category changes.
 

@@ -34,7 +34,7 @@ Task.value  (= taskTypeKey = Repo.value)
   → remote scripts: category=script, value=task.value
 ```
 
-`TaskDetails` holds `params`, `status`, `progress`, `nodeId` — **not** embedded repo metadata.
+`Task.status` is the top-level column; `TaskDetails` holds `params`, `progress`, `nodeId`, … — **not** embedded repo metadata.
 
 ---
 

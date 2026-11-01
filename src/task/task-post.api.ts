@@ -53,9 +53,9 @@ export async function createTaskRow(
             category: CategoryTask.TASK,
             tagList,
             extra,
+            status: taskStatus,
             details: {
                 manifestVersion: 0,
-                status: taskStatus,
                 params,
                 progress: 0,
                 nodeId: null,

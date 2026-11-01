@@ -44,13 +44,14 @@ export interface Task extends Target {
     name: string;
     /** Unique key, as TaskType */
     value: string;
+    /** Task lifecycle — persisted in `target.status` (not in `details`). */
+    status: TaskStatus;
     details: TaskDetails;
     category: CategoryTask;
 }
 
 export interface TaskDetails {
     manifestVersion: number;
-    status: TaskStatus;
     params: unknown;
     /** [0,100] */
     progress: number;

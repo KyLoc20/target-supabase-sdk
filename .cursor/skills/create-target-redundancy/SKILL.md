@@ -112,7 +112,7 @@ await supabase.client
 
 ### Why we are NOT using upsert (yet)
 
-1. **`checkRedundancyFilterList` is richer than column lists** — e.g. `details->>status IN ('OPEN','TODO','DOING')` is not expressible as `onConflict` alone.
+1. **`checkRedundancyFilterList` is richer than column lists** — e.g. Task `status IN ('OPEN','TODO','DOING')` (column) is not expressible as `onConflict` alone.
 
 2. **Partial unique indexes are unsupported by PostgREST client** — indexes with `WHERE category = '…' AND details->>'status' IN (…)` need `ON CONFLICT (cols) WHERE predicate`. Supabase JS `onConflict` accepts **columns only**, not predicates. Error:
 

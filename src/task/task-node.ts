@@ -115,7 +115,7 @@ class TaskNode extends BaseNodeRuntime {
                 taskId: task.id,
                 taskName: task.name,
                 taskTypeKey: task.value,
-                taskStatus: task.details.status,
+                taskStatus: task.status,
             },
         });
 

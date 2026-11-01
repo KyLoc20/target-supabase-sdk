@@ -64,13 +64,10 @@ Omitted patch keys are left unchanged. Identity columns (`name` / `value` / `cat
 await updateTargetDetails<Task, TaskDetails>({
   id: taskId,
   optimisticLockFilterList: [
-    { field: "details->>status", operator: "eq", value: TaskStatus.TODO },
+    { field: "status", operator: "eq", value: TaskStatus.TODO },
   ],
-  updateFn: (details) => ({
-    ...details,
-    status: TaskStatus.DOING,
-    nodeId,
-  }),
+  updateFn: (details) => ({ ...details, nodeId }),
+  updateStatusFn: () => TaskStatus.DOING,
 });
 ```
 
