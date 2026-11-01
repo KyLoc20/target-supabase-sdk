@@ -9,6 +9,11 @@ export interface Target {
     extra?: string;
     details?: unknown;
     created_at: string;
+    /**
+     * Optional row lifecycle — semantics and TypeScript narrowing are defined per domain
+     * (e.g. task / node ). Omitted or null for targets that do not use status.
+     */
+    status?: unknown;
 }
 
 /** Target row before persistence — no `id` or `created_at`. */

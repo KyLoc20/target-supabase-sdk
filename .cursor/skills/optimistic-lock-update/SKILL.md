@@ -22,8 +22,8 @@ That is not atomic. Two writers can both pass validation and overwrite each othe
 
 | Need | API |
 |------|-----|
-| Only `details` (optional `extra`) | `updateTargetDetails` |
-| `tagList` and/or `details` / `extra` in one UPDATE | `updateTarget` |
+| Only `details` (optional `extra`, optional top-level `status` via `updateStatusFn`) | `updateTargetDetails` |
+| `tagList` and/or `details` / `extra` / `status` in one UPDATE | `updateTarget` |
 | **`category` only** (restricted — archive / admin) | `updateTargetCategory` |
 | Full-row create-shaped rewrite | **Do not** — `patchTarget` is deprecated |
 
@@ -55,7 +55,7 @@ Omitted patch keys are left unchanged. Identity columns (`name` / `value` / `cat
 | Field | Purpose |
 |-------|---------|
 | `id` | Target row id |
-| `updateFn` | `(existing) => { tagList?, details?, extra? }` — only returned keys are written |
+| `updateFn` | `(existing) => { tagList?, details?, extra?, status? }` — only returned keys are written |
 | `optimisticLockFilterList` | **Lock.** `QueryFilter[]` applied on UPDATE via `applyQueryFilters` |
 
 ## API — `updateTargetDetails` (details-only)

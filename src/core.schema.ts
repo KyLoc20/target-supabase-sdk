@@ -24,6 +24,8 @@ export const postTargetPayloadSchema = z.object({
     tagList: z.array(z.string()),
     extra: z.string().optional(),
     details: z.unknown().optional(),
+    /** Optional; domain-specific. Omit on create when unused (DB NULL). */
+    status: z.unknown().optional(),
 });
 
 export type PostTargetPayload = z.infer<typeof postTargetPayloadSchema>;

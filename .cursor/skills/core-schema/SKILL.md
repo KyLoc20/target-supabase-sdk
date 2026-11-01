@@ -41,7 +41,7 @@ Exported via `browser.ts` → `export * from "./core.schema"` (browser-safe).
 | Symbol | Role |
 |--------|------|
 | `queryFilterSchema` | `QueryFilter` — `createTarget` redundancy, optimistic locks, message payloads |
-| `postTargetPayloadSchema` | `PostTargetPayload` — `postTarget` / `patchTarget` body (looser strings) |
+| `postTargetPayloadSchema` | `PostTargetPayload` — `postTarget` / `patchTarget` body (looser strings); optional `status` |
 | `targetDraftSchema` | `TargetDraft` boundary — trim + min(1) on `name` / `value` / `category` |
 | `formatZodError` | Single-line `"; "`-joined issue messages |
 | `safeParseWithSchema` | `{ ok, data } \| { ok: false, error }` — no throw |

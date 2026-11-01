@@ -20,7 +20,7 @@ export const MAX_TARGET_LIST_PAGE_SIZE = 100;
 /** Alias for {@link pollTargetList} batch size cap. */
 export const MAX_POLL_TARGET_LIST_SIZE = MAX_TARGET_LIST_PAGE_SIZE;
 
-const TARGET_LIST_ORDER_FIELDS = new Set<string>(["created_at", "name", "value", "category"]);
+const TARGET_LIST_ORDER_FIELDS = new Set<string>(["created_at", "name", "value", "category", "status"]);
 
 // biome-ignore lint/suspicious/noExplicitAny: PostgrestFilterBuilder is generic over schema
 export type TargetFilterBuilder = PostgrestFilterBuilder<any, any, any[], "target", unknown>;
@@ -456,6 +456,8 @@ export interface UpdateTargetRowSnapshot<D> {
     tagList: string[];
     details: D;
     extra?: string;
+    /** Present when the row has a top-level status; domain APIs narrow the type. */
+    status?: unknown;
 }
 
 /**
@@ -466,13 +468,15 @@ export type UpdateTargetPatch<D> = {
     tagList?: string[];
     details?: D;
     extra?: string;
+    /** Set or clear top-level status (`null` writes SQL NULL). */
+    status?: unknown;
 };
 
 /**
- * Read-modify-write mutable Target columns (`tagList` / `details` / `extra`) with optional
- * DB-level optimistic locking. Does not write `name` / `value` / `category`.
+ * Read-modify-write mutable Target columns (`tagList` / `details` / `extra` / optional `status`)
+ * with optional DB-level optimistic locking. Does not write `name` / `value` / `category`.
  *
- * Prefer this when the update may touch `tagList` (and optionally `details`/`extra`) in one UPDATE.
+ * Prefer this when the update may touch `tagList` (and optionally `details`/`extra`/`status`) in one UPDATE.
  * For details-only flows, {@link updateTargetDetails} remains the thinner API.
  */
 export interface UpdateTargetParams<D> {
@@ -493,7 +497,7 @@ export interface UpdateTargetParams<D> {
 export const updateTarget = async <T, D>({ id, updateFn, optimisticLockFilterList = [] }: UpdateTargetParams<D>) => {
     const { data: currentData, error: fetchError } = await supabase.client
         .from("target")
-        .select("tagList, details, extra")
+        .select("tagList, details, extra, status")
         .eq("id", id)
         .single();
 
@@ -510,6 +514,7 @@ export const updateTarget = async <T, D>({ id, updateFn, optimisticLockFilterLis
         tagList: Array.isArray(currentData.tagList) ? (currentData.tagList as string[]) : [],
         details: currentData.details as D,
         extra: typeof currentData.extra === "string" ? currentData.extra : undefined,
+        status: currentData.status ?? undefined,
     };
 
     const patch = updateFn(existing);
@@ -517,6 +522,7 @@ export const updateTarget = async <T, D>({ id, updateFn, optimisticLockFilterLis
         tagList?: string[];
         details?: D;
         extra?: string;
+        status?: unknown;
     } = {};
 
     if (patch.tagList !== undefined) {
@@ -527,6 +533,9 @@ export const updateTarget = async <T, D>({ id, updateFn, optimisticLockFilterLis
     }
     if (patch.extra !== undefined) {
         updated.extra = patch.extra;
+    }
+    if (patch.status !== undefined) {
+        updated.status = patch.status;
     }
 
     if (Object.keys(updated).length === 0) {
@@ -641,11 +650,17 @@ export interface UpdateTargetDetailsParams<D> {
      */
     updateExtraFn?: (existing: D) => string;
     /**
+     * Optional top-level `status` patch in the same UPDATE as `details`.
+     * Return `undefined` to leave the column unchanged; `null` writes SQL NULL.
+     */
+    updateStatusFn?: (snapshot: UpdateTargetRowSnapshot<D>) => unknown;
+    /**
      * Optimistic lock conditions applied on UPDATE (not on the prior SELECT).
      *
      * Replaces the removed `beforeUpdateValidator`: validators ran in app code between read and
      * write and could not prevent concurrent overwrites. These filters become part of the UPDATE
-     * WHERE clause (via `applyQueryFilters`), e.g. `{ field: "details->>status", operator: "eq", value: "TODO" }`.
+     * WHERE clause (via `applyQueryFilters`), e.g. `{ field: "status", operator: "eq", value: "TODO" }`
+     * (or legacy `{ field: "details->>status", … }` until domain migration completes).
      *
      * If no row matches after UPDATE:
      * - empty locks → not-found (`UPDATE_TARGET_NOT_FOUND_MESSAGE`)
@@ -659,6 +674,7 @@ export const updateTargetDetails = async <T, D>({
     id,
     updateFn,
     updateExtraFn,
+    updateStatusFn,
     optimisticLockFilterList = [],
 }: UpdateTargetDetailsParams<D>) => {
     return updateTarget<T, D>({
@@ -666,13 +682,17 @@ export const updateTargetDetails = async <T, D>({
         optimisticLockFilterList,
         updateFn: (existing) => {
             const nextDetails = updateFn(existing.details);
-            if (updateExtraFn == null) {
-                return { details: nextDetails };
+            const patch: UpdateTargetPatch<D> = { details: nextDetails };
+            if (updateExtraFn != null) {
+                patch.extra = updateExtraFn(existing.details);
             }
-            return {
-                details: nextDetails,
-                extra: updateExtraFn(existing.details),
-            };
+            if (updateStatusFn != null) {
+                const nextStatus = updateStatusFn(existing);
+                if (nextStatus !== undefined) {
+                    patch.status = nextStatus;
+                }
+            }
+            return patch;
         },
     });
 };
