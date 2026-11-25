@@ -1,4 +1,4 @@
-import type { LoggerWithScope } from "../log/index";
+import type { LoggerWithScope } from "../telemetry";
 import { classifyNetworkError, formatNetworkError } from "../utils/network-error";
 
 function sleep(ms: number): Promise<void> {

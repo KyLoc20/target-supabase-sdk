@@ -27,7 +27,7 @@ export interface CreateL3ChildLauncherOptions {
     childProcesses: ManagedChildProcesses;
     readRuntimeState: L3ChildLauncherRuntimeStore["readRuntimeState"];
     writeRuntimeState: L3ChildLauncherRuntimeStore["writeRuntimeState"];
-    /** Merged onto the child env. Default: `{ LOG_PERSIST_PROCESS: label }`. */
+    /** Merged onto the child env. Default: empty. */
     spawnEnv?: (label: string) => Record<string, string>;
 }
 
@@ -41,8 +41,8 @@ export interface L3ChildLauncher {
     stopChildProcesses: () => Promise<void>;
 }
 
-function defaultSpawnEnv(label: string): Record<string, string> {
-    return { LOG_PERSIST_PROCESS: label };
+function defaultSpawnEnv(_label: string): Record<string, string> {
+    return {};
 }
 
 /**

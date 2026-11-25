@@ -1,6 +1,6 @@
 import { getPossibleTarget, isCreateTargetAlreadyExistsError, postTarget, updateTarget } from "../../../core.api";
 import { CategoryLink, type Link, type LinkDetails } from "../../../link/link.interface";
-import { createLogger } from "../../log/core/create-logger";
+import { createLogger } from "../../telemetry/manager/create-logger";
 import { isHttpUrl } from "../../utils/fetch-url";
 import { buildMediaLinkDraft } from "../media.build";
 import { isMediaValue, type MediaValue } from "../media.interface";

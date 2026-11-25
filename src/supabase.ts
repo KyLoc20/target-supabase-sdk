@@ -17,6 +17,11 @@ export interface SupabaseInitializerParams {
     supabaseAnonKey: string;
     supabaseNeedAuthUrl?: string;
     supabaseNeedAuthAnonKey?: string;
+    /**
+     * Optional `fetch` for both main/auth clients (e.g. Node telemetry Stage A).
+     * Browser / default: omit — uses supabase-js default (global fetch).
+     */
+    fetch?: typeof globalThis.fetch;
 }
 
 class SupabaseInitializer {
@@ -50,24 +55,14 @@ class SupabaseInitializer {
         // Validate and get environment variables
         const config = this.validateEnvironmentVariables(params);
 
+        const clientOptions = params.fetch != null ? { global: { fetch: params.fetch } } : undefined;
+
         // Create main client
-        this._mainClient = createClient(config.main.url, config.main.anonKey, {
-            // TODO
-            // auth: {
-            //   persistSession: true,
-            //   autoRefreshToken: true,
-            // },
-        });
+        this._mainClient = createClient(config.main.url, config.main.anonKey, clientOptions);
 
         // Create auth client if configured
         if (config.auth) {
-            this._authClient = createClient(config.auth.url, config.auth.anonKey, {
-                // TODO
-                // auth: {
-                //   persistSession: true,
-                //   autoRefreshToken: true,
-                // },
-            });
+            this._authClient = createClient(config.auth.url, config.auth.anonKey, clientOptions);
         }
 
         // Log configuration

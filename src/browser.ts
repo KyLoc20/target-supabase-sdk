@@ -226,32 +226,6 @@ export {
     normalizeStringList,
     parseIdeaOriginal,
 } from "./shared/idea";
-export type {
-    CreateLoggerInput,
-    DecodedLogBatch,
-    FlatLogEntry,
-    LogEntry,
-    LoggerWithScope,
-    LogScope,
-    LogScopePatch,
-} from "./shared/log";
-export {
-    createLogger,
-    decodeLogBatch,
-    decodeLogBatchList,
-    flattenLogBatch,
-    flattenLogBatches,
-    formatLogSpoolBatchTimestamp,
-    isLogBatchList,
-    isLogEntry,
-    LOG_BATCH_LIST_VALUE,
-    LOG_MIN_LEVEL_ENV_KEY,
-    LogLevel,
-    logManager,
-    logMinLevelFromEnv,
-    parseLogBatchMeta,
-    resolveLogMinLevel,
-} from "./shared/log";
 export type { BuildMediaLinkDraftInput, MediaOriginal, MediaValue } from "./shared/media";
 export {
     buildMediaLinkDraft,
@@ -263,8 +237,50 @@ export {
     MEDIA_VALUES,
     mediaLinkDedupFilters,
 } from "./shared/media";
+export type {
+    ClassifyStalePrefixOptions,
+    GetLatestTargetInput,
+    MapWithConcurrencyOptions,
+    OverviewProbeError,
+    OverviewProbeMeta,
+    OverviewProbeResult,
+    RunOverviewProbeInput,
+} from "./shared/ops";
+export {
+    classifyStalePrefix,
+    DEFAULT_OBSERVABILITY_BUDGET_MS,
+    getLatestTarget,
+    isCreatedAtStale,
+    mapWithConcurrency,
+    parseCreatedAtMs,
+    runOverviewProbe,
+    runOverviewProbesSerial,
+    withObservabilityBudget,
+} from "./shared/ops";
 export type { BuildReviewLinkDraftInput } from "./shared/review";
 export { buildReviewLinkDraft, reviewLinksForNameFilters } from "./shared/review";
+export type {
+    CallEntry,
+    CreateLoggerInput,
+    LogEntry,
+    LoggerWithScope,
+    LogScope,
+    LogScopePatch,
+} from "./shared/telemetry";
+export {
+    createLogger,
+    LOG_MIN_LEVEL_ENV_KEY,
+    LogLevel,
+    logManager,
+    logMinLevelFromEnv,
+    recordCall,
+    resolveLogMinLevel,
+    TELEMETRY_DIR_ENV,
+    TELEMETRY_ON_ENV,
+    TelemetryManager,
+    telemetryManager,
+    withCallTelemetry,
+} from "./shared/telemetry";
 export { isHttpUrl, resolveFetchUrl } from "./shared/utils/fetch-url";
 export { getValueAtPath } from "./shared/utils/get-value-at-path";
 export type {

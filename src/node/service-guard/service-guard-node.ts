@@ -1,5 +1,4 @@
 import { createLogger, type LoggerWithScope } from "../../shared/log";
-import { registerCollectLogRunner } from "../../shared/log/spool/register-collect-log-runner";
 import { getErrorMessage } from "../../shared/utils/error.utils";
 import { TriggerNode } from "../../trigger/trigger-node";
 import type { NodeLoopContext } from "../base-node-runtime";
@@ -52,10 +51,6 @@ class ServiceGuardNode extends TriggerNode {
             serviceValue: options.serviceValue,
             logTopic: options.logTopic,
             spawnWorker: options.spawnBusinessNodes,
-        });
-        registerCollectLogRunner({
-            serviceValue: options.serviceValue,
-            getServiceId: options.guardRunner.getServiceId,
         });
         return new ServiceGuardNode(options);
     }

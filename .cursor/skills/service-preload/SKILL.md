@@ -30,11 +30,11 @@ node --import ./scripts/preload.mjs dist/index.js
 | Item | Verdict | Notes |
 |------|---------|-------|
 | Single `--import` per process | ✅ | Node supports one or more; one relative path is enough if SDK orchestrates internally |
-| Logic in SDK | ✅ | `loadEnvFiles`, `validateLogSpoolPreloadEnv`, root resolve already in `/node` |
+| Logic in SDK | ✅ | `loadEnvFiles`, root resolve already in `/node` |
 | Service-only `preload.mjs` | ✅ | Pass `packageName` + `serviceValue` (+ optional hooks) |
 | Replace 3-file chain | ✅ | `preload-env` + `preload-log-persist` merge into SDK runner |
 | `preload-diagnostics` | ⏸️ | No active task today — **remove** from chain; leave TODO in SDK runner |
-| Async work in preload | ❌ | `initSupabaseFromStandardEnv`, `ensureLogSpoolFromEnv` stay in app `main()` |
+| Async work in preload | ❌ | `initSupabaseFromStandardEnv`, `ensureTelemetryPersistFromEnv` stay in app `main()` |
 | Windows `--import` paths | ✅ | Service preload stays **relative** (`./scripts/preload.mjs`); SDK resolved via package exports |
 | Child spawn | ✅ | `spawnTsxChild({ preloadModules: ["./scripts/preload.mjs"] })` |
 
@@ -54,8 +54,7 @@ Phase 2 — Load .env files
   Order: .env.local → .env (no overwrite of existing process.env)
 
 Phase 3 — Service env defaults (SDK helpers + L3 hook)
-  applyServiceEnvDefaults(projectRoot, options)
-    • LOG_PERSIST_SERVICE ← options.serviceValue (when LOG_PERSIST_ENABLED)
+  applyRuntimeDataDirDefault(projectRoot, options)
     • RUNTIME_DATA_DIR ← options.runtimeDataDirRelative ?? "data/runtime"
   options.applyEnvDefaults?.(projectRoot)   // L3: legacy aliases, domain keys
 
@@ -65,17 +64,12 @@ Phase 3½ — Global log min level (after env load)
     • LOG_MIN_LEVEL env: DEBUG | INFO | SUCCESS | WARN | ERROR | CRITICAL
     • unset → options.defaultLogMinLevel ?? (DEBUG in dev, INFO in prod)
 
-Phase 4 — Cross-cutting validation
-  validateLogSpoolPreloadEnv() when LOG_PERSIST_ENABLED
-
-Phase 5 — Process diagnostics
-  // TODO: optional unhandledRejection / uncaughtException formatters
-  // Previously watch-service preload-diagnostics.mjs — not enabled in v1
-
 ─── NOT in preload (app entry, async) ───
   await initSupabaseFromStandardEnv({ root })
-  await ensureLogSpoolFromEnv()   // guard / scheduler / worker; main via createServiceHost after claim
+  await enableTelemetryPersistFromEnvInChild()  // when TARGET_SUPABASE_SDK_TELEMETRY_ON; main via createServiceHost after claim
 ```
+See [telemetry](../telemetry/SKILL.md) / `docs/telemetry.protocol.md`.
+
 
 ## Service contract
 
@@ -109,27 +103,19 @@ const PRELOAD_MODULES = ["./scripts/preload.mjs"] as const;
 
 spawnTsxChild({
     preloadModules: PRELOAD_MODULES,
-    env: { ...process.env, LOG_PERSIST_PROCESS: label },
+    env: { ...process.env },
 });
 ```
 
 ### Child process env
 
-Launcher sets `LOG_PERSIST_PROCESS` per child (`guard` | `scheduler` | `worker`). Main spool is enabled by `createServiceHost` after registry claim (`processRole: "main"`).
+`TARGET_SUPABASE_SDK_SERVICE_ID` (`SERVICE_ID_ENV`, registry instance id) is set on main after claim and inherited via spawn env. See [node-protocol](../node-protocol/SKILL.md).
 
-## Log file spool (multi-process)
+## Local telemetry
 
-When `LOG_PERSIST_ENABLED=true`, each process enables a **file spool writer** (`ensureLogSpoolFromEnv`). Logs buffer in memory, flush to `{RUNTIME_DATA_DIR}/log-spool/{serviceId}/{role}/*.tmp`. The **guard** uploads batches via `registerCollectLogRunner` — no cross-process registry heartbeat.
+When `TARGET_SUPABASE_SDK_TELEMETRY_ON=true` and DIR is writable, each process enables local `{DIR}/log` + `{DIR}/call` batches. **No** upload to Supabase.
 
-See [log-spool](../log-spool/SKILL.md) and [`src/shared/log/README.md`](../../src/shared/log/README.md).
-
-| Concern | Approach |
-|---------|----------|
-| Producer write | Per-process `.tmp` files (atomic `.part` → rename) |
-| Upload | Guard-only `collect-log` runner |
-| Sync tracking | `.tmp` / `.json` suffix per batch file (no central index) |
-| Child `serviceId` | `ManagedChildProcesses.spawn` auto-injects `LOG_SPOOL_SERVICE_ID` |
-| Extra roles (e.g. `chrome-sidecar`) | `runServicePreload({ logSpoolExtraProcessRoles: [...] })` or env |
+See [telemetry](../telemetry/SKILL.md) and [`docs/telemetry.protocol.md`](../../docs/telemetry.protocol.md).
 
 **Do not** use a shared JSON registry file that all processes read-modify-write — same Windows `EPERM` lessons as [json-state-store](../json-state-store/SKILL.md). Runtime gate state uses `createServiceRuntimeStateStore` (sharded `runtime-state/*.json`).
 
@@ -150,7 +136,7 @@ interface ServicePreloadOptions {
     callerImportMetaUrl: string;
     /** package.json name — for resolveProjectRootByPackageName */
     packageName: string;
-    /** LOG_PERSIST_SERVICE default when persistence enabled */
+    /** Logical service value (e.g. upload-service) */
     serviceValue: string;
     /** Relative to project root; default "data/runtime" */
     runtimeDataDirRelative?: string;
@@ -167,7 +153,7 @@ interface ServicePreloadOptions {
 
 ### `LOG_MIN_LEVEL` (.env)
 
-See SDK `.env.example`. Applied in Phase 3½ — affects **this process** console output and log-persist offers (not inbound LogBatch from other services).
+See SDK `.env.example`. Applied in Phase 3½ — affects **this process** console output (and log-lane offers when telemetry persist is on).
 
 | Value | Rank |
 |-------|------|
@@ -213,11 +199,11 @@ supabase-sdk/
 ## Do not
 
 - Put `await initSupabaseFromStandardEnv()` in preload
-- Put `await ensureLogSpoolFromEnv()` in preload
+- Put `await ensureTelemetryPersistFromEnv()` in preload
 - Use absolute paths in `--import` on Windows
 - Duplicate `.env` parsing in service `env.ts` and preload (preload loads; app reads `process.env`)
 - Reintroduce multi-file preload chains in new services
-- Use a shared JSON registry for log readiness — file spool uses per-process `.tmp` / `.json` instead
+- Reintroduce Supabase log-batch upload / Guard collect-log
 
 ## Env parsers (`src/node/env/`)
 
@@ -265,5 +251,6 @@ Keep domain getters in service `src/env.ts` (Telegram / upload limits / legacy a
 
 ## Related skills
 
-- [log-spool](../log-spool/SKILL.md) — file spool layout and L3 integration
+- [telemetry](../telemetry/SKILL.md) — local persist (log/call lanes)
 - [l3-service-host](../l3-service-host/SKILL.md) — `preloadModules`, spawn, readiness
+- [node-protocol](../node-protocol/SKILL.md) — `SERVICE_ID_ENV`

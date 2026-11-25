@@ -7,7 +7,7 @@ import {
 } from "../../../core.api";
 import type { Target } from "../../../core.interface";
 import { CategoryLink, type Link, type LinkDetails } from "../../../link/link.interface";
-import { createLogger } from "../../log/core/create-logger";
+import { createLogger } from "../../telemetry/manager/create-logger";
 import { buildFeedLinkDraft, buildFeedTagList, resolveFeedOriginalStorageProvider } from "../feed.build";
 import {
     type FeedIngestSource,

@@ -73,11 +73,12 @@ src/task/task-manager.ts     ─┘         │
 Same pattern for infra domains not yet on root:
 
 ```text
-src/shared/log/log-manager.ts      ─┐
-src/shared/log/log-scope.ts        ─┼─► src/shared/log/index.ts
-src/shared/log/create-logger.ts ─┘
+src/shared/telemetry/manager/telemetry-manager.ts ─┐
+src/shared/telemetry/manager/log-scope.ts         ─┼─► src/shared/telemetry/index.ts
+src/shared/telemetry/manager/create-logger.ts     ─┘
          ▲
-         └── src/*.api.ts imports from "../shared/log" (domain barrel OK cross-folder)
+         └── src/*.api.ts imports from "../shared/telemetry" (domain barrel OK cross-folder)
+`src/shared/log` is a deprecated thin re-export of telemetry.
 ```
 
 | Layer | File | Role |
@@ -118,24 +119,27 @@ export type { RegisterTasksOptions, RegisterTasksResult, PrepareTaskResponse, ..
 
 **Keep private** (task example): `local-task-registry.ts`, `task-repo-context.ts`, `bootstrapLocalTasks`, script loaders.
 
-### Smaller domain example (`src/shared/log/index.ts`)
+### Smaller domain example (`src/shared/telemetry/index.ts`)
 
 ```typescript
 /**
- * Log domain public API — curated re-exports only.
+ * Telemetry domain public API — curated re-exports only.
  */
 
-export { logManager, LogManager, LogLevel } from "./log-manager";
-export type { LogEntry, LogOptions, LoggerWithScope, LogRestParams } from "./log-manager";
+export { logManager, LogManager, LogLevel, telemetryManager, TelemetryManager } from "./manager/telemetry-manager";
+export type { LogEntry, LogOptions, LoggerWithScope, LogRestParams } from "./manager/telemetry-manager";
 
-export { createLogger } from "./create-logger";
-export type { CreateLoggerInput } from "./create-logger";
+export { createLogger } from "./manager/create-logger";
+export type { CreateLoggerInput } from "./manager/create-logger";
 
-export { createScope, withModule, ... } from "./log-scope";
-export type { LogScope, LogScopePatch, CreateScopeInput } from "./log-scope";
+export { createScope, withModule, ... } from "./manager/log-scope";
+export type { LogScope, LogScopePatch, CreateScopeInput } from "./manager/log-scope";
+
+export { withCallTelemetry, recordCall } from "./call/with-call";
+export { createSupabaseTelemetryFetch } from "./transport/supabase-telemetry-fetch";
 ```
 
-Not exported via barrel: nothing else under `shared/log/` today. Consumers inside `src/` use `from "../shared/log"`; files inside `shared/log/` use `from "./log-manager"` etc.
+Node-only persist APIs live under `persist/` and are re-exported from `src/node.ts`. Consumers use `from "../shared/telemetry"`; files inside telemetry use leaf paths (`./manager/...`, `./call/...`), not the domain barrel.
 
 ---
 

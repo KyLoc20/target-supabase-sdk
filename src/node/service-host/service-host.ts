@@ -2,9 +2,8 @@ import { ServiceRegistryError } from "../../service/registry/registry.service";
 import type { ServiceRegistrySession } from "../../service/registry/registry-lifecycle";
 import type { Service } from "../../service/service.interface";
 import { createLogger, type LoggerWithScope } from "../../shared/log";
-import { LOG_SPOOL_SERVICE_ID_ENV } from "../../shared/log/spool/config";
-import { ensureLogSpoolFromEnv } from "../../shared/log/spool/enable";
-import { logSpoolEnabledFromEnv } from "../../shared/log/upload/env";
+import { ensureTelemetryPersistFromEnv, shutdownTelemetryPersist } from "../../shared/telemetry/persist/enable";
+import { SERVICE_ID_ENV } from "../node-service-id";
 import type { ManagedChildProcesses } from "../process/managed-child-processes";
 import { claimRegistrySlotOrExit } from "./claim-registry-slot";
 
@@ -33,8 +32,11 @@ export interface ServiceHostOptions {
     startSupervisors?: (ctx: ServiceHostContext) => void | Promise<void>;
     waitUntilReady?: () => Promise<void>;
     startServer?: () => Promise<ServiceHostClosable>;
-    /** When true (default), enable file log spool for main after registry claim. */
-    enableLogSpoolAfterClaim?: boolean;
+    /**
+     * When true (default), try enable local telemetry persist after registry claim
+     * (`TARGET_SUPABASE_SDK_TELEMETRY_ON` + writable DIR).
+     */
+    enableTelemetryPersistAfterClaim?: boolean;
     /** Stop child processes and other local resources (not registry release). */
     onShutdown?: (signal: string) => Promise<void>;
 }
@@ -75,6 +77,8 @@ export function createServiceHost(options: ServiceHostOptions): ServiceHost {
         if (options.onShutdown != null) {
             await options.onShutdown(signal).catch(() => undefined);
         }
+
+        await shutdownTelemetryPersist().catch(() => undefined);
 
         if (session != null) {
             await session.release();
@@ -127,15 +131,11 @@ export function createServiceHost(options: ServiceHostOptions): ServiceHost {
             await options.onRegistryClaimed(hostCtx);
         }
 
-        process.env[LOG_SPOOL_SERVICE_ID_ENV] = session.service.id;
+        process.env[SERVICE_ID_ENV] = session.service.id;
 
-        const enableSpool = options.enableLogSpoolAfterClaim ?? true;
-        if (enableSpool && logSpoolEnabledFromEnv()) {
-            await ensureLogSpoolFromEnv({
-                serviceId: session.service.id,
-                serviceValue: options.serviceValue,
-                processRole: "main",
-            });
+        const enableTelemetry = options.enableTelemetryPersistAfterClaim ?? true;
+        if (enableTelemetry) {
+            await ensureTelemetryPersistFromEnv().catch(() => undefined);
         }
 
         if (options.startSupervisors != null) {
@@ -167,6 +167,8 @@ export function createServiceHost(options: ServiceHostOptions): ServiceHost {
             if (options.onShutdown != null) {
                 await options.onShutdown("fatal").catch(() => undefined);
             }
+
+            await shutdownTelemetryPersist().catch(() => undefined);
 
             if (session != null) {
                 await session.release().catch(() => undefined);

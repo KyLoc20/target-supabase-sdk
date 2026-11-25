@@ -1,7 +1,7 @@
 import type { ServiceRegistrySession } from "../../service/registry/registry-lifecycle";
 import type { Service } from "../../service/service.interface";
 import { createLogger, type LoggerWithScope } from "../../shared/log";
-import { LOG_SPOOL_SERVICE_ID_ENV } from "../../shared/log/spool/config";
+import { SERVICE_ID_ENV } from "../node-service-id";
 import { claimRegistrySlotOrExit } from "./claim-registry-slot";
 
 export interface SingleProcessServiceContext {
@@ -38,7 +38,7 @@ export async function runSingleProcessService(options: SingleProcessServiceOptio
         logTopic,
     });
 
-    process.env[LOG_SPOOL_SERVICE_ID_ENV] = session.service.id;
+    process.env[SERVICE_ID_ENV] = session.service.id;
 
     try {
         await options.run({ service: session.service, session });

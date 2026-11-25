@@ -3,6 +3,7 @@ import type { ZodError, ZodType } from "zod";
 import { generateResponse, type QueryFilter, type Target, type TargetDraft } from "./core.interface";
 import { type PostTargetPayload, postTargetPayloadSchema } from "./core.schema";
 import { type BaseValidator, handleSupabaseError } from "./core.utils";
+import { withCallTelemetry } from "./shared/telemetry/call/with-call";
 import { supabase } from "./supabase";
 
 export type { QueryFilter } from "./core.interface";
@@ -124,28 +125,34 @@ export interface BaseQueryParams {
     orderBy?: QueryOrderBy;
 }
 
-export const getTarget = async ({ id, filterList }: { id: string; filterList?: QueryFilter[] }) => {
-    const query =
-        filterList != null && filterList.length > 0
-            ? applyQueryFilters(supabase.client.from("target").select().eq("id", id), filterList)
-            : supabase.client.from("target").select().eq("id", id);
+export const getTarget = withCallTelemetry(
+    "getTarget",
+    async ({ id, filterList }: { id: string; filterList?: QueryFilter[] }) => {
+        const query =
+            filterList != null && filterList.length > 0
+                ? applyQueryFilters(supabase.client.from("target").select().eq("id", id), filterList)
+                : supabase.client.from("target").select().eq("id", id);
 
-    const { data, error } = await query.single();
-    if (error) {
-        handleSupabaseError("getTarget", error, "Failed to fetch target.");
-    }
-    return generateResponse.success<Target>(data as Target);
-};
+        const { data, error } = await query.single();
+        if (error) {
+            handleSupabaseError("getTarget", error, "Failed to fetch target.");
+        }
+        return generateResponse.success<Target>(data as Target);
+    },
+);
 
-export const getPossibleTarget = async ({ filterList }: { filterList: QueryFilter[] }) => {
-    const query = applyQueryFilters(supabase.client.from("target").select(), filterList);
+export const getPossibleTarget = withCallTelemetry(
+    "getPossibleTarget",
+    async ({ filterList }: { filterList: QueryFilter[] }) => {
+        const query = applyQueryFilters(supabase.client.from("target").select(), filterList);
 
-    const { data, error } = await query.maybeSingle();
-    if (error) {
-        handleSupabaseError("getPossibleTarget", error, "Failed to fetch target.");
-    }
-    return generateResponse.success<Target | null>(data);
-};
+        const { data, error } = await query.maybeSingle();
+        if (error) {
+            handleSupabaseError("getPossibleTarget", error, "Failed to fetch target.");
+        }
+        return generateResponse.success<Target | null>(data);
+    },
+);
 
 export interface GetTargetListParams extends BaseQueryParams {
     category: Target["category"];
@@ -163,7 +170,7 @@ export interface GetTargetListParams extends BaseQueryParams {
 /**
  * Paginated target list by category. Failures throw via `handleSupabaseError` (no `{ error }` envelope).
  */
-export const getTargetList = async <T extends Target = Target>({
+async function getTargetListImpl<T extends Target = Target>({
     pageNum,
     pageSize,
     limit,
@@ -172,7 +179,7 @@ export const getTargetList = async <T extends Target = Target>({
     orderBy = { field: "created_at", ascending: false },
     selectFields = "*",
     filterBuilder,
-}: GetTargetListParams) => {
+}: GetTargetListParams) {
     const { pageNum: resolvedPageNum, pageSize: resolvedPageSize } = resolveTargetListPagination({
         pageNum,
         pageSize,
@@ -195,7 +202,12 @@ export const getTargetList = async <T extends Target = Target>({
         handleSupabaseError("getTargetList", error, "Failed to fetch target list.");
     }
     return generateResponse.success<T[]>((data ?? []) as T[]);
-};
+}
+
+export const getTargetList = withCallTelemetry(
+    "getTargetList",
+    getTargetListImpl as typeof getTargetListImpl,
+) as typeof getTargetListImpl;
 
 export interface ScanTargetListParams {
     category: Target["category"];
@@ -219,14 +231,14 @@ export interface ScanTargetListParams {
  * Uses offset pagination (`.range`). Stable enough for small catalogs (e.g. Repo registry);
  * for large tables under concurrent writes, consider a DB RPC or keyset pagination later.
  */
-export const scanTargetList = async <T extends Target = Target>({
+async function scanTargetListImpl<T extends Target = Target>({
     category,
     filterList = [],
     orderBy = { field: "created_at", ascending: false },
     selectFields = "*",
     filterBuilder,
     maxRows,
-}: ScanTargetListParams) => {
+}: ScanTargetListParams) {
     const batchSize = MAX_TARGET_LIST_PAGE_SIZE;
     validateTargetListOrderBy(orderBy);
     if (maxRows != null && (!Number.isInteger(maxRows) || maxRows < 1)) {
@@ -272,29 +284,37 @@ export const scanTargetList = async <T extends Target = Target>({
     }
 
     return generateResponse.success(rows);
-};
+}
+
+export const scanTargetList = withCallTelemetry(
+    "scanTargetList",
+    scanTargetListImpl as typeof scanTargetListImpl,
+) as typeof scanTargetListImpl;
 
 export interface GetTargetTotalCountParams extends BaseQueryParams {
     category: Target["category"];
     /** Custom query builder; `category` and `filterList` are still applied. */
     filterBuilder?: TargetFilterBuilder;
 }
-export const getTargetTotalCount = async ({ category, filterList = [], filterBuilder }: GetTargetTotalCountParams) => {
-    const query = buildCategoryScopedQuery({
-        category,
-        filterList,
-        filterBuilder,
-        select: "id",
-        selectOptions: { count: "exact", head: true },
-    });
+export const getTargetTotalCount = withCallTelemetry(
+    "getTargetTotalCount",
+    async ({ category, filterList = [], filterBuilder }: GetTargetTotalCountParams) => {
+        const query = buildCategoryScopedQuery({
+            category,
+            filterList,
+            filterBuilder,
+            select: "id",
+            selectOptions: { count: "exact", head: true },
+        });
 
-    const { count, error } = await query;
+        const { count, error } = await query;
 
-    if (error) {
-        handleSupabaseError("getTargetTotalCount", error, "Failed to fetch target count.");
-    }
-    return generateResponse.success<number>(count ?? 0);
-};
+        if (error) {
+            handleSupabaseError("getTargetTotalCount", error, "Failed to fetch target count.");
+        }
+        return generateResponse.success<number>(count ?? 0);
+    },
+);
 
 function validatePollTargetListSize(size: number): void {
     if (!Number.isInteger(size) || size < 1 || size > MAX_POLL_TARGET_LIST_SIZE) {
@@ -330,13 +350,13 @@ export interface PollTargetListParams {
  * - 或 claim 状态机：UPDATE … WHERE pending → DELETE/标记已消费（类似 patchClaimTask 乐观锁）
  * - 短期加固：DELETE 后校验影响行数，0 行则不 push 到 polled
  */
-export const pollTargetList = async <T extends Target = Target>({
+async function pollTargetListImpl<T extends Target = Target>({
     category,
     size,
     filterList = [],
     ascending = true,
     selectFields = "*",
-}: PollTargetListParams) => {
+}: PollTargetListParams) {
     validatePollTargetListSize(size);
 
     const query = buildCategoryScopedQuery({
@@ -364,25 +384,33 @@ export const pollTargetList = async <T extends Target = Target>({
     }
 
     return generateResponse.success<T[]>(polled);
-};
+}
 
-export const deleteTarget = async ({ id, filterList }: { id: string; filterList?: QueryFilter[] }) => {
-    // Check whether the target exists given filterList
-    if (filterList != null && filterList.length > 0) {
-        const query = applyQueryFilters(supabase.client.from("target").select().eq("id", id), filterList);
-        const { data: existingTarget, error: existingError } = await query.single();
-        if (existingError || existingTarget == null) {
-            const msg = `[deleteTarget] Cannot find the target ${id}`;
-            console.error(msg, { filterList }, existingError);
-            throw new Error(msg);
+export const pollTargetList = withCallTelemetry(
+    "pollTargetList",
+    pollTargetListImpl as typeof pollTargetListImpl,
+) as typeof pollTargetListImpl;
+
+export const deleteTarget = withCallTelemetry(
+    "deleteTarget",
+    async ({ id, filterList }: { id: string; filterList?: QueryFilter[] }) => {
+        // Check whether the target exists given filterList
+        if (filterList != null && filterList.length > 0) {
+            const query = applyQueryFilters(supabase.client.from("target").select().eq("id", id), filterList);
+            const { data: existingTarget, error: existingError } = await query.single();
+            if (existingError || existingTarget == null) {
+                const msg = `[deleteTarget] Cannot find the target ${id}`;
+                console.error(msg, { filterList }, existingError);
+                throw new Error(msg);
+            }
         }
-    }
-    const { error } = await supabase.client.from("target").delete().eq("id", id);
-    if (error) {
-        handleSupabaseError("deleteTarget", error, `Failed to delete target ${id}.`);
-    }
-    return generateResponse.success();
-};
+        const { error } = await supabase.client.from("target").delete().eq("id", id);
+        if (error) {
+            handleSupabaseError("deleteTarget", error, `Failed to delete target ${id}.`);
+        }
+        return generateResponse.success();
+    },
+);
 
 function parsePostTargetPayload(payload: unknown): PostTargetPayload {
     const result = postTargetPayloadSchema.safeParse(payload);
@@ -392,7 +420,7 @@ function parsePostTargetPayload(payload: unknown): PostTargetPayload {
     return result.data;
 }
 
-export const postTarget = async (payload: PostTargetPayload) => {
+export const postTarget = withCallTelemetry("postTarget", async (payload: PostTargetPayload) => {
     const validPayload = parsePostTargetPayload(payload);
 
     const { data, error } = await supabase.client
@@ -405,7 +433,7 @@ export const postTarget = async (payload: PostTargetPayload) => {
         handleSupabaseError("postTarget", error, "Failed to create target.");
     }
     return generateResponse.success<Target>(data as Target);
-};
+});
 
 export interface PatchTargetPayload extends PostTargetPayload {
     id: string;
@@ -423,7 +451,7 @@ export const UPDATE_TARGET_NOT_FOUND_MESSAGE = "[updateTarget] Target not found 
  * Full-row rewrite of create-shaped fields. Forces callers to resupply name/value/category,
  * has no optimistic lock, and can accidentally mutate identity columns. Unused in-tree.
  */
-export const patchTarget = async ({ id, ...restPayload }: PatchTargetPayload) => {
+export const patchTarget = withCallTelemetry("patchTarget", async ({ id, ...restPayload }: PatchTargetPayload) => {
     const { data: currentData, error: fetchError } = await supabase.client
         .from("target")
         .select()
@@ -449,7 +477,7 @@ export const patchTarget = async ({ id, ...restPayload }: PatchTargetPayload) =>
         handleSupabaseError("patchTarget", error, "Failed to update target.");
     }
     return generateResponse.success<Target>(data as Target);
-};
+});
 
 /** Mutable Target columns allowed by {@link updateTarget} (identity fields excluded). */
 export interface UpdateTargetRowSnapshot<D> {
@@ -494,7 +522,7 @@ export interface UpdateTargetParams<D> {
     optimisticLockFilterList?: QueryFilter[];
 }
 
-export const updateTarget = async <T, D>({ id, updateFn, optimisticLockFilterList = [] }: UpdateTargetParams<D>) => {
+async function updateTargetImpl<T, D>({ id, updateFn, optimisticLockFilterList = [] }: UpdateTargetParams<D>) {
     const { data: currentData, error: fetchError } = await supabase.client
         .from("target")
         .select("tagList, details, extra, status")
@@ -573,7 +601,12 @@ export const updateTarget = async <T, D>({ id, updateFn, optimisticLockFilterLis
     }
 
     return data as T;
-};
+}
+
+export const updateTarget = withCallTelemetry(
+    "updateTarget",
+    updateTargetImpl as typeof updateTargetImpl,
+) as typeof updateTargetImpl;
 
 /**
  * Update only `target.category` with optional DB-level optimistic locking on UPDATE.
@@ -592,41 +625,40 @@ export interface UpdateTargetCategoryParams {
     optimisticLockFilterList?: QueryFilter[];
 }
 
-export const updateTargetCategory = async ({
-    id,
-    category,
-    optimisticLockFilterList = [],
-}: UpdateTargetCategoryParams) => {
-    const updateQuery = applyQueryFilters(
-        supabase.client.from("target").update({ category }).eq("id", id),
-        optimisticLockFilterList,
-    );
+export const updateTargetCategory = withCallTelemetry(
+    "updateTargetCategory",
+    async ({ id, category, optimisticLockFilterList = [] }: UpdateTargetCategoryParams) => {
+        const updateQuery = applyQueryFilters(
+            supabase.client.from("target").update({ category }).eq("id", id),
+            optimisticLockFilterList,
+        );
 
-    const { data, error } = await updateQuery.select("id, category").maybeSingle();
+        const { data, error } = await updateQuery.select("id, category").maybeSingle();
 
-    if (error) {
-        handleSupabaseError("updateTargetCategory", error, "Failed to update target category.");
-    }
-    if (!data) {
-        if (optimisticLockFilterList.length === 0) {
-            throw new Error(UPDATE_TARGET_NOT_FOUND_MESSAGE);
+        if (error) {
+            handleSupabaseError("updateTargetCategory", error, "Failed to update target category.");
         }
-        const { data: stillThere, error: recheckError } = await supabase.client
-            .from("target")
-            .select("id")
-            .eq("id", id)
-            .maybeSingle();
-        if (recheckError) {
-            handleSupabaseError("updateTargetCategory", recheckError, "Failed to recheck target after lock miss.");
+        if (!data) {
+            if (optimisticLockFilterList.length === 0) {
+                throw new Error(UPDATE_TARGET_NOT_FOUND_MESSAGE);
+            }
+            const { data: stillThere, error: recheckError } = await supabase.client
+                .from("target")
+                .select("id")
+                .eq("id", id)
+                .maybeSingle();
+            if (recheckError) {
+                handleSupabaseError("updateTargetCategory", recheckError, "Failed to recheck target after lock miss.");
+            }
+            if (!stillThere) {
+                throw new Error(UPDATE_TARGET_NOT_FOUND_MESSAGE);
+            }
+            throw new Error(OPTIMISTIC_LOCK_FAILED_MESSAGE);
         }
-        if (!stillThere) {
-            throw new Error(UPDATE_TARGET_NOT_FOUND_MESSAGE);
-        }
-        throw new Error(OPTIMISTIC_LOCK_FAILED_MESSAGE);
-    }
 
-    return generateResponse.success(data as Pick<Target, "id" | "category">);
-};
+        return generateResponse.success(data as Pick<Target, "id" | "category">);
+    },
+);
 
 /**
  * Read-modify-write `target.details` with optional DB-level optimistic locking on UPDATE.
@@ -670,13 +702,13 @@ export interface UpdateTargetDetailsParams<D> {
     optimisticLockFilterList?: QueryFilter[];
 }
 
-export const updateTargetDetails = async <T, D>({
+async function updateTargetDetailsImpl<T, D>({
     id,
     updateFn,
     updateExtraFn,
     updateStatusFn,
     optimisticLockFilterList = [],
-}: UpdateTargetDetailsParams<D>) => {
+}: UpdateTargetDetailsParams<D>) {
     return updateTarget<T, D>({
         id,
         optimisticLockFilterList,
@@ -695,7 +727,12 @@ export const updateTargetDetails = async <T, D>({
             return patch;
         },
     });
-};
+}
+
+export const updateTargetDetails = withCallTelemetry(
+    "updateTargetDetails",
+    updateTargetDetailsImpl as typeof updateTargetDetailsImpl,
+) as typeof updateTargetDetailsImpl;
 
 export const OPTIMISTIC_LOCK_ERROR_CODE = "OPTIMISTIC_LOCK" as const;
 
@@ -744,7 +781,7 @@ async function failCreateTargetRedundancy(selfId: string, checkRedundancyFilterL
  * When `checkRedundancyFilterList` is set, uses insert-first + post-verify (not SELECT-before-INSERT).
  * See `.cursor/skills/create-target-redundancy/SKILL.md`.
  */
-export const createTarget = async <T extends Target, P extends object>({
+async function createTargetImpl<T extends Target, P extends object>({
     payload,
     validator,
     createFn,
@@ -761,7 +798,7 @@ export const createTarget = async <T extends Target, P extends object>({
      * Reserved for a later release; do not pass `true`.
      */
     upsert?: boolean;
-}) => {
+}) {
     if (upsert) {
         console.warn("[createTarget] `upsert` is deprecated and has no effect.");
     }
@@ -805,7 +842,12 @@ export const createTarget = async <T extends Target, P extends object>({
     }
 
     return failCreateTargetRedundancy(selfId, checkRedundancyFilterList);
-};
+}
+
+export const createTarget = withCallTelemetry(
+    "createTarget",
+    createTargetImpl as typeof createTargetImpl,
+) as typeof createTargetImpl;
 
 export function validateWith<P extends object, V extends BaseValidator<P>>(ValidatorClass: new () => V) {
     return <R>(fn: (validPayload: P) => R) => {

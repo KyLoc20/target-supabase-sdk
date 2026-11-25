@@ -34,7 +34,7 @@ import {
 
 Location: `src/node/service-guard/` (`runReadinessGate` lives in `src/node/readiness/`).
 
-`ServiceGuardNode.create` registers the guard + collect-log runners, then on bootstrap runs the readiness gate and **`spawnBusinessNodes`**. Worker spawn cooldown is recorded automatically — do not pass `spawnWorker` inside `guardRunner`.
+`ServiceGuardNode.create` registers the guard runner (no collect-log — telemetry is local-only), then on bootstrap runs the readiness gate and **`spawnBusinessNodes`**. Worker spawn cooldown is recorded automatically — do not pass `spawnWorker` inside `guardRunner`.
 
 ```typescript
 import { createL3ChildLauncher } from "target-supabase-sdk/node";
@@ -74,7 +74,7 @@ export function createServiceGuardNode(): ServiceGuardNode {
 ```typescript
 // src/processes/guard.ts
 await initSupabaseFromEnv();
-await enableLogSpoolFromEnvInChild();
+await enableTelemetryPersistFromEnvInChild();
 await createServiceGuardNode().start();
 ```
 

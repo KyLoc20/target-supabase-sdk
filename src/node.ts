@@ -4,6 +4,9 @@
  * import { TaskManager, RepoManager, TaskNode } from "target-supabase-sdk/node";
  */
 
+/** Install ALS so Supabase telemetry fetch can correlate with withCallTelemetry. */
+import "./shared/telemetry/transport/call-transport-context-node";
+
 export * from "./browser";
 export * from "./command/command.api";
 export * from "./command/command.interface";
@@ -50,6 +53,7 @@ export {
     nodeBufferToArrayBuffer,
     readAndVerifySourceFile,
 } from "./node/fs/read-source-file";
+export { SERVICE_ID_ENV } from "./node/node-service-id";
 export type {
     BuildNodeImportArgsInput,
     CreateManagedChildProcessesOptions,
@@ -183,36 +187,6 @@ export {
     IDEA_TEMP_DOWNLOAD_PATH_SUFFIX,
     parseIdeaTempDownloadLocator,
 } from "./shared/idea/node";
-export { runCollectLogTick } from "./shared/log/spool/collector";
-export { LOG_SPOOL_SERVICE_ID_ENV } from "./shared/log/spool/config";
-export type { LogSpoolCoordinator, LogSpoolCoordinatorOptions } from "./shared/log/spool/coordinator";
-export { createLogSpoolCoordinator } from "./shared/log/spool/coordinator";
-export {
-    buildLogSpoolSpawnEnv,
-    ensureLogSpoolFromEnv,
-    getLogSpoolStats,
-    logSpoolEnabledFromEnv,
-    shutdownLogSpoolFromEnv,
-    validateLogSpoolPreloadEnv,
-} from "./shared/log/spool/enable";
-export type {
-    EnableLogSpoolOptions,
-    LogSpoolCoreProcessRole,
-    LogSpoolProcessRole,
-    LogSpoolWriterStats,
-} from "./shared/log/spool/interface";
-export { resolveLogSpoolRoot } from "./shared/log/spool/paths";
-export {
-    COLLECT_LOG_RUNNER_KEY,
-    registerCollectLogRunner,
-} from "./shared/log/spool/register-collect-log-runner";
-export {
-    enableLogSpoolFromEnvInChild,
-    getMainLogSpoolWriterStats,
-    isLogSpoolEnabled,
-    shutdownLogSpool,
-} from "./shared/log/spool/service-lifecycle";
-export type { LogBatchMeta, LogPersistLane } from "./shared/log/upload/interface";
 export type {
     CheckMediaAvailabilityInput,
     FindMediaLinkInput,
@@ -226,6 +200,29 @@ export {
     probeMediaOriginal,
     registerMediaLink,
 } from "./shared/media/node";
+export type { LogEntry } from "./shared/telemetry/manager/telemetry-manager";
+export {
+    enableTelemetryPersistFromEnvInChild,
+    ensureTelemetryPersistFromEnv,
+    flushTelemetry,
+    gcTelemetry,
+    getTelemetryStats,
+    isTelemetryPersistEnabled,
+    listTelemetryBatches,
+    readTelemetryBatch,
+    shutdownTelemetryPersist,
+} from "./shared/telemetry/persist/enable";
+export type {
+    CallEntry,
+    GcTelemetryInput,
+    GcTelemetryResult,
+    ListTelemetryBatchesInput,
+    ReadTelemetryBatchInput,
+    TelemetryBatchFilePayload,
+    TelemetryBatchMeta,
+    TelemetryLane,
+    TelemetryStats,
+} from "./shared/telemetry/types";
 export type {
     ConfigSchema,
     LoadCachedJsConfigOptions,

@@ -30,7 +30,7 @@ description: >-
 | Child launcher | `createL3ChildLauncher`, `ManagedChildProcesses` | node — main→guard; Guard→scheduler+worker; extras (chrome-sidecar) stay local |
 | Single-process | `runSingleProcessService` | node — optional non-L3 one-process tools (**not** log-service; log is four-process) |
 | Guard step | `ServiceGuardNode`, `applyRegistrySlotGuardStep` | node — guard process; silent on heartbeat loss |
-| Log spool | `enableLogSpoolFromEnvInChild`, `shutdownLogSpool` | node — file spool; **no** `waitForAllProcessesReady` |
+| Telemetry | `enableTelemetryPersistFromEnvInChild`, `shutdownTelemetryPersist` | node — local log/call lanes; see [telemetry](../telemetry/SKILL.md) |
 
 ---
 
@@ -58,7 +58,10 @@ createServiceHost({
   startSupervisors: () => { spawnGuard(); },
   waitUntilReady: async () => { await waitForServiceReady(...); },
   startServer: async () => { /* express listen → { close } */ },
-  onShutdown: async () => { await stopChildProcesses(); await shutdownLogSpoolFromEnv(); },
+  onShutdown: async () => {
+    await stopChildProcesses();
+    await shutdownTelemetryPersist();
+  },
 }).run();
 ```
 
@@ -84,9 +87,9 @@ export const {
 } = createL3ChildLauncher({ childProcesses, readRuntimeState, writeRuntimeState });
 ```
 
-Launcher spawns via `childProcesses.spawn(label, script)` — after registry claim, **`createServiceHost` always sets `LOG_SPOOL_SERVICE_ID` on main** (required for `postRegisterNode`, not only when log spool is enabled). Spawn **auto-injects** that id + `LOG_PERSIST_PROCESS` for labels `main|guard|scheduler|worker`. Explicit `buildLogSpoolSpawnEnv` is optional.
+Launcher spawns via `childProcesses.spawn(label, script)` — after registry claim, **`createServiceHost` always sets `TARGET_SUPABASE_SDK_SERVICE_ID` (`SERVICE_ID_ENV`) on main** (registry instance id for `postRegisterNode`). Telemetry persist is env-gated (`TARGET_SUPABASE_SDK_TELEMETRY_*`) and does not need per-role spawn env.
 
-`runSingleProcessService` sets `LOG_SPOOL_SERVICE_ID` after claim before `run()`. See [node-protocol](../node-protocol/SKILL.md).
+`runSingleProcessService` sets `SERVICE_ID_ENV` after claim before `run()`. See [node-protocol](../node-protocol/SKILL.md).
 
 ---
 
@@ -302,7 +305,8 @@ Do **not** `scanTargetList` on `category=task` just to count TODO/DOING — use 
 
 - [service-guard](../service-guard/SKILL.md) — guard process API, silent mode, spawn ownership
 - [target-system-registry](../target-system-registry/SKILL.md) — slot semantics
-- [log-spool](../log-spool/SKILL.md) — file spool + guard collect-log
+- [telemetry](../telemetry/SKILL.md) — local TelemetryManager persist
+- [node-protocol](../node-protocol/SKILL.md) — `SERVICE_ID_ENV` / Node.`name`
 - [json-state-store](../json-state-store/SKILL.md) — sharded runtime state + Windows RMW pitfall
 - [service-preload](../service-preload/SKILL.md) — `--import` preload + env parsers
 - [node-protocol](../node-protocol/SKILL.md) — Node row shape, env, Guard vs fleet

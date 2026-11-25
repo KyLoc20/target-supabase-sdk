@@ -1,6 +1,6 @@
 import { isDevEnvironment } from "../../../core.utils";
 import { generateUniqueId } from "../../utils/id.utils";
-import { offerToLogPersist } from "../upload/hook";
+import { offerLogEntry } from "../call/offer";
 import { formatScopeLabels, type LoggerResetScopePatch, type LogScope, patchScope, resolveLogData } from "./log-scope";
 
 /**
@@ -68,7 +68,7 @@ interface LogOptions {
     onLog?: (entry: LogEntry) => void;
 }
 
-/** Per-scoped-logger options for {@link LogManager.withScope}. */
+/** Per-scoped-logger options for {@link TelemetryManager.withScope}. */
 interface WithScopeOptions {
     /** Overrides global {@link LogOptions.minLevel} for this logger instance. */
     minLevel?: LogLevel;
@@ -122,12 +122,13 @@ function validateLogScope(logScope: LogScope): void {
         missing.push("traceParentId");
     }
     if (missing.length > 0) {
-        console.warn(`[LogManager] LogScope missing or invalid: ${missing.join(", ")}`, logScope);
+        console.warn(`[TelemetryManager] LogScope missing or invalid: ${missing.join(", ")}`, logScope);
     }
 }
 
-class LogManager {
-    private static instance: LogManager;
+/** Runtime singleton: console logging + optional local telemetry log lane. */
+class TelemetryManager {
+    private static instance: TelemetryManager;
     private options: LogOptions;
     private readonly levelEmojis = {
         [LogLevel.DEBUG]: "🔍",
@@ -142,15 +143,15 @@ class LogManager {
         this.options = mergeLogOptions(options);
     }
 
-    public static getInstance(options?: Partial<LogOptions>): LogManager {
-        if (!LogManager.instance) {
-            LogManager.instance = new LogManager(options);
+    public static getInstance(options?: Partial<LogOptions>): TelemetryManager {
+        if (!TelemetryManager.instance) {
+            TelemetryManager.instance = new TelemetryManager(options);
         } else if (options != null && Object.keys(options).length > 0) {
             console.warn(
-                "[LogManager] getInstance(options) ignored — singleton already created. Use setOptions() instead.",
+                "[TelemetryManager] getInstance(options) ignored — singleton already created. Use setOptions() instead.",
             );
         }
-        return LogManager.instance;
+        return TelemetryManager.instance;
     }
 
     public setOptions(options: Partial<LogOptions>): void {
@@ -248,7 +249,7 @@ class LogManager {
 
         validateLogScope(logScope);
         if (!restParams.topic?.trim()) {
-            throw new Error("[LogManager] topic is required on every log call");
+            throw new Error("[TelemetryManager] topic is required on every log call");
         }
 
         const { topic, extra } = restParams;
@@ -265,7 +266,7 @@ class LogManager {
         const formatted = this.formatLog(entry);
         this.emitLog(entry, formatted);
         this.options.onLog?.(entry);
-        offerToLogPersist(entry);
+        offerLogEntry(entry);
     }
 
     public generateTraceId(): string {
@@ -326,6 +327,10 @@ class LogManager {
     }
 }
 
-export const logManager = LogManager.getInstance();
+export const telemetryManager = TelemetryManager.getInstance();
+/** @deprecated Use {@link telemetryManager} — alias for existing call sites. */
+export const logManager = telemetryManager;
 export type { LogEntry, LoggerWithScope, LogOptions, LogRestParams, WithScopeOptions };
-export { LogLevel, LogManager };
+export { LogLevel, TelemetryManager };
+/** @deprecated Use {@link TelemetryManager}. */
+export const LogManager = TelemetryManager;

@@ -49,17 +49,15 @@ See [rollup-library-build](../rollup-library-build/SKILL.md) for build rationale
 | Detection | Regex `from "node:…"` and side-effect `import "node:…"` |
 | Node entry | Rollup `dist/node.js`; peers + `node:*` external — not separately scanned |
 
-### Lesson: log spool `file.ts` + shared chunks (0.3.2)
+### Lesson: browser re-export pulled `node:*` via shared chunk (0.3.2)
 
 | What happened | Why |
 |---------------|-----|
-| `formatLogSpoolBatchTimestamp` exported on browser entry via `shared/log/index.ts` → `./spool/file.ts` | Same module had `import { randomBytes } from "node:crypto"` for spool **writer** filenames |
-| `verify-browser-entry` only scanned `browser.js` | Top-level `browser.js` had no `node:` string; **`dist/chunks/config-*.js` did** |
-| chrome-extension-starter `pnpm build` failed | Webpack cannot resolve `node:crypto` scheme in MV3 bundles |
+| Browser barrel re-exported a “pure” helper from a module that also imported `node:crypto` | Rollup put `node:` into a **shared chunk** used by browser graph |
+| `verify-browser-entry` only scanned `browser.js` | Top-level file had no `node:` string; **`dist/chunks/*` did** |
+| chrome-extension-starter `pnpm build` failed | Webpack cannot resolve `node:crypto` in MV3 bundles |
 
-**Fix (source):** `spool/batch-timestamp.ts` for browser; `randomLogSpoolShortId` uses `crypto.getRandomValues` (no `node:crypto` in spool filename helpers). **Fix (CI):** verify walks browser → chunk import list.
-
-**Rule:** Never re-export a browser symbol from a file that statically imports `node:*`, even if the browser symbol is “pure”. Rollup **externalizes** `node:*` into shared chunks consumed by both entries.
+**Fix (CI):** verify walks browser → chunk import list. **Rule:** Never re-export a browser symbol from a file that statically imports `node:*`. Rollup **externalizes** `node:*` into shared chunks consumed by both entries. (Former file-spool modules that triggered this are removed.)
 
 ### Legacy: `verify-graph.mjs`
 

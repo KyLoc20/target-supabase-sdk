@@ -1,5 +1,5 @@
-import { type LoggerWithScope, type LogLevel, logManager } from "./log-manager";
 import { createScope, type LogScope, type LogScopePatch } from "./log-scope";
+import { type LoggerWithScope, type LogLevel, logManager } from "./telemetry-manager";
 
 type CreateLoggerLevelOption = {
     /** Overrides global minimum level for this logger only. */

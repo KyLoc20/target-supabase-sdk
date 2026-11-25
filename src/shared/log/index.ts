@@ -1,47 +1,59 @@
 /**
- * Log domain public API — curated re-exports only (browser-safe).
+ * @deprecated Import from `../telemetry` (or `target-supabase-sdk` package exports).
+ * Thin re-export barrel kept so existing `shared/log` paths keep compiling during migration.
  */
-
 export type {
+    CallEntry,
     CreateLoggerFromModuleInput,
     CreateLoggerFromScopeInput,
     CreateLoggerInput,
-} from "./core/create-logger";
-export { createLogger } from "./core/create-logger";
-export type { DecodedLogBatch, FlatLogEntry } from "./core/log-batch";
-export {
-    decodeLogBatch,
-    decodeLogBatchList,
-    flattenLogBatch,
-    flattenLogBatches,
-    isLogBatchList,
-    isLogEntry,
-    parseLogBatchMeta,
-} from "./core/log-batch";
-export type { LogEntry, LoggerWithScope, LogOptions, LogRestParams, WithScopeOptions } from "./core/log-manager";
-export { LogLevel, LogManager, logManager } from "./core/log-manager";
-export type { ResolveLogMinLevelOptions } from "./core/log-min-level";
-export {
-    LOG_MIN_LEVEL_ENV_KEY,
-    logMinLevelFromEnv,
-    resolveLogMinLevel,
-} from "./core/log-min-level";
-export type {
     CreateScopeInput,
+    GcTelemetryInput,
+    GcTelemetryResult,
+    ListTelemetryBatchesInput,
+    LogEntry,
     LoggerResetScopePatch,
+    LoggerWithScope,
+    LogOptions,
+    LogRestParams,
     LogScope,
     LogScopeInput,
     LogScopePatch,
     PatchScopeInput,
-} from "./core/log-scope";
+    ReadTelemetryBatchInput,
+    RecordCallInput,
+    ResolveLogMinLevelOptions,
+    TelemetryBatchFilePayload,
+    TelemetryBatchMeta,
+    TelemetryLane,
+    TelemetryStats,
+    WithScopeOptions,
+} from "../telemetry";
 export {
+    CALL_ERR_MESSAGE_MAX,
+    CALL_RESULT_SUMMARY_MAX,
+    clipCostMs,
+    createLogger,
     createScope,
+    DEFAULT_TELEMETRY_DIR,
     formatScopeLabels,
+    LOG_MIN_LEVEL_ENV_KEY,
+    LogLevel,
+    LogManager,
+    logManager,
+    logMinLevelFromEnv,
     normalizeScope,
     patchScope,
+    recordCall,
     resolveLogData,
+    resolveLogMinLevel,
+    TELEMETRY_DIR_ENV,
+    TELEMETRY_ON_ENV,
+    TELEMETRY_SDK_VERSION,
+    TelemetryManager,
+    telemetryDirFromEnv,
+    telemetryManager,
+    telemetryOnFromEnv,
+    withCallTelemetry,
     withModule,
-} from "./core/log-scope";
-export { formatLogSpoolBatchTimestamp } from "./spool/batch-timestamp";
-export type { LogBatchMeta, LogPersistLane } from "./upload/interface";
-export { LOG_BATCH_LIST_VALUE } from "./upload/interface";
+} from "../telemetry";

@@ -2,10 +2,11 @@
 name: node-protocol
 description: >-
   Node Target protocol (category=node) in target-supabase-sdk 0.3.0+: NodeKind on
-  value, service instance id on name, postRegisterNode payload, LOG_SPOOL_SERVICE_ID,
-  Guard scoped scan vs fleet GC, nodesForTaskLiveness, Service.runtime.nodes rollup.
-  Use when registering TaskNode/TriggerNode/ServiceGuardNode, reviewing guard ticks,
-  gc-service overview vs observability.
+  value, service instance id on name, postRegisterNode payload,
+  TARGET_SUPABASE_SDK_SERVICE_ID (SERVICE_ID_ENV), Guard scoped scan vs fleet GC,
+  nodesForTaskLiveness, Service.runtime.nodes rollup. Use when registering
+  TaskNode/TriggerNode/ServiceGuardNode, reviewing guard ticks, gc-service
+  overview vs observability.
 ---
 
 # Node protocol (`category = node`)
@@ -52,15 +53,22 @@ Runtime processes do **not** call this directly — {@link BaseNodeRuntime} in `
 
 ## Service instance id env
 
-**Same variable as log spool:** `LOG_SPOOL_SERVICE_ID` (`LOG_SPOOL_SERVICE_ID_ENV`).
+| | |
+|--|--|
+| Env | **`TARGET_SUPABASE_SDK_SERVICE_ID`** (`SERVICE_ID_ENV`) |
+| Meaning | Claimed **Service instance id** (registry `service.id`) |
+| Used for | `postRegisterNode` → Node.`name`; Guard scoped scans (`name eq serviceId`) |
+| Not for | Local telemetry persist (`TARGET_SUPABASE_SDK_TELEMETRY_*`) |
 
 | Writer | When |
 |--------|------|
-| `createServiceHost` | Immediately after registry claim (always, even if log spool disabled) |
+| `createServiceHost` | Immediately after registry claim |
 | `runSingleProcessService` | After claim, before `run()` |
-| Child spawn | `ManagedChildProcesses.spawn` merges parent env + `resolveLogSpoolSpawnEnvForLabel` when parent already has `LOG_SPOOL_SERVICE_ID` |
+| Child spawn | Inherits parent `process.env` (including `SERVICE_ID_ENV`) |
 
 Missing env at node bootstrap → **fail-fast** (`requireNodeServiceIdFromEnv`) → shutdown; no anonymous legacy rows.
+
+`requireNodeServiceIdFromEnv` still **reads** the legacy key `LOG_SPOOL_SERVICE_ID` if the new key is empty (one-release dual-read). Hosts **write only** the new key. Do not document or set the legacy name in L3.
 
 ---
 

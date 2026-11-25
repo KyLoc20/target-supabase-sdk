@@ -217,7 +217,7 @@ unregisterServiceAtShutdown({ service })  // best-effort; never throws — use i
 | Single-process TriggerNode (log-service) | `TriggerNode({ beforeProcessExit })` | hook → `unregisterServiceAtShutdown` |
 | Startup failure after claim | `main().catch` when register succeeded | `unregisterServiceAtShutdown` |
 
-Shutdown order (multi-process): `server.close` → stop children → **unregister** → `shutdownLogSpool()` → `process.exit`.
+Shutdown order (multi-process): `server.close` → stop children → **unregister** → `shutdownTelemetryPersist()` → `process.exit`.
 
 ---
 

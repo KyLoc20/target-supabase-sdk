@@ -1,3 +1,4 @@
+import { createSupabaseTelemetryFetch } from "../src/shared/telemetry/transport/supabase-telemetry-fetch.js";
 import { supabase } from "../src/supabase.js";
 import { loadEnvFiles } from "./load-env.js";
 
@@ -9,7 +10,7 @@ export function requireEnv(name: string): string {
     return value;
 }
 
-/** Load `.env.local` / `.env` and initialize Supabase clients. */
+/** Load `.env.local` / `.env` and initialize Supabase clients (Node telemetry fetch). */
 export async function initSupabaseFromEnv(projectRoot: string): Promise<void> {
     loadEnvFiles(projectRoot);
 
@@ -18,5 +19,6 @@ export async function initSupabaseFromEnv(projectRoot: string): Promise<void> {
         supabaseAnonKey: requireEnv("SUPABASE_ANON_KEY"),
         supabaseNeedAuthUrl: process.env.SUPABASE_NEED_AUTH_URL,
         supabaseNeedAuthAnonKey: process.env.SUPABASE_NEED_AUTH_ANON_KEY,
+        fetch: createSupabaseTelemetryFetch(globalThis.fetch),
     });
 }

@@ -1,5 +1,5 @@
 import { isDevEnvironment } from "../../../core.utils";
-import { LogLevel } from "./log-manager";
+import { LogLevel } from "./telemetry-manager";
 
 /** Env key for global {@link LogManager} min level (console + log-persist when enabled). */
 export const LOG_MIN_LEVEL_ENV_KEY = "LOG_MIN_LEVEL";
