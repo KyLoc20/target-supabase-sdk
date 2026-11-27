@@ -11,8 +11,17 @@ export type IdeaLinkValue = typeof IDEA_LINK_VALUE;
 /** Link.name for clipboard-image ideas (distinct from title-based text ideas). */
 export const IDEA_IMAGE_LINK_NAME = "idea.image" as const;
 
-/** Default tag for raw captures (quick-note, paste-image). Leading `.` = system tag. */
-export const IDEA_IMAGE_TAG_RAW = ".raw" as const;
+export type { IdeaLifecycleTagValue } from "./idea.lifecycle";
+export {
+    assertIdeaTagListHasLifecycleTag,
+    buildIdeaIngestTagList,
+    IDEA_IMAGE_TAG_RAW,
+    IDEA_LIFECYCLE_TAGS,
+    IdeaLifecycleTag,
+    ideaTagListHasLifecycleTag,
+    isIdeaLifecycleTag,
+    normalizeIdeaTagList,
+} from "./idea.lifecycle";
 
 /** Temp sandbox prefix for pasted images (`TEMP_FS_ROOT` on upload-service). */
 export const IDEA_IMAGE_TEMP_DIR = "idea/paste" as const;

@@ -6,13 +6,20 @@
 
 export type { BuildIdeaImageLinkDraftInput, BuildIdeaLinkDraftInput } from "./idea.build";
 export { buildIdeaImageLinkDraft, buildIdeaLinkDraft } from "./idea.build";
-export type { IdeaOriginal } from "./idea.interface";
+export type { IdeaLifecycleTagValue, IdeaOriginal } from "./idea.interface";
 export {
+    assertIdeaTagListHasLifecycleTag,
+    buildIdeaIngestTagList,
     IDEA_IMAGE_LINK_NAME,
     IDEA_IMAGE_TAG_RAW,
     IDEA_IMAGE_TEMP_DIR,
+    IDEA_LIFECYCLE_TAGS,
     IDEA_LINK_VALUE,
+    IdeaLifecycleTag,
+    ideaTagListHasLifecycleTag,
     isIdeaImageLinkName,
+    isIdeaLifecycleTag,
+    normalizeIdeaTagList,
 } from "./idea.interface";
 export { normalizeStringList } from "./idea.normalize";
 export { parseIdeaOriginal } from "./idea.parse";

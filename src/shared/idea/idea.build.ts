@@ -2,11 +2,13 @@ import type { TargetDraft } from "../../core.interface";
 import { buildLinkTargetDraft } from "../../link/link.build";
 import type { Link } from "../../link/link.interface";
 import {
+    buildIdeaIngestTagList,
     IDEA_IMAGE_LINK_NAME,
-    IDEA_IMAGE_TAG_RAW,
     IDEA_LINK_VALUE,
+    IdeaLifecycleTag,
     type IdeaOriginal,
     isIdeaImageLinkName,
+    normalizeIdeaTagList,
 } from "./idea.interface";
 import { normalizeStringList } from "./idea.normalize";
 
@@ -87,7 +89,10 @@ export function buildIdeaLinkDraft(input: BuildIdeaLinkDraftInput): TargetDraft<
         throw new Error("buildIdeaLinkDraft: name is reserved for image ideas; use buildIdeaImageLinkDraft");
     }
 
-    const tagList = normalizeStringList(input.tagList);
+    const tagList =
+        input.tagList != null && normalizeStringList(input.tagList).length > 0
+            ? normalizeIdeaTagList(input.tagList, "buildIdeaLinkDraft")
+            : [IdeaLifecycleTag.Raw];
     if (tagList.length > 32) {
         throw new Error("buildIdeaLinkDraft: tagList exceeds 32 entries");
     }
@@ -136,9 +141,14 @@ export function buildIdeaImageLinkDraft(input: BuildIdeaImageLinkDraftInput): Ta
         throw new Error("buildIdeaImageLinkDraft: url exceeds 2000 characters");
     }
 
-    const tagList = normalizeStringList(input.tagList ?? [IDEA_IMAGE_TAG_RAW]);
-    if (tagList.length === 0) {
-        throw new Error("buildIdeaImageLinkDraft: tagList is empty");
+    const tagList = buildIdeaIngestTagList(input.tagList);
+    if (tagList.length > 32) {
+        throw new Error("buildIdeaImageLinkDraft: tagList exceeds 32 entries");
+    }
+    for (const tag of tagList) {
+        if (tag.length > 128) {
+            throw new Error("buildIdeaImageLinkDraft: tag exceeds 128 characters");
+        }
     }
 
     const original: IdeaOriginal = {

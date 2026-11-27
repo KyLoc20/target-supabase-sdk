@@ -70,7 +70,7 @@ Quick-note (chrome extension) should wrap `buildIdeaLinkDraft` **locally** with 
 | Text `name` | Title; max 500; must not be `idea.image` |
 | Image `name` | Fixed `idea.image` via `buildIdeaImageLinkDraft` |
 | `description` / `preview` | Default `""` |
-| `tagList` | User/system tags; image default `[ ".raw" ]` |
+| `tagList` | Must include **one of** `IdeaLifecycleTag` (`.raw` / `.clean` / `.curated`); ingest always `.raw`; image may add `.oss` |
 
 See [VALIDATION-MATRIX.md](./VALIDATION-MATRIX.md) for limits across Zod, builders, and HTTP.
 

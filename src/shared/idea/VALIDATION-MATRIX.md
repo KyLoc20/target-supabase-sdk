@@ -30,12 +30,14 @@ Legend: **Z** = `ideaOriginalSchema` / `ideaCreateSchema` / `ideaUpdateSchema` (
 
 ## `tagList`
 
-| Rule | Z create | B text | B image | Notes |
-|------|----------|--------|---------|-------|
-| Max 32 tags | ✓ | ✓ | ✓ | |
-| Each tag 1–128 chars | ✓ | ✓ | — | Builder checks length on text tags |
-| Default image tags | — | — | ✓ `[ ".raw" ]` if omitted | |
-| Quick-note `.raw` | — | — | — | Extension local wrapper only |
+| Rule | Z create | Z update | B text | B image | Notes |
+|------|----------|----------|--------|---------|-------|
+| Max 32 tags | — | ✓ | ✓ | ✓ | |
+| Each tag 1–128 chars | — | ✓ | ✓ | ✓ | |
+| Lifecycle tag required | — | ✓ one of `.raw` / `.clean` / `.curated` | ✓ | ✓ ingest | See `IdeaLifecycleTag` |
+| Create body `tagList` | — (omitted) | — | — | — | Ingest always `.raw` via `buildIdeaIngestTagList` |
+| Default text tags | — | — | ✓ `[ ".raw" ]` if empty | — | |
+| Image ingest tags | — | — | — | ✓ `.raw` + extras (e.g. `.oss`) | Strips caller lifecycle tags on ingest |
 
 ## Paste-image (bytes → Link)
 
